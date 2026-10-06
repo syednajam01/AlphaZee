@@ -1,0 +1,89 @@
+/* Brand Logo Styles */
+
+.brand-logo-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 44px; /* Ensure 44px touch target */
+  min-width: 44px;
+  text-decoration: none;
+  color: inherit;
+  position: relative;
+}
+
+.brand-logo-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.brand-logo-img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  transition: filter var(--transition-fast);
+  user-select: none;
+}
+
+/* Light / Dark Surface Rules */
+/* Light surface: black artwork */
+.logo-surface-light .brand-logo-img,
+.brand-logo-img.logo-surface-light {
+  filter: none;
+}
+
+/* Dark surface: white artwork */
+.logo-surface-dark .brand-logo-img,
+.brand-logo-img.logo-surface-dark {
+  filter: brightness(0) invert(1);
+}
+
+/* Auto surface (e.g., inside header that reacts to scroll) */
+.site-header .brand-logo-img {
+  filter: brightness(0) invert(1); /* Default over dark hero */
+}
+
+.site-header.is-scrolled .brand-logo-img {
+  filter: none; /* Black on solid white header */
+}
+
+/* Invert inside dark footer */
+.site-footer .brand-logo-img {
+  filter: brightness(0) invert(1);
+}
+
+/* Responsive Storefront Header Logo switching */
+.storefront-header-logo .logo-variant-wordmark {
+  display: block;
+  width: 125px; /* Mobile width: 110–135px */
+}
+
+.storefront-header-logo .logo-variant-combined {
+  display: none;
+  width: 165px; /* Desktop width: 150–180px */
+}
+
+@media (min-width: 768px) {
+  .storefront-header-logo .logo-variant-wordmark {
+    display: none;
+  }
+
+  .storefront-header-logo .logo-variant-combined {
+    display: block;
+  }
+}
+
+/* Symbol variant styling with non-destructive margin compensation */
+.logo-symbol-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.logo-symbol-wrapper .brand-logo-img {
+  margin-top: -28%;
+  margin-bottom: -28%;
+}
