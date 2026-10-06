@@ -12,3 +12,46 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+backend/venv/
+
+# Package build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ── Backend environment ───────────────────────────────────────────────────────
+# .env.example IS committed — it contains only documented placeholders.
+# .env is NOT committed — it contains real credentials.
+backend/.env
+backend/.env.local
+.env.local
+
+# ── Alembic ───────────────────────────────────────────────────────────────────
+# alembic/versions/ IS committed — migration files belong in version control.
+# Nothing else from alembic should be ignored.
+
+# ── Editor / OS ───────────────────────────────────────────────────────────────
+.vscode/settings.json
+*.orig
+

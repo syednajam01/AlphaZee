@@ -1,0 +1,1 @@
+"""AlphaZee backend application package."""
