@@ -14,6 +14,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import catalog as catalog_router
 from app.api.v1 import health as health_router
 from app.config import settings
 
@@ -47,10 +48,7 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 # All public endpoints are versioned under /api/v1.
 app.include_router(health_router.router, prefix="/api/v1")
-
-# Catalog routes (Phase 3) will be registered here:
-# app.include_router(collections_router.router, prefix="/api/v1")
-# app.include_router(products_router.router, prefix="/api/v1")
+app.include_router(catalog_router.router, prefix="/api/v1")
 
 
 # ── Root ──────────────────────────────────────────────────────────────────────

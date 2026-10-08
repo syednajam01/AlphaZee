@@ -12,9 +12,8 @@ services:
       POSTGRES_PASSWORD: changeme
       POSTGRES_DB: alphazee_dev
     ports:
-      # Expose PostgreSQL on the default local port.
-      # Only bind to localhost — not reachable from outside the machine.
-      - "127.0.0.1:5432:5432"
+      # Bind to local port 5433 (native Postgres uses 5432)
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
