@@ -15,7 +15,7 @@ Rules:
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.catalog import Collection, Product, Variant
@@ -53,30 +53,33 @@ def get_active_products(
     Return a paginated list of active products with their active variants
     eager-loaded.
 
+    Products whose parent collection is inactive are excluded.
     Returns (products, total_count) where total_count is the un-paginated count
     for the given filter (used to build pagination metadata).
     """
     page_size = min(page_size, MAX_PAGE_SIZE)
     offset = (page - 1) * page_size
 
-    # Base filter
-    base_stmt = select(Product).where(Product.is_active.is_(True))
+    # Base filter — join Collection to ensure only products in active collections are returned
+    base_stmt = (
+        select(Product)
+        .join(Collection, Product.collection_id == Collection.id)
+        .where(Product.is_active.is_(True), Collection.is_active.is_(True))
+    )
     if collection_id:
         base_stmt = base_stmt.where(Product.collection_id == collection_id)
 
-    # Count query (no load options, no limit/offset)
-    from sqlalchemy import func
-
+    # Count query (matches exact same base filters)
     count_stmt = select(func.count()).select_from(base_stmt.subquery())
     total = db.scalar(count_stmt) or 0
 
-    # Data query — eager-load only active variants
+    # Data query — eager-load only active variants, with stable secondary sort
     data_stmt = (
         base_stmt
         .options(
-            selectinload(Product.variants).where(Variant.is_active.is_(True))
+            selectinload(Product.variants.and_(Variant.is_active.is_(True)))
         )
-        .order_by(Product.created_at.desc())
+        .order_by(Product.created_at.desc(), Product.id.asc())
         .limit(page_size)
         .offset(offset)
     )
@@ -89,14 +92,19 @@ def get_product_by_slug(db: Session, slug: str) -> Product | None:
     """
     Return a single active product by slug with active variants eager-loaded.
 
-    Returns None if the product does not exist or is inactive — the route
-    layer translates None to a 404 response.
+    Returns None if the product does not exist, is inactive, or belongs to
+    an inactive collection — the route layer translates None to a 404 response.
     """
     stmt = (
         select(Product)
-        .where(Product.slug == slug, Product.is_active.is_(True))
+        .join(Collection, Product.collection_id == Collection.id)
+        .where(
+            Product.slug == slug,
+            Product.is_active.is_(True),
+            Collection.is_active.is_(True),
+        )
         .options(
-            selectinload(Product.variants).where(Variant.is_active.is_(True))
+            selectinload(Product.variants.and_(Variant.is_active.is_(True)))
         )
     )
     return db.scalars(stmt).first()
@@ -104,18 +112,24 @@ def get_product_by_slug(db: Session, slug: str) -> Product | None:
 
 def get_hero_products(db: Session) -> list[Product]:
     """
-    Return active hero products ordered by hero_order ASC.
+    Return active hero products ordered by hero_order ASC, then id ASC.
 
+    Hero products belonging to inactive collections are excluded.
     Used by the homepage hero carousel. Returns an empty list if no hero
     products exist — the frontend must handle this case gracefully.
     """
     stmt = (
         select(Product)
-        .where(Product.is_active.is_(True), Product.is_hero.is_(True))
-        .options(
-            selectinload(Product.variants).where(Variant.is_active.is_(True))
+        .join(Collection, Product.collection_id == Collection.id)
+        .where(
+            Product.is_active.is_(True),
+            Product.is_hero.is_(True),
+            Collection.is_active.is_(True),
         )
-        .order_by(Product.hero_order.asc().nullslast())
+        .options(
+            selectinload(Product.variants.and_(Variant.is_active.is_(True)))
+        )
+        .order_by(Product.hero_order.asc().nullslast(), Product.id.asc())
     )
     return list(db.scalars(stmt).all())
 

@@ -73,17 +73,62 @@ def upsert_product(db, data: dict) -> None:
 
 
 def upsert_variant(db, data: dict) -> None:
-    """Insert a variant by SKU if it doesn't exist."""
+    """
+    Insert a variant by SKU if it doesn't exist.
+    Also handles changed SKUs gracefully by ensuring no variant with the same
+    (product_id, size, color) combination is duplicated.
+    """
     from sqlalchemy import select
 
-    existing = db.scalars(
-        select(Variant).where(Variant.sku == data["sku"])
+    # Normalize size and color before checking or inserting
+    normalized = dict(data)
+    if "size" in normalized:
+        normalized["size"] = Variant.normalize_option(normalized["size"])
+    if "color" in normalized:
+        normalized["color"] = Variant.normalize_option(normalized["color"])
+
+    # 1. Check if a variant with the exact (product_id, size, color) combo already exists
+    size_cond = (
+        Variant.size.is_(None)
+        if normalized["size"] is None
+        else Variant.size == normalized["size"]
+    )
+    color_cond = (
+        Variant.color.is_(None)
+        if normalized["color"] is None
+        else Variant.color == normalized["color"]
+    )
+
+    existing_combo = db.scalars(
+        select(Variant).where(
+            Variant.product_id == normalized["product_id"],
+            size_cond,
+            color_cond,
+        )
     ).first()
-    if existing:
-        print(f"    [skip] Variant {data['sku']!r} already exists.")
+
+    if existing_combo:
+        if existing_combo.sku != normalized["sku"]:
+            print(
+                f"    [skip] Variant for {normalized['product_id']!r} "
+                f"(size={normalized['size']!r}, color={normalized['color']!r}) "
+                f"already exists with SKU {existing_combo.sku!r}. "
+                f"Skipping duplicate insertion for new SKU {normalized['sku']!r}."
+            )
+        else:
+            print(f"    [skip] Variant {normalized['sku']!r} already exists.")
         return
-    db.add(Variant(**data))
-    print(f"    [insert] Variant {data['sku']!r}")
+
+    # 2. Check if a variant with the exact SKU already exists under a different option combination
+    existing_sku = db.scalars(
+        select(Variant).where(Variant.sku == normalized["sku"])
+    ).first()
+    if existing_sku:
+        print(f"    [skip] Variant SKU {normalized['sku']!r} already exists.")
+        return
+
+    db.add(Variant(**normalized))
+    print(f"    [insert] Variant {normalized['sku']!r}")
 
 
 # ── Seed data ──────────────────────────────────────────────────────────────────
@@ -311,17 +356,20 @@ PRODUCTS: list[tuple[dict, list[tuple[str | None, str | None, int]]]] = [
 
 
 def main() -> None:
-    # ── Production guard ──────────────────────────────────────────────────────
-    if settings.is_production:
+    # ── Environment guard ─────────────────────────────────────────────────────
+    allowed_envs = {"development", "test"}
+    current_env = settings.app_env.lower().strip()
+    if current_env not in allowed_envs:
         print(
-            "ERROR: Refusing to seed a production database.\n"
-            "       Set APP_ENV=development to run the seed script."
+            f"ERROR: Seeding only permitted in {allowed_envs}.\n"
+            f"       Current APP_ENV={settings.app_env!r} is not an authorized seed target."
         )
         sys.exit(1)
 
     db_host = settings.database_url.split("@")[-1]
     print(f"[seed] Environment : {settings.app_env}")
     print(f"[seed] Database    : {db_host}")
+    print("[seed] Notice      : Seed catalog products and variant availability represent sample demo data.")
 
     db = SessionLocal()
     try:

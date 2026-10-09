@@ -1,228 +1,339 @@
-You are implementing the first backend milestone for AlphaZee, my Pakistan ecommerce business.
+You are working on AlphaZee, my Pakistan ecommerce business.
 
-Inspect the current repository, then implement the scope below. Preserve existing work and follow repository instructions. Give a short implementation plan before editing, then proceed. Ask only if a genuinely blocking decision cannot be resolved from the code or this prompt.
+Fix the existing backend and frontend issues, prepare the project for our finalized database design, and then stop. We are still discussing the database structure separately.
 
-## 1. Project context
+## 1. Critical boundaries
 
-The current frontend lives in `frontend/` and uses Vite, plain JavaScript, and CSS. Keep this stack and preserve the current visual design.
+For this task:
 
-Existing features include product cards, a hero carousel, collection filters, product option selection, a localStorage cart, checkout UI, and an admin preview.
+- Do not generate migration files.
+- Do not run migrations, seed commands, database resets, or schema changes.
+- Do not call create_all() or drop_all() against any existing database.
+- Do not implement orders, suppliers, payments, customer accounts, or admin authentication yet.
+- Do not push or deploy.
+- Preserve unrelated work and all existing data.
 
-The business will support:
-- COD.
-- Manual bank transfer, verified by me before shipping.
-- Initially, manual supplier handoff.
+You may fix application code, existing catalog model definitions, test code, configuration, and documentation. Model changes remain unapplied until we finalize the database design.
 
-Future hosting is Azure Linux App Service with a separate PostgreSQL database. Develop and verify locally first. Do not provision Azure resources or deploy anything during this task.
+If an earlier prompt in `.context/next_target.txt` tells you to generate or apply migrations, this instruction overrides that part for this task.
 
-## 2. Scope and boundaries
+Complete all useful work within these boundaries. Do not repeatedly ask for permission for routine fixes.
 
-Implement:
-- Python backend foundation.
-- PostgreSQL schema and migrations for the catalog.
-- Read-only catalog APIs.
-- Frontend catalog integration.
-- Essential cart compatibility and prototype safety fixes.
-- Tests and project documentation.
+## 2. Inspect the current project first
 
-Do not implement admin authentication, product editing APIs, real order creation, payment processing, receipt uploads, supplier automation, analytics, or customer accounts yet.
+A previous source review examined this commit:
 
-Do not rewrite the frontend, add microservices, Redis, queues, or Kubernetes.
+`6df075a72e9648975a9a66bd39a12e1230520985`
 
-## 3. Inspect before editing
+The local project may contain newer changes. Check actual current files and fix only issues that still exist.
 
-Check the working tree and preserve uncommitted changes. Do not reset or overwrite unrelated work.
+Before editing:
 
-Read:
-- Repository instructions and `.context/design.md`.
-- Frontend package files and Vite configuration.
-- Product and collection data.
-- Hero, product grid, product modal, cart, and checkout code.
+1. Read applicable repository instructions.
+2. Inspect git status and preserve uncommitted work.
+3. Read `.context/design.md` and `.context/next_target.txt`.
+4. Inspect backend configuration, database sessions, models, queries, schemas, routes, seed script, Alembic setup, and tests.
+5. Inspect frontend catalog data, hero, products, option selection, cart, checkout, admin preview, package scripts, and Vite configuration.
+6. Run the existing frontend build to establish a baseline.
+7. Give a brief implementation plan, then proceed.
 
-Confirm the baseline build. Check actual current files rather than assuming an earlier review is still accurate.
+## 3. Fix catalog queries
 
-## 4. Backend foundation
+In `backend/app/queries/catalog.py`, the reviewed code used:
 
-Create `backend/` using:
-- FastAPI.
-- SQLAlchemy.
-- Alembic.
-- PostgreSQL.
-- Pydantic request/response validation and environment configuration.
+`selectinload(Product.variants).where(Variant.is_active.is_(True))`
 
-Use a consistent database access style. Prefer straightforward synchronous SQLAlchemy sessions for this milestone unless the repository already establishes another approach.
+This is an invalid SQLAlchemy loader-option pattern.
 
-Keep separate areas for API routes, configuration, database sessions, models, schemas, and catalog queries. Avoid unnecessary abstraction.
+Use a supported approach, such as:
 
-Provide:
-- Reproducible dependencies and documented Python version.
-- `.env.example` with placeholders.
-- A local PostgreSQL setup, preferably a minimal Docker Compose service.
-- Reliable session cleanup and transaction handling.
-- Clear startup and migration commands.
+`selectinload(Product.variants.and_(Variant.is_active.is_(True)))`
 
-Keep database credentials entirely server-side. Extend `.gitignore` for Python caches, virtual environments, and environment files while allowing example configuration files.
+Alternatively use `with_loader_criteria` correctly.
 
-Do not automatically create tables or insert demo data when the application starts.
+Apply the fix consistently to product listing, product details, and hero queries.
 
-## 5. Catalog data model
+Also:
 
-Design a small schema supporting:
+- Exclude products whose parent collection is inactive.
+- Apply identical eligibility rules to listing data and its total-count query.
+- Ensure inactive products and variants remain excluded.
+- Return 404 for a product within an inactive collection.
+- Use deterministic ordering for pagination, with a stable ID tie-breaker.
+- Use deterministic hero ordering when hero_order values match.
+- Check that static routes such as `/products/hero` cannot be captured by the dynamic slug route.
+- Preserve bounded pagination and validate page/page_size values.
 
-**Collection**
-- Stable ID.
-- Unique slug.
-- Name.
-- Optional image.
-- Active status and display order.
+Do not redesign the API unnecessarily.
 
-**Product**
-- Stable ID and unique slug.
-- Title and description.
-- Collection association.
-- Image URL.
-- Active status.
-- Optional hero placement and presentation metadata.
-- Creation and update timestamps.
+## 4. Fix existing catalog model consistency
 
-**Variant**
-- Stable ID and unique SKU.
-- Product association.
-- Optional size and color.
-- Price in integer PKR minor units.
-- Active status.
-- Explicit availability status.
+In `backend/app/models/catalog.py`:
 
-Every purchasable product must have a variant, including products without visible options.
+### Variant uniqueness
 
-Represent actual valid size/color combinations as variants. Do not assume all combinations are available. Prevent duplicate combinations for a product.
+The current ordinary unique constraint on product_id, size, and color allows duplicate combinations when size or color is NULL.
 
-For now, use manually maintained availability such as available, unavailable, or unknown. Do not invent supplier stock quantities or imply that supplier stock is synchronized.
+Enforce uniqueness at the database level for:
 
-Use database constraints where appropriate, including nonnegative prices, foreign keys, and uniqueness.
+- Size and color variants.
+- Size-only variants.
+- Color-only variants.
+- Products with no visible options.
 
-The catalog is the single source of product prices and availability. Hero entries must reference catalog products rather than duplicating commercial data.
+The local database is PostgreSQL 16, so consider SQLAlchemy’s PostgreSQL `NULLS NOT DISTINCT` support.
 
-Keep image/video files outside PostgreSQL; store URLs only. Object storage setup is out of scope.
+Update the model definition only. Do not generate or apply a migration.
 
-## 6. Migrations and development data
+Normalize size/color input consistently so accidental whitespace or empty strings do not create duplicate logical options. Explain the chosen normalization behavior.
 
-Create an initial Alembic migration.
+### Deletion behavior
 
-Provide an explicit, repeatable development seed command:
-- Use the existing sample catalog as clearly documented demo data.
-- Preserve existing IDs where practical.
-- Create valid sample variants.
-- Avoid duplicates when run repeatedly.
-- Do not overwrite edited product data on subsequent runs.
-- Refuse to seed a production environment.
+The collection relationship previously used `cascade="all, delete-orphan"` while the product foreign key used `ON DELETE RESTRICT`.
 
-Existing sample photos and videos can remain for development. Do not spend this milestone replacing them.
+Align ORM and foreign-key behavior so deleting a collection cannot silently delete its products.
 
-## 7. API contract
+Prefer using `is_active` for catalog removal. Document any remaining deliberate cascade behavior. Future order history must not depend on catalog records remaining editable or deletable.
 
-Implement versioned endpoints such as:
-- `GET /api/v1/health`
-- `GET /api/v1/ready`
-- `GET /api/v1/collections`
-- `GET /api/v1/products`
-- `GET /api/v1/products/{slug}`
+### Money representation
+
+Standardize existing catalog code and comments on:
+
+- Currency: PKR.
+- Stored monetary values: integer minor units, meaning paisas.
+- Example: PKR 3,450 is stored as 345000.
+
+Fix contradictory comments.
+
+Existing helpers use integer division by 100 and can silently truncate fractional rupees. Ensure formatting handles minor units accurately and never silently changes an amount.
+
+Keep numeric minor units authoritative. Use a consistent frontend formatter. Do not introduce float-based money calculations.
+
+Document whether existing convenience fields represent whole rupees or a formatted amount. Do not enforce a new business restriction on fractional prices without recording it as a proposed decision.
+
+### Purchasable variants
+
+Every purchasable product must have a variant, including products without size/color options.
+
+Do not assume every possible size/color combination exists. Use actual variant records.
+
+Availability is manually maintained. Do not invent supplier stock quantities or imply synchronization with suppliers.
+
+## 5. Fix configuration and Alembic preparation
+
+Review `backend/app/config.py`:
+
+- Verify ALLOWED_ORIGINS accepts both comma-separated text and JSON arrays.
+- Verify this through the actual Pydantic Settings environment-loading path, not only by calling the validator directly.
+- Ensure the resulting value is a validated list of strings.
+- Keep credentials server-side.
+- Keep `.env` ignored and `.env.example` tracked.
+
+Review `backend/alembic/env.py`:
+
+- Keep all model modules registered in Base.metadata.
+- Handle database URLs with percent-encoded credentials correctly.
+- Avoid unescaped percent characters going through ConfigParser interpolation.
+- Prefer passing the database URL safely to engine creation or use the required escaping.
+- Do not expose credentials in error messages.
+- Ensure the versions directory exists in a fresh checkout, using a harmless tracked placeholder if necessary.
+- Preserve the explicit migration workflow. Do not create tables during application startup.
+
+Do not execute Alembic commands that generate revisions or change a database.
+
+Verify dependency installation is reproducible enough for this milestone. Document Python 3.13 as the selected project runtime, without unsupported claims about other Python releases.
+
+## 6. Prepare safe tests without changing an existing database
+
+The reviewed `backend/tests/conftest.py` claimed to apply migrations but actually called create_all() and drop_all().
+
+Fix the misleading documentation and unsafe assumptions.
 
 Requirements:
-- Health confirms the application is running.
-- Readiness checks database connectivity and returns 503 if unavailable without exposing credentials.
-- Product listing supports collection filtering and bounded pagination.
-- Public responses exclude inactive products and variants.
-- Product detail includes valid variant combinations and availability.
-- Unknown or inactive product slugs return 404.
-- Responses expose numeric prices and currency with the unit clearly documented.
-- Document how hero products are selected and retrieved.
-- Do not expose public write endpoints.
 
-## 8. Frontend integration
+- Test configuration must explicitly identify a dedicated disposable test database.
+- Refuse destructive setup or teardown if the target matches the development database.
+- Validate the parsed database URL rather than using a weak substring check.
+- Do not silently fall back to development credentials or a development database.
+- Always clean up dependency overrides, sessions, connections, and transactions.
+- Account for tests that intentionally trigger an IntegrityError.
+- If application code commits transactions, verify the fixture’s isolation strategy remains correct.
+- Readiness failure coverage must test an unavailable database response without exposing internal details.
 
-Create a central API module with configurable base URL and consistent error handling.
+Add focused regression coverage for:
 
-Configure a Vite development proxy for `/api` to the local backend. Prefer same-origin `/api` requests so production can later serve the built frontend and backend together.
+- Valid catalog loader options.
+- Inactive parent collections.
+- Stable pagination.
+- Price formatting.
+- Cart data validation.
+- Nullable variant uniqueness and restrictive deletion behavior, ready to execute later.
 
-Replace direct mock-catalog imports in the storefront, including hero click handling, product cards, collection filters, and product details.
+Because migrations are paused, do not run tests that create, drop, or modify database objects or records.
 
-Fetch shared catalog data once where practical and pass it into components. Do not let components maintain conflicting copies.
+Run only checks that respect this boundary. Clearly distinguish tests executed now from database tests prepared but deferred.
 
-Preserve existing appearance and interactions while adding:
-- Loading states.
-- Empty catalog and empty collection states.
-- Clear API error messages with retry.
-- A useful unavailable-product state.
-- Safe behavior when no hero items exist.
+Document a future migration verification procedure using a fresh disposable database:
 
-Never silently fall back to mock products after an API failure.
+- Upgrade.
+- Verify expected schema and constraints.
+- Downgrade.
+- Upgrade again.
 
-Derive formatted prices from numeric API values using one shared formatter.
+Do not claim that metadata.create_all() proves a migration works.
 
-Use safe DOM text rendering for dynamic data. Validate URLs before assigning image or video sources; do not insert untrusted API content directly into HTML strings.
+Also document that the current Alembic setup uses DATABASE_URL. Setting TEST_DATABASE_URL alone does not automatically redirect Alembic.
 
-## 9. Cart and checkout safeguards
+## 7. Review the development seed script
 
-Update cart items to use variant IDs.
+Fix `backend/seed.py` without running it.
 
-The browser may cache product descriptions and prices for display, but these are not authoritative for future order creation.
+Requirements:
 
-Validate localStorage data:
-- Confirm the expected array and item structure.
-- Require valid identifiers and positive integer quantities.
-- Handle malformed JSON, wrong data shapes, and obsolete entries without crashing.
-- Document how the old cart format is migrated or reset.
-- Reconcile cached items with current catalog prices and availability without fetching the API on every quantity click.
+- Permit seeding only in explicitly allowed local development/test environments.
+- Refuse production and unknown environments.
+- Do not overwrite existing edited products, variants, or prices.
+- Do not duplicate records on repeated execution.
+- Handle a changed SKU without accidentally inserting another variant for the same product/size/color combination.
+- Preserve atomic transactions and proper rollback/cleanup.
+- Fail clearly when tables are missing.
+- Never create tables itself.
+- Never run automatically at startup.
+- Identify sample products and availability as demo data.
 
-Keep unavailable items clearly marked and prevent them from proceeding toward checkout.
+Document any unresolved identity or seed behavior rather than guessing.
 
-The existing checkout currently displays a success alert and clears the cart without saving an order. Remove this behavior.
+## 8. Complete frontend catalog integration where possible
 
-Until order creation exists:
+Preserve Vite, plain JavaScript, CSS, and the current visual design.
+
+Implement or finish:
+
+- A central API module.
+- Configurable API base URL.
+- A Vite development proxy for `/api`.
+- Consistent loading, empty, failure, and retry states.
+- Shared catalog data where practical.
+- Product cards, collection filters, product details, and hero interactions using the backend API.
+- Safe handling when no hero products exist.
+- Consistent money formatting from numeric minor units.
+
+Do not silently fall back to mock products after an API failure.
+
+If the database has not been migrated yet, the frontend should show a useful unavailable/error state. Do not change the database to make the frontend work during this task.
+
+Avoid inserting untrusted API values into HTML strings. Use safe DOM text handling and validate image/video URLs before assigning them.
+
+Do not introduce a framework rewrite or unnecessary infrastructure.
+
+## 9. Fix cart behavior
+
+The reviewed cart stored product IDs and free-form options and accepted parsed localStorage data without checking its structure.
+
+Update it to:
+
+- Identify purchasable selections by variant ID.
+- Accept only valid stored item structures.
+- Require valid identifiers and bounded positive integer quantities.
+- Handle malformed JSON, wrong shapes, obsolete entries, and unavailable localStorage gracefully.
+- Introduce an intentional storage-version migration or reset for the old cart format.
+- Reconcile displayed prices and availability against current API data.
+- Avoid fetching the API on every quantity click.
+- Prevent unavailable, inactive, unknown, or nonexistent variants from proceeding toward checkout.
+- Preserve useful user feedback if cached items cannot be validated.
+
+Browser-cached prices are for display. Future order creation must recalculate prices on the backend.
+
+Check that malformed cart data cannot prevent the entire storefront from initializing.
+
+## 10. Fix checkout and prototype claims
+
+The reviewed checkout displayed an order-success alert and cleared the cart without saving an order.
+
+Remove that behavior.
+
+Until real order creation is implemented:
+
 - Clearly label checkout as a preview.
 - Disable order submission.
 - Preserve the cart.
-- Do not collect or transmit payment details.
-- Do not imply an order was placed.
+- Do not show an order number or success confirmation.
+- Do not upload receipts or transmit payment information.
+- Keep payment copy aligned with planned COD and manually verified bank transfer.
+- Remove unsupported card/gateway/security claims.
+- Keep the admin preview clearly labeled as a demo.
 
-Correct payment copy to reflect the planned COD and manually verified bank transfer methods. Remove unsupported card/gateway and “256-bit checkout” claims. Keep the admin interface explicitly identified as a demo.
+Do not implement real checkout during this task.
 
-## 10. Verification
+## 11. Verify and report honestly
 
-Run the frontend production build and focused backend tests using a separate PostgreSQL test database.
+Run the checks available without changing databases:
 
-Verify:
-- Migrations apply to a fresh database.
-- Repeated seeding does not duplicate or overwrite records.
-- Listing, filtering, pagination, and detail endpoints work.
-- Inactive records are excluded and unknown products return 404.
-- Invalid prices and duplicate variants are rejected.
-- Database failure is handled cleanly.
-- Broken localStorage data cannot prevent storefront initialization.
-- Cart options map to valid variants.
-- Checkout cannot show false success or clear the cart.
+- Frontend production build.
+- Python syntax/import checks where dependencies and configuration permit.
+- Focused tests that do not create, drop, seed, or modify database records.
+- Configuration validation.
+- Browser checks if available, using controlled mocked API responses for loading, success, empty, and failure states.
 
-If browser tooling is available, check the main shopping interactions at 360px and desktop width, including API loading and failure states. Otherwise explicitly report browser checks as not run.
+Check desktop and mobile shopping interactions where practical.
 
-Never claim a test passed without running it.
+Never claim a test passed unless you executed it. List deferred database checks explicitly.
 
-## 11. Documentation and handoff
+If something cannot be verified without migrations, prepare it and report the limitation. Do not cross the migration boundary.
 
-Add or update:
-- Root README with exact setup, migration, seed, run, build, and test commands.
-- `docs/architecture.md` describing implemented architecture and distinguishing it from future plans.
-- `docs/decisions.md` recording confirmed business requirements and technical choices.
-- `docs/progress.md` summarizing completed work and remaining stages.
+## 12. Prepare documentation for our database discussion
 
-Conclude with:
-1. What changed.
-2. Main files changed.
-3. Schema and API summary.
-4. Commands executed and actual results.
-5. Known limitations or unverified behavior.
-6. Any decisions that need my review.
+Create or update:
 
-Stop after this milestone. Do not push, deploy, or start the next phase.
+- Root README.
+- `docs/architecture.md`.
+- `docs/decisions.md`.
+- `docs/progress.md`.
+- `docs/database-design-pending.md`.
 
-Success means that a product or price changed in the development database appears correctly in the storefront after refresh, catalog failures are handled clearly, and checkout no longer pretends to create orders.
+Record these confirmed requirements:
+
+- Pakistan launch.
+- COD.
+- Manual bank transfer verified by me before shipping.
+- Initially manual supplier handoff.
+- PostgreSQL backend.
+- Current catalog milestone.
+- No real orders yet.
+
+In `docs/database-design-pending.md`, list unresolved choices without implementing them:
+
+- Guest checkout and future customer accounts.
+- One supplier versus multiple suppliers per order.
+- Shipping charges and split shipments.
+- Supplier costs and availability confirmation.
+- Order, payment, shipment, and settlement statuses.
+- COD collection and remittance responsibility.
+- RTO charges.
+- Returns, exchanges, and refunds.
+- Purchase-time price, supplier-cost, and address snapshots.
+- Actual expenses and profit calculation.
+- Admin permissions.
+- Receipt storage and access.
+- Marketing attribution.
+- Future inventory or print-on-demand needs.
+
+Clearly label proposed choices as proposals.
+
+Do not treat previously suggested future tables as an approved final schema.
+
+## 13. Final handoff and stopping point
+
+Finish with:
+
+1. Issues found in the current local code.
+2. Issues fixed and files changed.
+3. Checks executed and actual results.
+4. Checks deferred because database changes are paused.
+5. Remaining database decisions.
+6. Any genuine blocker.
+7. A clear statement that no migrations, seed commands, or database changes were executed.
+
+Leave the code and documentation ready so that, when I provide our finalized database specification, you can implement it without repeating this cleanup.
+
+Stop after this task and wait for the finalized database design.

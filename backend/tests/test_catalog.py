@@ -282,3 +282,22 @@ class TestModelConstraints:
 
         with pytest.raises(IntegrityError):
             make_variant(db_session, prod.id, sku="DUPE-SKU", size="M")
+
+    def test_duplicate_variant_null_options_rejected(self, db_session):
+        col = make_collection(db_session, id="c-null", slug="c-null")
+        prod = make_product(db_session, col.id, id="p-null", slug="p-null")
+        make_variant(db_session, prod.id, sku="SKU-1", size=None, color=None)
+
+        from sqlalchemy.exc import IntegrityError
+
+        with pytest.raises(IntegrityError):
+            make_variant(db_session, prod.id, sku="SKU-2", size=None, color=None)
+
+
+def test_variant_normalize_option():
+    assert Variant.normalize_option(None) is None
+    assert Variant.normalize_option("") is None
+    assert Variant.normalize_option("   ") is None
+    assert Variant.normalize_option("  Large  ") == "Large"
+    assert Variant.normalize_option("Chalk White") == "Chalk White"
+

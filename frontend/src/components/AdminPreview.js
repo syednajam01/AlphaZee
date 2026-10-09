@@ -64,7 +64,10 @@ export function createAdminPreviewModal() {
       <!-- Admin Main Content Area -->
       <main style="flex: 1; display: flex; flex-direction: column; overflow-y: auto;">
         <div style="height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
-          <div style="font-size: 1rem; font-weight: 600;">Store Management Console</div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="font-size: 1rem; font-weight: 600;">Store Management Console</div>
+            <span class="badge badge-accent" style="font-size: 0.65rem; padding: 2px 8px;">Concept Demo</span>
+          </div>
           <button class="btn-icon" id="admin-close-btn" style="color: #FFFFFF;" aria-label="Close admin preview">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>

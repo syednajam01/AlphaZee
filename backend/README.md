@@ -7,6 +7,7 @@ FastAPI catalog service and local development environment for AlphaZee.
 ## 1. Prerequisites
 
 - **Python**: 3.13 (`.python-version` pinned to 3.13)
+  > **Note on Python Version:** Python 3.13 is required. Python 3.14 (pre-release) introduces internal typing evaluation changes that trigger errors in SQLAlchemy 2.0 declarative mapper when scanning `Mapped[Optional[...]]` annotations. Python 3.13 is the stable release with full ecosystem support.
 - **Docker & Docker Compose**: for local PostgreSQL
 - **Git**
 
@@ -60,6 +61,32 @@ uvicorn app.main:app --reload --port 8000
 ## 3. Running Tests
 
 ```bash
-pytest tests/test_health.py -v
+# Run unit and configuration tests (no database required):
+pytest tests/test_config.py tests/test_readiness.py -v
+
+# Run full integration tests (requires PostgreSQL running):
+pytest tests/ -v
 ```
-Tests run against `alphazee_test` on `localhost:5433`.
+Integration tests run strictly against `alphazee_test` on `localhost:5433` and validate database targets before executing.
+
+---
+
+## 4. Database & Migration Verification Strategy
+
+### 4.1 Schema Verification Boundary
+Calling `Base.metadata.create_all()` inside test fixtures is a convenient test-isolation shortcut, but it **does not verify Alembic migrations**.
+
+### 4.2 Alembic Environment Redirection
+Alembic migrations read `DATABASE_URL` from application settings (`app.config.settings.database_url`). Setting `TEST_DATABASE_URL` alone does not redirect Alembic CLI commands. When testing migrations against an isolated test database, `DATABASE_URL` must be set explicitly:
+```bash
+$env:DATABASE_URL="postgresql://alphazee:changeme@localhost:5433/alphazee_test"
+alembic upgrade head
+```
+
+### 4.3 Verified Migration Lifecycle Procedure
+When migrations are authorized and generated, verify them against a guarded disposable test database using the full 4-step lifecycle:
+1. **Upgrade**: `alembic upgrade head`
+2. **Inspect**: Verify tables, unique indices (`NULLS NOT DISTINCT`), foreign keys, and check constraints match model definitions.
+3. **Downgrade**: `alembic downgrade base` to verify full rollback cleanliness without leftover types or tables.
+4. **Re-upgrade**: `alembic upgrade head` to confirm migrations are repeatable and idempotent from a clean state.
+

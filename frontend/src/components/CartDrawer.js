@@ -1,5 +1,7 @@
 import { cart } from '../utils/cart.js';
 import { storeConfig } from '../data/store-config.js';
+import { formatPkr } from '../utils/money.js';
+import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
 
 export function createCartDrawer(onCheckout) {
   const backdrop = document.createElement('div');
@@ -31,12 +33,15 @@ export function createCartDrawer(onCheckout) {
     </div>
 
     <div class="drawer-footer" id="cart-footer">
+      <div id="cart-availability-alert" style="display: none; margin-bottom: 12px; padding: 10px 12px; background: #FFF5F5; border: 1px solid #FED7D7; border-radius: var(--radius-sm); font-size: 0.75rem; color: #C53030;">
+        Some items in your cart are currently out of stock or unavailable. Please adjust before checkout.
+      </div>
       <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
         <span style="font-weight: 500;">Subtotal</span>
         <span style="font-size: 1.25rem; font-weight: 700;" id="cart-subtotal">PKR 0</span>
       </div>
       <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 16px;">
-        Shipping calculated at checkout (${storeConfig.shippingInfo.standardTime}).
+        Shipping calculated at checkout (${escapeHtml(storeConfig.shippingInfo.standardTime)}).
       </p>
       <button class="btn btn-primary" id="btn-checkout" style="width: 100%; min-height: 48px;">
         Proceed to Checkout
@@ -49,6 +54,8 @@ export function createCartDrawer(onCheckout) {
     const badge = drawer.querySelector('#cart-item-count-badge');
     const subtotal = drawer.querySelector('#cart-subtotal');
     const footer = drawer.querySelector('#cart-footer');
+    const alertBox = drawer.querySelector('#cart-availability-alert');
+    const checkoutBtn = drawer.querySelector('#btn-checkout');
 
     badge.textContent = `${state.count} ${state.count === 1 ? 'item' : 'items'}`;
     subtotal.textContent = state.formattedTotal;
@@ -62,45 +69,70 @@ export function createCartDrawer(onCheckout) {
             <path d="M16 10a4 4 0 0 1-8 0"></path>
           </svg>
           <p style="font-weight: 600; font-size: 1.125rem; color: var(--color-text); margin-bottom: 4px;">Your cart is empty</p>
-          <p style="font-size: 0.875rem;">Discover our latest collection and add your favorite essentials.</p>
+          <p style="font-size: 0.875rem;">Discover our latest pieces and build your minimalist wardrobe.</p>
         </div>
       `;
       footer.style.opacity = '0.5';
-      footer.querySelector('#btn-checkout').disabled = true;
+      checkoutBtn.disabled = true;
+      alertBox.style.display = 'none';
     } else {
       footer.style.opacity = '1';
-      footer.querySelector('#btn-checkout').disabled = false;
 
-      itemsContainer.innerHTML = state.items.map(item => `
-        <div class="cart-item" data-key="${item.key}">
-          <img src="${item.image}" alt="${item.title}" class="cart-item-img" />
-          <div class="cart-item-info">
-            <div class="cart-item-title">${item.title}</div>
-            <div class="cart-item-meta">
-              ${item.options?.size ? `Size: ${item.options.size}` : ''}
-              ${item.options?.color ? ` • Color: ${item.options.color}` : ''}
-            </div>
-            <div class="cart-item-price">${item.formattedPrice}</div>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
-              <div class="cart-qty-ctrl">
-                <button class="cart-qty-btn btn-qty-dec" aria-label="Decrease quantity">−</button>
-                <span class="cart-qty-num">${item.quantity}</span>
-                <button class="cart-qty-btn btn-qty-inc" aria-label="Increase quantity">+</button>
+      if (state.hasUnavailable) {
+        alertBox.style.display = 'block';
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Unavailable Items in Cart';
+        checkoutBtn.classList.remove('btn-primary');
+        checkoutBtn.classList.add('btn-secondary');
+      } else {
+        alertBox.style.display = 'none';
+        checkoutBtn.disabled = false;
+        checkoutBtn.textContent = 'Proceed to Checkout';
+        checkoutBtn.classList.add('btn-primary');
+        checkoutBtn.classList.remove('btn-secondary');
+      }
+
+      itemsContainer.innerHTML = state.items.map(item => {
+        const safeTitle = escapeHtml(item.title);
+        const safeImage = sanitizeMediaUrl(item.image_url, 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80');
+        const formattedItemPrice = formatPkr(item.price_minor);
+        const metaParts = [];
+        if (item.size) metaParts.push(`Size: ${escapeHtml(item.size)}`);
+        if (item.color) metaParts.push(`Color: ${escapeHtml(item.color)}`);
+
+        return `
+          <div class="cart-item" data-variant-id="${escapeHtml(String(item.variant_id))}">
+            <img src="${safeImage}" alt="${safeTitle}" class="cart-item-img" />
+            <div class="cart-item-info">
+              <div class="cart-item-title">${safeTitle}</div>
+              <div class="cart-item-meta">${metaParts.join(' • ')}</div>
+              ${!item.is_available ? `
+                <span class="badge badge-neutral" style="color: #C53030; background: #FFF5F5; font-size: 0.7rem; align-self: flex-start; margin: 4px 0;">
+                  Currently Unavailable
+                </span>
+              ` : ''}
+              <div class="cart-item-price">${formattedItemPrice}</div>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
+                <div class="cart-qty-ctrl">
+                  <button class="cart-qty-btn btn-qty-dec" aria-label="Decrease quantity">−</button>
+                  <span class="cart-qty-num">${item.quantity}</span>
+                  <button class="cart-qty-btn btn-qty-inc" aria-label="Increase quantity">+</button>
+                </div>
+                <button class="btn-remove-item" style="font-size: 0.75rem; color: #b3261e; text-decoration: underline; background: none; border: none; cursor: pointer;">
+                  Remove
+                </button>
               </div>
-              <button class="btn-remove-item" style="font-size: 0.75rem; color: #b3261e; text-decoration: underline; background: none; border: none; cursor: pointer;">
-                Remove
-              </button>
             </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
       // Add quantity & remove listeners
       itemsContainer.querySelectorAll('.cart-item').forEach(el => {
-        const key = el.dataset.key;
-        el.querySelector('.btn-qty-dec').addEventListener('click', () => cart.updateQuantity(key, -1));
-        el.querySelector('.btn-qty-inc').addEventListener('click', () => cart.updateQuantity(key, 1));
-        el.querySelector('.btn-remove-item').addEventListener('click', () => cart.removeItem(key));
+        const variantId = el.dataset.variantId;
+        el.querySelector('.btn-qty-dec').addEventListener('click', () => cart.updateQuantity(variantId, -1));
+        el.querySelector('.btn-qty-inc').addEventListener('click', () => cart.updateQuantity(variantId, 1));
+        el.querySelector('.btn-remove-item').addEventListener('click', () => cart.removeItem(variantId));
       });
     }
   }
@@ -111,6 +143,8 @@ export function createCartDrawer(onCheckout) {
     backdrop.classList.add('is-open');
     drawer.classList.add('is-open');
     document.body.style.overflow = 'hidden';
+    // Reconcile with API in background when drawer is opened
+    cart.reconcileWithApi();
   }
 
   function close() {

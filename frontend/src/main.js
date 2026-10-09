@@ -9,7 +9,6 @@ import { createProductModal } from './components/ProductModal.js';
 import { createMobileNavDrawer } from './components/MobileNavDrawer.js';
 import { createCheckoutView } from './components/CheckoutView.js';
 import { createAdminPreviewModal } from './components/AdminPreview.js';
-import { productsData } from './data/products.js';
 
 function initApp() {
   const app = document.getElementById('app');
@@ -31,15 +30,12 @@ function initApp() {
   // 2. Create Section Components
   const header = createHeader();
 
-  const featuredProducts = createFeaturedProducts((product) => {
-    productModal.open(product);
+  const featuredProducts = createFeaturedProducts((productOrSlug) => {
+    productModal.open(productOrSlug);
   });
 
-  const hero = createHero((productId) => {
-    const product = productsData.find(p => p.id === productId);
-    if (product) {
-      productModal.open(product);
-    }
+  const hero = createHero((slugOrId) => {
+    productModal.open(slugOrId);
   });
 
   const collections = createCollectionsSection((collectionId) => {

@@ -9,8 +9,9 @@ Design rules enforced via database constraints:
   PKR 3,450 (no subdivision currently used, but stored correctly for future).
 - Slugs are unique so URLs are stable and conflict-free.
 - SKUs are globally unique across all products.
-- Variant (product_id, size, color) combination is unique per product.
-- Foreign keys cascade deletes from Collection → Product and Product → Variant.
+- Variant (product_id, size, color) combination is unique per product (NULLS NOT DISTINCT).
+- Foreign keys: Collection FK uses RESTRICT to prevent accidental orphan products; Product → Variant uses CASCADE.
+- Order history must snapshot prices, titles, and variant descriptions at purchase time; variant records are not protected by FK for order history purposes.
 - Hero entries reference the catalog product rather than duplicating data.
 - Image / video URLs stored as text; files live outside the database.
 """
@@ -26,10 +27,10 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -95,7 +96,10 @@ class Collection(Base):
 
     # Relationship
     products: Mapped[list[Product]] = relationship(
-        "Product", back_populates="collection", cascade="all, delete-orphan"
+        "Product",
+        back_populates="collection",
+        cascade="save-update, merge",
+        passive_deletes=True,
     )
 
     def __repr__(self) -> str:
@@ -194,10 +198,16 @@ class Variant(Base):
     __tablename__ = "variants"
     __table_args__ = (
         # A product cannot have two variants with the same size+color combination.
-        # NULL values are distinct in SQL, so (M, NULL) != (M, NULL) would
-        # allow duplicate "size-only" variants — we handle this in the seed
-        # script with explicit checks.
-        UniqueConstraint("product_id", "size", "color", name="uq_variant_product_size_color"),
+        # Uses postgresql_nulls_not_distinct=True (PostgreSQL 16+) so that NULL
+        # values are treated as matching (e.g. (prod-1, NULL, NULL) cannot be duplicated).
+        Index(
+            "uq_variant_product_size_color",
+            "product_id",
+            "size",
+            "color",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
         CheckConstraint("price_minor >= 0", name="ck_variant_price_nonnegative"),
     )
 
@@ -241,9 +251,24 @@ class Variant(Base):
     # Relationship
     product: Mapped[Product] = relationship("Product", back_populates="variants")
 
+    @staticmethod
+    def normalize_option(value: str | None) -> str | None:
+        """
+        Normalize an option string (size or color).
+        Strips leading/trailing whitespace and converts empty/whitespace-only strings to None.
+        """
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped if stripped else None
+
     @property
     def price_pkr(self) -> int:
-        """Price in whole PKR (divided by 100). Convenience for display."""
+        """
+        Price in whole PKR (divided by 100 via integer division). Convenience helper for display.
+        Note: Any fractional rupee prices (e.g. 345050 minor units = PKR 3,450.50)
+        will truncate the fractional part. Use price_minor for exact calculations and storage.
+        """
         return self.price_minor // 100
 
     def __repr__(self) -> str:
