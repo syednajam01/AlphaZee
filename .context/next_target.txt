@@ -1,9 +1,76 @@
-Three remaining corrections:
-Issue	What I found
-Backend still truncates money	CurrencyAmount.from_minor(345050) formats PKR 3,450, losing .50. The frontend fix did not cover the backend.
-Network failure retains confirmed availability	I simulated an offline request; the cart still reported is_available: true. It should preserve the item but show availability as unverified.
-Cart validation remains incomplete	I reproduced quantity 1.5 through updateQuantity, and a negative total through nested price.minor. IDs also need safe-integer validation.
+I reviewed your latest commit becf827. The previous corrections improved the code, but the wider frontend/backend integration still has important issues. My earlier checks focused too narrowly on the reported cart bugs; this review traced the actual components and API responses.
+What I verified
+- 19 frontend tests passed.
+- 16 backend unit/configuration/readiness tests passed, using Python 3.12 in this environment; your intended Python 3.13 still needs local verification.
+- Frontend production build passed.
+- Vite → FastAPI health request passed: HTTP 200.
+- Exercised frontend components using responses serialized by your actual FastAPI schemas, with database queries mocked.
+- No migrations, seed commands, or database changes were executed.
+- Docker was unavailable here, so PostgreSQL connectivity and database-backed tests remain unverified.
+Passing the build and utility tests does not cover the component failures below.
+1. Product prices still break in the storefront
+In FeaturedProducts.js, cards read product.min_price_minor. Your API returns product.min_price.minor.
+In ProductModal.js, the popup and add-to-cart handler read activeVariant.price_minor. Your API returns activeVariant.price.minor.
+Reproduced: a product priced at PKR 3,450.50 displayed PKR 0, and the popup initially added it at zero.
+Fix: use the actual response contract consistently across cards, popup, hero, and cart. Missing prices should display “Price unavailable” and prevent adding, rather than silently become zero.
+2. Collection display and filters do not match the API
+Your API returns:
+{"collections": [...], "total": 3}
+
+Both collection consumers expect a plain array.
+Reproduced: the collection section displayed “Collections Unavailable,” while product filters showed only “All Products.”
+Fix: consistently read response.collections, either in the API client or its consumers. Add component tests for populated, empty, and failed responses.
+3. Selecting options can add the wrong variant
+The popup uses:
+variants.find(/* selected options */) || variants[0]
+
+If a combination does not exist, it silently selects the first variant.
+Reproduced: with only S/Red and M/Blue available, selecting M/Red added the S/Red variant ID, while the cart displayed M/Red.
+Fix: remove that fallback. Disable impossible combinations, require an exact match, and copy the selected variant’s actual size/color into the cart.
+This is particularly important for your supplier stock system: the selected variant and stock record must identify the same item.
+4. Hero media is not connected properly
+Hero.js expects hero video, poster, and benefit fields, but /products/hero returns product summaries without them. It also reads the wrong price field.
+Additionally, only the first video receives a src; later video slides cannot load correctly even after the response contract is fixed.
+Fix: define one hero response containing the required media, benefit, and structured price. Load each video when needed, and retain image fallback behavior.
+5. Media URL handling allows HTML attribute injection
+In dom.js, URL validation checks the protocol but returns the original string. Components insert it directly into HTML.
+Reproduced: a crafted URL containing quotes created an onerror attribute on an image.
+Fix: create image elements and assign .src and .alt through DOM properties. Protocol validation alone does not make a value safe inside an HTML string. Add a regression test.
+6. Cart verification still has gaps
+The recent offline fix works, but:
+- Items without a slug are skipped during verification and can remain marked available.
+- Missing/invalid prices can become zero instead of being marked invalid.
+- A live variant with an invalid price can still be marked available.
+- The drawer does not disable its checkout navigation while isReconciling is true.
+Fix: keep unverifiable items visible, clearly mark them unverified, and prevent progression until valid price and availability are confirmed. Real order submission is already disabled, so this currently affects preview reliability.
+7. Catalog navigation needs completion
+The API paginates products, but the frontend fetches only the first page and ignores pagination metadata. Products beyond the default first 20 have no browsing path.
+Filter requests and popup requests also lack protection against out-of-order responses: a slower earlier request can overwrite the latest selection.
+Fix: add pagination or “Load more,” and use request IDs or cancellation so only the latest request updates the screen.
+8. Demo content currently looks like confirmed business information
+Using sample products for development is fine. You do not need real photos or descriptions before designing the database.
+However, the current UI includes:
+- Random product photographs as fallbacks when real media is missing.
+- Invented fabric descriptions.
+- “In Stock” and “Ready to ship” without supporting availability data.
+- Card/payment-gateway and encryption claims in the footer configuration.
+- Unconfirmed shipping times, seven-day exchange policy, and size-chart promises.
+- Placeholder WhatsApp links.
+Fix now: label the storefront as a demo, isolate sample content, use a neutral local “Image coming soon” placeholder, and remove unsupported business promises. Keep sample seeding explicit and limited to disposable development/test data.
+Your real products should later populate the same components through data. Replacing sample products should not require rewriting the frontend.
+9. Database test protection needs strengthening
+conftest.py compares application and test URLs as raw strings before running create_all() and drop_all().
+Reproduced without connecting: the guard accepted the same host, port, and database when only the password string differed.
+Fix: compare normalized database targets independently of credentials and require an explicitly disposable target. Verify commit, rollback, and constraint-error isolation against PostgreSQL after database testing is authorized.
+Docker and setup status
+The intended local connections are consistent:
+Connection	Status
+Frontend port 3000 → backend port 8000	Health request verified
+Backend → PostgreSQL at localhost:5433	Configuration matches Compose; live connection unverified
+Docker host 5433 → container 5432	Correct configuration
+Fresh database → catalog tables	Pending migrations, as intended
 
 
-Relevant files: backend schemas, cart.
-Ask your agent to fix these three and add regression tests covering those exact cases. Also correct the model’s contradictory money comment: PKR 3,450 = 345000 paisas.
+Compose starts only PostgreSQL. You still start FastAPI and Vite separately; that is a valid development setup.
+Compose creates alphazee_dev, but does not automatically create alphazee_test. Document its explicit setup. Also, a successful readiness check using SELECT 1 does not prove catalog tables exist.
+My recommendation: continue our database-rule discussion now, while your IDE agent fixes these integration issues. Before applying the first approved migration, require tests covering the actual API-to-component flow, especially prices, collections, variant selection, missing media, and unavailable stock. The project has a workable foundation, but I cannot honestly call it fully integrated or issue-free yet.

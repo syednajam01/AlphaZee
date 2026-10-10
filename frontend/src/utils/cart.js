@@ -1,4 +1,4 @@
-import { formatPkr } from './money.js';
+import { formatPkr, extractPriceMinor } from './money.js';
 import { fetchProductBySlug } from './api.js';
 
 const STORAGE_KEY = 'alphazee_cart_v2';
@@ -31,13 +31,10 @@ function validateCartItem(raw) {
     ? Math.min(raw.quantity, MAX_QUANTITY_PER_ITEM)
     : 1;
 
-  let priceMinor = 0;
-  if (typeof raw.price_minor === 'number' && Number.isSafeInteger(raw.price_minor) && raw.price_minor >= 0) {
-    priceMinor = raw.price_minor;
-  } else if (typeof raw.price?.minor === 'number' && Number.isSafeInteger(raw.price.minor) && raw.price.minor >= 0) {
-    priceMinor = raw.price.minor;
-  } else if (typeof raw.price === 'number' && Number.isFinite(raw.price) && raw.price >= 0) {
-    priceMinor = Math.round(raw.price * 100);
+  // Validate price: must resolve to a valid non-negative integer minor unit
+  const priceMinor = extractPriceMinor(raw.price_minor ?? raw.price);
+  if (priceMinor === null) {
+    return null;
   }
 
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : 'AlphaZee Essential';
@@ -156,7 +153,9 @@ class CartStore {
       const q = (typeof item.quantity === 'number' && Number.isSafeInteger(item.quantity) && item.quantity > 0) ? item.quantity : 0;
       return sum + (price * q);
     }, 0);
-    const hasUnavailable = this.items.some(item => !item.is_available);
+    const hasUnavailable = this.items.some(
+      item => !item.is_available || extractPriceMinor(item.price_minor) === null
+    );
     const hasUnverified = this.items.some(item => item.availability === 'unverified');
 
     return {
@@ -166,7 +165,7 @@ class CartStore {
       formattedTotal: formatPkr(Math.max(0, totalMinor)),
       hasUnavailable,
       hasUnverified,
-      isReconciling: this.isReconciling,
+      isReconciling: Boolean(this.isReconciling),
     };
   }
 
@@ -253,8 +252,22 @@ class CartStore {
     this.notify();
 
     try {
-      // Find all distinct product slugs to check
-      const slugsToCheck = [...new Set(this.items.map(i => i.slug).filter(Boolean))];
+      // 1. Items without a slug cannot be verified against the catalog — mark unverified immediately
+      for (const item of this.items) {
+        if (!item.slug || typeof item.slug !== 'string' || !item.slug.trim()) {
+          item.is_available = false;
+          item.availability = 'unverified';
+        }
+      }
+
+      // 2. Find all distinct valid product slugs to check
+      const slugsToCheck = [
+        ...new Set(
+          this.items
+            .map((i) => i.slug)
+            .filter((s) => typeof s === 'string' && s.trim())
+        ),
+      ];
 
       for (const slug of slugsToCheck) {
         try {
@@ -277,15 +290,14 @@ class CartStore {
               );
 
               if (liveVariant) {
-                const liveMinor = typeof liveVariant.price?.minor === 'number' && Number.isSafeInteger(liveVariant.price.minor) && liveVariant.price.minor >= 0
-                  ? liveVariant.price.minor
-                  : (typeof liveVariant.price_minor === 'number' && Number.isSafeInteger(liveVariant.price_minor) && liveVariant.price_minor >= 0 ? liveVariant.price_minor : null);
-                if (typeof liveMinor === 'number') {
+                const liveMinor = extractPriceMinor(liveVariant.price ?? liveVariant.price_minor);
+                const hasValidPrice = liveMinor !== null;
+                if (hasValidPrice) {
                   item.price_minor = liveMinor;
                 }
-                const isAvailable = liveVariant.availability === 'available' && liveVariant.is_active !== false;
+                const isAvailable = hasValidPrice && liveVariant.availability === 'available' && liveVariant.is_active !== false;
                 item.is_available = isAvailable;
-                item.availability = isAvailable ? 'available' : (liveVariant.availability || 'unavailable');
+                item.availability = isAvailable ? 'available' : (!hasValidPrice ? 'unavailable' : (liveVariant.availability || 'unavailable'));
               } else {
                 // Variant no longer exists in active catalog
                 item.is_available = false;

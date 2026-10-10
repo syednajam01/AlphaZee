@@ -1,6 +1,6 @@
 import { fetchProducts, fetchCollections } from '../utils/api.js';
-import { formatPkr } from '../utils/money.js';
-import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
+import { formatDisplayPrice } from '../utils/money.js';
+import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
 
 export function createFeaturedProducts(onOpenProductModal) {
   const section = document.createElement('section');
@@ -8,10 +8,15 @@ export function createFeaturedProducts(onOpenProductModal) {
   section.id = 'featured';
 
   let activeCategory = 'all';
+  let currentPage = 1;
+  const pageSize = 12;
+  let totalProducts = 0;
   let isLoading = false;
+  let isLoadingMore = false;
   let errorState = null;
   let products = [];
   let collections = [];
+  let activeRequestId = 0;
 
   const container = document.createElement('div');
   container.className = 'container';
@@ -32,12 +37,17 @@ export function createFeaturedProducts(onOpenProductModal) {
     <div class="products-grid" id="products-grid-container">
       <!-- Rendered dynamically -->
     </div>
+
+    <div class="pagination-container" id="pagination-container" style="display: flex; justify-content: center; margin-top: 32px;">
+      <!-- Load more button rendered dynamically -->
+    </div>
   `;
 
   section.appendChild(container);
 
   const grid = container.querySelector('#products-grid-container');
   const tabsContainer = container.querySelector('#filter-tabs-container');
+  const paginationContainer = container.querySelector('#pagination-container');
 
   function renderTabs() {
     tabsContainer.innerHTML = `
@@ -55,9 +65,40 @@ export function createFeaturedProducts(onOpenProductModal) {
         if (activeCategory === filter) return;
         activeCategory = filter;
         renderTabs();
-        loadProducts();
+        loadProducts({ reset: true });
       });
     });
+  }
+
+  function renderPagination() {
+    if (!paginationContainer) return;
+
+    if (isLoading || errorState || !products || products.length === 0) {
+      paginationContainer.innerHTML = '';
+      return;
+    }
+
+    if (products.length < totalProducts) {
+      paginationContainer.innerHTML = `
+        <button class="btn btn-secondary btn-load-more" id="btn-load-more" ${isLoadingMore ? 'disabled' : ''} style="min-width: 200px;">
+          ${isLoadingMore ? 'Loading Pieces...' : `Load More Products (${products.length} of ${totalProducts})`}
+        </button>
+      `;
+
+      paginationContainer.querySelector('#btn-load-more')?.addEventListener('click', () => {
+        if (isLoadingMore) return;
+        currentPage++;
+        loadProducts({ reset: false });
+      });
+    } else if (totalProducts > 0) {
+      paginationContainer.innerHTML = `
+        <span class="catalog-status-desc" style="color: var(--color-text-muted); font-size: 0.85rem;">
+          Showing all ${totalProducts} pieces
+        </span>
+      `;
+    } else {
+      paginationContainer.innerHTML = '';
+    }
   }
 
   function renderGrid() {
@@ -69,6 +110,7 @@ export function createFeaturedProducts(onOpenProductModal) {
           <div class="catalog-skeleton-text" style="width: 40%;"></div>
         </div>
       `).join('');
+      renderPagination();
       return;
     }
 
@@ -84,8 +126,9 @@ export function createFeaturedProducts(onOpenProductModal) {
       `;
 
       grid.querySelector('.btn-retry')?.addEventListener('click', () => {
-        loadProducts();
+        loadProducts({ reset: true });
       });
+      renderPagination();
       return;
     }
 
@@ -96,33 +139,24 @@ export function createFeaturedProducts(onOpenProductModal) {
           <div class="catalog-status-desc">There are currently no active products in this collection.</div>
         </div>
       `;
+      renderPagination();
       return;
     }
 
     grid.innerHTML = products.map(product => {
       const safeTitle = escapeHtml(product.title);
-      const safeImage = sanitizeMediaUrl(product.image_url, 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80');
-      const safeBadge = product.badge ? escapeHtml(product.badge) : 'In Stock';
-      const formattedPrice = formatPkr(product.min_price_minor);
+      const safeBadge = product.badge ? escapeHtml(product.badge) : null;
+      const formattedPrice = formatDisplayPrice(product.min_price ?? product.min_price_minor);
 
       return `
         <article class="product-card" id="product-${escapeHtml(product.id)}">
           <div class="product-card-img-wrapper">
-            <span class="badge badge-neutral product-card-badge">${safeBadge}</span>
-            <img 
-              src="${safeImage}" 
-              alt="${safeTitle}" 
-              class="product-card-img" 
-              loading="lazy"
-              width="320"
-              height="320"
-            />
+            ${safeBadge ? `<span class="badge badge-neutral product-card-badge">${safeBadge}</span>` : ''}
           </div>
           <div class="product-card-info">
             <h3 class="product-card-title">${safeTitle}</h3>
             <div class="product-card-price-row">
               <span class="product-card-price">${formattedPrice}</span>
-              <span class="product-card-status">Ready to ship</span>
             </div>
             <button 
               class="btn btn-secondary product-card-btn" 
@@ -136,6 +170,24 @@ export function createFeaturedProducts(onOpenProductModal) {
       `;
     }).join('');
 
+    // Prepend safe images via DOM properties
+    products.forEach(product => {
+      const card = grid.querySelector(`#product-${product.id}`);
+      const wrapper = card?.querySelector('.product-card-img-wrapper');
+      if (wrapper && !wrapper.querySelector('.product-card-img')) {
+        wrapper.appendChild(
+          createSafeImageElement({
+            src: product.image_url,
+            alt: product.title || 'Product',
+            className: 'product-card-img',
+            loading: 'lazy',
+            width: 320,
+            height: 320,
+          })
+        );
+      }
+    });
+
     // Attach card click handlers
     grid.querySelectorAll('.product-card-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -146,32 +198,62 @@ export function createFeaturedProducts(onOpenProductModal) {
         }
       });
     });
+
+    renderPagination();
   }
 
   async function loadCollections() {
     try {
       const cols = await fetchCollections();
-      collections = Array.isArray(cols) ? cols : [];
+      collections = Array.isArray(cols) ? cols : (Array.isArray(cols?.collections) ? cols.collections : []);
       renderTabs();
     } catch {
       // If collections fail, keep the "All Products" tab
     }
   }
 
-  async function loadProducts() {
-    isLoading = true;
-    errorState = null;
-    renderGrid();
+  async function loadProducts({ reset = true } = {}) {
+    if (reset) {
+      currentPage = 1;
+      products = [];
+      totalProducts = 0;
+      isLoading = true;
+      isLoadingMore = false;
+      errorState = null;
+      renderGrid();
+    } else {
+      isLoadingMore = true;
+      renderPagination();
+    }
+
+    const thisReqId = ++activeRequestId;
 
     try {
       const res = await fetchProducts({
         collectionId: activeCategory === 'all' ? null : activeCategory,
+        page: currentPage,
+        pageSize,
       });
-      products = res?.products || [];
+
+      if (thisReqId !== activeRequestId) return; // Discard stale response
+
+      const newItems = res?.products || [];
+      if (reset) {
+        products = newItems;
+      } else {
+        const existingIds = new Set(products.map(p => p.id));
+        const filteredNew = newItems.filter(p => !existingIds.has(p.id));
+        products = [...products, ...filteredNew];
+      }
+
+      totalProducts = typeof res?.total === 'number' ? res.total : products.length;
       isLoading = false;
+      isLoadingMore = false;
       renderGrid();
     } catch (err) {
+      if (thisReqId !== activeRequestId) return;
       isLoading = false;
+      isLoadingMore = false;
       errorState = err.message || 'Could not connect to product catalog.';
       renderGrid();
     }
@@ -179,18 +261,19 @@ export function createFeaturedProducts(onOpenProductModal) {
 
   // Initial load
   loadCollections();
-  loadProducts();
+  loadProducts({ reset: true });
 
   return {
     element: section,
     setFilter: (category) => {
       activeCategory = category;
       renderTabs();
-      loadProducts();
+      loadProducts({ reset: true });
     },
     reload: () => {
       loadCollections();
-      loadProducts();
+      loadProducts({ reset: true });
     }
   };
 }
+

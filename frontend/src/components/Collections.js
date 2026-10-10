@@ -1,5 +1,5 @@
 import { fetchCollections } from '../utils/api.js';
-import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
+import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
 
 export function createCollectionsSection(onSelectCollection) {
   const section = document.createElement('section');
@@ -26,8 +26,9 @@ export function createCollectionsSection(onSelectCollection) {
 
   async function loadCollections() {
     try {
-      const collections = await fetchCollections();
-      if (!collections || collections.length === 0) {
+      const res = await fetchCollections();
+      const list = Array.isArray(res) ? res : (Array.isArray(res?.collections) ? res.collections : []);
+      if (!list || list.length === 0) {
         grid.innerHTML = `
           <div class="catalog-status-box" style="grid-column: 1 / -1;">
             <div class="catalog-status-title">No Collections Configured</div>
@@ -37,22 +38,14 @@ export function createCollectionsSection(onSelectCollection) {
         return;
       }
 
-      grid.innerHTML = collections.map(col => {
+      grid.innerHTML = list.map(col => {
         const safeName = escapeHtml(col.name);
         const safeDesc = col.description ? escapeHtml(col.description) : 'Explore pieces';
-        const safeImage = sanitizeMediaUrl(col.image_url, 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80');
+        const safeImage = sanitizeMediaUrl(col.image_url);
         const safeId = escapeHtml(col.id);
 
         return `
           <a href="#featured" class="collection-card" data-collection="${safeId}">
-            <img 
-              src="${safeImage}" 
-              alt="${safeName}" 
-              class="collection-img"
-              loading="lazy"
-              width="400"
-              height="300"
-            />
             <div class="collection-card-overlay"></div>
             <div class="collection-card-content">
               <span class="badge badge-accent" style="margin-bottom: 8px;">Collection</span>
@@ -70,6 +63,22 @@ export function createCollectionsSection(onSelectCollection) {
         `;
       }).join('');
 
+      list.forEach(col => {
+        const card = grid.querySelector(`[data-collection="${col.id}"]`);
+        if (card) {
+          card.prepend(
+            createSafeImageElement({
+              src: col.image_url,
+              alt: col.name || 'Collection',
+              className: 'collection-img',
+              loading: 'lazy',
+              width: 400,
+              height: 300,
+            })
+          );
+        }
+      });
+
       grid.querySelectorAll('.collection-card').forEach(card => {
         card.addEventListener('click', (e) => {
           e.preventDefault();
@@ -84,12 +93,17 @@ export function createCollectionsSection(onSelectCollection) {
         <div class="catalog-status-box is-error" style="grid-column: 1 / -1;">
           <div class="catalog-status-title">Collections Unavailable</div>
           <div class="catalog-status-desc">Unable to load collections from server. Please check your backend connection.</div>
+          <button class="btn btn-secondary btn-retry" style="margin-top: 8px;">Retry Connection</button>
         </div>
       `;
+      grid.querySelector('.btn-retry')?.addEventListener('click', () => {
+        loadCollections();
+      });
     }
   }
 
   loadCollections();
 
+  section.reload = loadCollections;
   return section;
 }

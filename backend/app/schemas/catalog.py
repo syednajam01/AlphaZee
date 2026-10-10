@@ -148,6 +148,33 @@ class HeroMetaSchema(BaseModel):
     video_url: Optional[str] = None
 
 
+class HeroProductSchema(BaseModel):
+    """
+    Product representation for the homepage hero carousel.
+    Contains presentation media, benefit text, and lowest variant price.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    slug: str
+    title: str
+    description: Optional[str] = None
+    collection_id: str
+    image_url: Optional[str] = None
+    badge: Optional[str] = None
+    is_hero: bool = True
+    hero_order: Optional[int] = None
+    hero_benefit: Optional[str] = None
+    hero_image_url: Optional[str] = None
+    hero_poster_url: Optional[str] = None
+    hero_video_url: Optional[str] = None
+    min_price: Optional[CurrencyAmount] = Field(
+        default=None,
+        description="Lowest price across all active variants.",
+    )
+
+
 class ProductDetailSchema(BaseModel):
     """
     Full product detail including all active variants.

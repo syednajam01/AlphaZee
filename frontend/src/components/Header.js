@@ -7,6 +7,11 @@ export function createHeader() {
   header.id = 'site-header';
 
   header.innerHTML = `
+    <!-- MVP Prototype Announcement Bar -->
+    <div class="announcement-bar" role="region" aria-label="Prototype announcement">
+      <span>MVP Concept Preview — Orders and payments are currently disabled.</span>
+    </div>
+
     <div class="container">
       <div class="header-inner">
         <!-- Logo Container -->

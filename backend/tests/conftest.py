@@ -39,11 +39,16 @@ TEST_DB_URL = os.environ.get(
 )
 
 
-def validate_test_database_url(url_str: str) -> None:
+def validate_test_database_url(url_str: str, app_url_str: str | None = None) -> None:
     """
     Validate that the test database URL points to a dedicated disposable database.
 
-    Refuses execution if the URL targets development, production, or lacks a '_test' suffix.
+    Refuses execution if:
+    1. The database name is an application/system database ('alphazee_dev', 'alphazee', 'postgres').
+    2. The database name does not end with '_test'.
+    3. The database name matches the application database name.
+    4. The normalized (host, port, database) matches the application target,
+       independently of credentials or username/password differences.
     """
     url = make_url(url_str)
     db_name = (url.database or "").lower()
@@ -56,10 +61,28 @@ def validate_test_database_url(url_str: str) -> None:
             "Tests must target a dedicated disposable database ending with '_test'."
         )
 
-    if url_str.strip() == settings.database_url.strip():
+    app_target_str = app_url_str if app_url_str is not None else settings.database_url
+    app_url = make_url(app_target_str)
+    app_db_name = (app_url.database or "").lower()
+
+    if db_name == app_db_name:
         raise RuntimeError(
-            "TEST_DATABASE_URL cannot match application DATABASE_URL."
+            f"Unsafe test database target: {db_name!r} matches application database name {app_db_name!r}."
         )
+
+    def canonical_host(h: str | None) -> str:
+        h_norm = (h or "localhost").lower()
+        return "127.0.0.1" if h_norm in ("localhost", "127.0.0.1") else h_norm
+
+    test_target = (canonical_host(url.host), url.port or 5432, db_name)
+    app_target = (canonical_host(app_url.host), app_url.port or 5432, app_db_name)
+
+    if test_target == app_target:
+        raise RuntimeError(
+            f"TEST_DATABASE_URL targets the same host/port/database ({test_target[0]}:{test_target[1]}/{test_target[2]}) "
+            "as application DATABASE_URL independently of credentials."
+        )
+
 
 
 @pytest.fixture(scope="session")

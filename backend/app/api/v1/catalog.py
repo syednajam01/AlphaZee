@@ -32,6 +32,7 @@ from app.schemas.catalog import (
     CollectionSchema,
     CurrencyAmount,
     HeroMetaSchema,
+    HeroProductSchema,
     ProductDetailSchema,
     ProductListResponse,
     ProductSummarySchema,
@@ -55,6 +56,26 @@ def _build_product_summary(product) -> ProductSummarySchema:
         image_url=product.image_url,
         badge=product.badge,
         is_hero=product.is_hero,
+        min_price=CurrencyAmount.from_minor(min_minor) if min_minor is not None else None,
+    )
+
+
+def _build_hero_product(product) -> HeroProductSchema:
+    min_minor = get_min_price_minor(product)
+    return HeroProductSchema(
+        id=product.id,
+        slug=product.slug,
+        title=product.title,
+        description=product.description,
+        collection_id=product.collection_id,
+        image_url=product.image_url,
+        badge=product.badge,
+        is_hero=product.is_hero,
+        hero_order=product.hero_order,
+        hero_benefit=product.hero_benefit,
+        hero_image_url=product.hero_image_url,
+        hero_poster_url=product.hero_poster_url,
+        hero_video_url=product.hero_video_url,
         min_price=CurrencyAmount.from_minor(min_minor) if min_minor is not None else None,
     )
 
@@ -158,7 +179,7 @@ def list_products(
 
 @router.get(
     "/products/hero",
-    response_model=list[ProductSummarySchema],
+    response_model=list[HeroProductSchema],
     summary="List hero products",
     description=(
         "Returns active products flagged for the homepage hero carousel, "
@@ -166,9 +187,9 @@ def list_products(
         "The frontend must handle the empty-hero case gracefully."
     ),
 )
-def list_hero_products(db: Session = Depends(get_db)) -> list[ProductSummarySchema]:
+def list_hero_products(db: Session = Depends(get_db)) -> list[HeroProductSchema]:
     products = get_hero_products(db)
-    return [_build_product_summary(p) for p in products]
+    return [_build_hero_product(p) for p in products]
 
 
 @router.get(

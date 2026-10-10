@@ -157,3 +157,40 @@ def test_currency_amount_formatting():
     assert ca_zero.minor == 0
     assert ca_zero.pkr == 0
     assert ca_zero.formatted == "PKR 0"
+
+
+def test_hero_product_schema_and_builder():
+    """Verify HeroProductSchema serialization and _build_hero_product preserves presentation media & price."""
+    from app.schemas.catalog import HeroProductSchema
+    from app.api.v1.catalog import _build_hero_product
+
+    v = Variant(id="var_hero_1", sku="AZ-OVS-M-BLK", price_minor=395000, is_active=True)
+    prod = Product(
+        id="prod_hero_1",
+        slug="oversized-heavyweight-tee",
+        title="Oversized Heavyweight Tee",
+        description="Premium 280 GSM cotton.",
+        collection_id="essentials",
+        image_url="https://cdn.alphazee.pk/tee-thumb.jpg",
+        badge="Best Seller",
+        is_hero=True,
+        hero_order=1,
+        hero_benefit="Engineered heavyweight drape",
+        hero_image_url="https://cdn.alphazee.pk/tee-hero.jpg",
+        hero_poster_url="https://cdn.alphazee.pk/tee-poster.jpg",
+        hero_video_url="https://cdn.alphazee.pk/tee-video.mp4",
+        variants=[v],
+    )
+
+    schema = _build_hero_product(prod)
+    assert isinstance(schema, HeroProductSchema)
+    assert schema.id == "prod_hero_1"
+    assert schema.slug == "oversized-heavyweight-tee"
+    assert schema.is_hero is True
+    assert schema.hero_order == 1
+    assert schema.hero_benefit == "Engineered heavyweight drape"
+    assert schema.hero_poster_url == "https://cdn.alphazee.pk/tee-poster.jpg"
+    assert schema.hero_video_url == "https://cdn.alphazee.pk/tee-video.mp4"
+    assert schema.min_price is not None
+    assert schema.min_price.minor == 395000
+    assert schema.min_price.formatted == "PKR 3,950"

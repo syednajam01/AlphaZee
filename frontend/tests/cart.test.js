@@ -259,18 +259,137 @@ describe('CartStore', () => {
     assert.equal(cart.getState().items[0].variant_id, Number.MAX_SAFE_INTEGER);
   });
 
-  it('rejects negative nested prices and prevents negative cart total', () => {
-    // Negative nested price.minor coerced to 0, preventing negative totals
+  it('rejects negative or missing prices and prevents adding invalid price items', () => {
+    // Missing price rejected
     assert.equal(cart.addItem({
       variant_id: 401,
       product_id: 'p1',
       title: 'Tee',
+    }), false);
+
+    // Negative nested price rejected
+    assert.equal(cart.addItem({
+      variant_id: 402,
+      product_id: 'p1',
+      title: 'Tee',
       price: { minor: -500 },
+    }), false);
+
+    // Negative direct price_minor rejected
+    assert.equal(cart.addItem({
+      variant_id: 403,
+      product_id: 'p1',
+      title: 'Tee',
+      price_minor: -100,
+    }), false);
+
+    assert.equal(cart.getState().count, 0);
+
+    // Valid price with minor units accepted
+    assert.equal(cart.addItem({
+      variant_id: 404,
+      product_id: 'p1',
+      title: 'Tee',
+      price: { minor: 345050, formatted: 'PKR 3,450.50' },
     }), true);
 
     const state = cart.getState();
-    assert.equal(state.items[0].price_minor, 0);
-    assert.equal(state.total_minor, 0);
-    assert.equal(state.formattedTotal, 'PKR 0');
+    assert.equal(state.count, 1);
+    assert.equal(state.items[0].price_minor, 345050);
+    assert.equal(state.total_minor, 345050);
+    assert.equal(state.formattedTotal, 'PKR 3,450.50');
+  });
+
+  it('marks item unavailable during reconciliation if live variant has missing/invalid price', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      cart.addItem({
+        variant_id: 501,
+        product_id: 'p1',
+        slug: 'invalid-price-prod',
+        title: 'Tee',
+        price_minor: 345000,
+      });
+
+      assert.equal(cart.getState().items[0].is_available, true);
+
+      // Live variant returns invalid price
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({
+          slug: 'invalid-price-prod',
+          variants: [
+            {
+              id: 501,
+              price: { minor: -500 }, // invalid price
+              availability: 'available',
+            },
+          ],
+        }),
+      });
+
+      await cart.reconcileWithApi();
+
+      const item = cart.getState().items[0];
+      assert.equal(item.is_available, false);
+      assert.equal(item.availability, 'unavailable');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('marks item unverified during reconciliation if slug is missing', async () => {
+    cart.addItem({
+      variant_id: 601,
+      product_id: 'p-no-slug',
+      slug: '', // missing slug
+      title: 'No Slug Piece',
+      price_minor: 250000,
+    });
+
+    assert.equal(cart.getState().items[0].is_available, true);
+
+    await cart.reconcileWithApi();
+
+    const item = cart.getState().items[0];
+    assert.equal(item.is_available, false);
+    assert.equal(item.availability, 'unverified');
+    assert.equal(cart.getState().hasUnavailable, true);
+    assert.equal(cart.getState().hasUnverified, true);
+  });
+
+  it('exposes isReconciling state during active reconciliation', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      cart.addItem({
+        variant_id: 701,
+        product_id: 'p7',
+        slug: 'slow-slug',
+        title: 'Slow Item',
+        price_minor: 100000,
+      });
+
+      let reconcileObserved = false;
+      globalThis.fetch = async () => {
+        // While fetch is ongoing, check isReconciling
+        reconcileObserved = cart.getState().isReconciling;
+        return {
+          ok: true,
+          json: async () => ({
+            slug: 'slow-slug',
+            variants: [{ id: 701, price: { minor: 100000 }, availability: 'available' }],
+          }),
+        };
+      };
+
+      assert.equal(cart.getState().isReconciling, false);
+      const promise = cart.reconcileWithApi();
+      await promise;
+
+      assert.equal(reconcileObserved, true);
+      assert.equal(cart.getState().isReconciling, false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

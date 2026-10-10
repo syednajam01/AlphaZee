@@ -74,3 +74,47 @@ def test_environment_helpers():
     prod_settings = Settings(app_env="production", _env_file=None)
     assert prod_settings.is_development is False
     assert prod_settings.is_production is True
+
+
+def test_validate_test_database_url_allowed():
+    """Verify valid disposable test database URL passes validation."""
+    from tests.conftest import validate_test_database_url
+
+    app_url = "postgresql://alphazee:secret@localhost:5433/alphazee_dev"
+    test_url = "postgresql://alphazee:secret@localhost:5433/alphazee_test"
+    # Should not raise
+    validate_test_database_url(test_url, app_url_str=app_url)
+
+
+def test_validate_test_database_url_rejects_non_test_database():
+    """Verify non-disposable and non-_test databases are rejected."""
+    from tests.conftest import validate_test_database_url
+
+    app_url = "postgresql://alphazee:secret@localhost:5433/alphazee_dev"
+
+    for unsafe_db in ("alphazee_dev", "alphazee", "postgres", "production_db", "my_store"):
+        with pytest.raises(RuntimeError, match="Unsafe test database configuration"):
+            validate_test_database_url(f"postgresql://alphazee:secret@localhost:5433/{unsafe_db}", app_url_str=app_url)
+
+
+def test_validate_test_database_url_rejects_credential_independent_match():
+    """Verify test URL is rejected when targeting the same host/port/db even with different credentials."""
+    from tests.conftest import validate_test_database_url
+
+    app_url = "postgresql://admin_user:production_pass@localhost:5433/disposable_test"
+    test_url = "postgresql://different_user:different_pass@localhost:5433/disposable_test"
+
+    with pytest.raises(RuntimeError, match="matches application database name"):
+        validate_test_database_url(test_url, app_url_str=app_url)
+
+
+def test_validate_test_database_url_normalizes_localhost_and_ip():
+    """Verify localhost and 127.0.0.1 are normalized and detected as matching targets."""
+    from tests.conftest import validate_test_database_url
+
+    app_url = "postgresql://u1:p1@127.0.0.1:5433/custom_test"
+    test_url = "postgresql://u2:p2@localhost:5433/custom_test"
+
+    with pytest.raises(RuntimeError, match="matches application database name"):
+        validate_test_database_url(test_url, app_url_str=app_url)
+

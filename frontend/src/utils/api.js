@@ -47,7 +47,7 @@ async function request(endpoint, options = {}) {
 
 /**
  * Fetch all active collections ordered by display_order.
- * @returns {Promise<Array>}
+ * @returns {Promise<{ collections: Array, total: number }>}
  */
 export async function fetchCollections() {
   return request('/collections');
@@ -59,31 +59,35 @@ export async function fetchCollections() {
  * @param {string|null} [params.collectionId]
  * @param {number} [params.page=1]
  * @param {number} [params.pageSize=20]
+ * @param {AbortSignal|null} [params.signal]
  * @returns {Promise<{ products: Array, total: number, page: number, page_size: number, collection_id: string|null }>}
  */
-export async function fetchProducts({ collectionId = null, page = 1, pageSize = 20 } = {}) {
+export async function fetchProducts({ collectionId = null, page = 1, pageSize = 20, signal = null } = {}) {
   const query = new URLSearchParams();
   if (collectionId && collectionId !== 'all') {
     query.set('collection_id', collectionId);
   }
   query.set('page', String(page));
   query.set('page_size', String(pageSize));
-  return request(`/products?${query.toString()}`);
+  return request(`/products?${query.toString()}`, { signal: signal || undefined });
 }
 
 /**
  * Fetch active products featured in the hero carousel.
  * @returns {Promise<Array>}
  */
-export async function fetchHeroProducts() {
-  return request('/products/hero');
+export async function fetchHeroProducts({ signal = null } = {}) {
+  return request('/products/hero', { signal: signal || undefined });
 }
 
 /**
  * Fetch product detail by slug with variants.
  * @param {string} slug
+ * @param {Object} [options]
+ * @param {AbortSignal|null} [options.signal]
  * @returns {Promise<Object>}
  */
-export async function fetchProductBySlug(slug) {
-  return request(`/products/${encodeURIComponent(slug)}`);
+export async function fetchProductBySlug(slug, { signal = null } = {}) {
+  return request(`/products/${encodeURIComponent(slug)}`, { signal: signal || undefined });
 }
+

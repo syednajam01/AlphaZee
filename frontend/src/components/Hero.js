@@ -1,5 +1,5 @@
 import { fetchHeroProducts } from '../utils/api.js';
-import { formatPkr } from '../utils/money.js';
+import { formatDisplayPrice } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
 
 export function createHero(onProductClick) {
@@ -62,8 +62,7 @@ export function createHero(onProductClick) {
         video.loop = true;
         video.playsInline = true;
         video.setAttribute('aria-hidden', 'true');
-        video.dataset.slideIndex = index;
-
+        video.dataset.videoSrc = videoUrl;
         if (index === 0) {
           video.src = videoUrl;
           video.play().catch(() => {});
@@ -110,14 +109,15 @@ export function createHero(onProductClick) {
 
       const safeTitle = escapeHtml(item.title);
       const safeBenefit = escapeHtml(item.hero_benefit || 'Engineered with premium materials and precision fits.');
-      const priceText = formatPkr(item.min_price_minor);
+      const priceDisplay = formatDisplayPrice(item.min_price ?? item.min_price_minor);
+      const priceText = priceDisplay === 'Price unavailable' ? 'Price unavailable' : `From ${priceDisplay}`;
 
       slide.innerHTML = `
         <div class="hero-text-content">
           <span class="badge badge-accent hero-badge">Featured Piece</span>
           <h1 class="hero-title">${safeTitle}</h1>
           <p class="hero-desc">${safeBenefit}</p>
-          <div class="hero-price-tag">From ${priceText}</div>
+          <div class="hero-price-tag">${priceText}</div>
           <div class="hero-cta-group">
             <button class="btn btn-hero hero-cta-btn" data-slug="${escapeHtml(item.slug || '')}" data-id="${escapeHtml(item.id || '')}">
               View Product Details
@@ -171,8 +171,19 @@ export function createHero(onProductClick) {
     section.querySelectorAll('.hero-bg-media').forEach((media, i) => {
       const isActive = i === currentSlide;
       media.classList.toggle('is-active', isActive);
-      if (isActive && media.tagName === 'VIDEO' && media.paused) {
-        media.play().catch(() => {});
+      if (media.tagName === 'VIDEO') {
+        if (isActive) {
+          if (!media.src && media.dataset.videoSrc) {
+            media.src = media.dataset.videoSrc;
+          }
+          if (media.paused) {
+            media.play().catch(() => {});
+          }
+        } else {
+          if (!media.paused) {
+            media.pause();
+          }
+        }
       }
     });
 
@@ -192,6 +203,9 @@ export function createHero(onProductClick) {
     autoAdvanceInterval = setInterval(() => {
       goToSlide(currentSlide + 1);
     }, 6000);
+    if (autoAdvanceInterval && typeof autoAdvanceInterval.unref === 'function') {
+      autoAdvanceInterval.unref();
+    }
   }
 
   // Load from API
@@ -207,6 +221,10 @@ export function createHero(onProductClick) {
   }
 
   loadHero();
+
+  section.destroy = () => {
+    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+  };
 
   return section;
 }

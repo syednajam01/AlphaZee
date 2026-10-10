@@ -1,7 +1,7 @@
 import { cart } from '../utils/cart.js';
 import { storeConfig } from '../data/store-config.js';
 import { formatPkr } from '../utils/money.js';
-import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
+import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
 
 export function createCartDrawer(onCheckout) {
   const backdrop = document.createElement('div');
@@ -78,7 +78,14 @@ export function createCartDrawer(onCheckout) {
     } else {
       footer.style.opacity = '1';
 
-      if (state.hasUnavailable) {
+      if (state.isReconciling) {
+        alertBox.style.display = 'block';
+        alertBox.textContent = 'Verifying live catalog prices and availability...';
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Verifying Cart...';
+        checkoutBtn.classList.remove('btn-primary');
+        checkoutBtn.classList.add('btn-secondary');
+      } else if (state.hasUnavailable || state.hasUnverified) {
         alertBox.style.display = 'block';
         alertBox.textContent = state.hasUnverified
           ? 'Some items have unverified availability due to a network connection issue.'
@@ -97,7 +104,6 @@ export function createCartDrawer(onCheckout) {
 
       itemsContainer.innerHTML = state.items.map(item => {
         const safeTitle = escapeHtml(item.title);
-        const safeImage = sanitizeMediaUrl(item.image_url, 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80');
         const formattedItemPrice = formatPkr(item.price_minor);
         const metaParts = [];
         if (item.size) metaParts.push(`Size: ${escapeHtml(item.size)}`);
@@ -105,7 +111,6 @@ export function createCartDrawer(onCheckout) {
 
         return `
           <div class="cart-item" data-variant-id="${escapeHtml(String(item.variant_id))}">
-            <img src="${safeImage}" alt="${safeTitle}" class="cart-item-img" />
             <div class="cart-item-info">
               <div class="cart-item-title">${safeTitle}</div>
               <div class="cart-item-meta">${metaParts.join(' • ')}</div>
@@ -129,6 +134,19 @@ export function createCartDrawer(onCheckout) {
           </div>
         `;
       }).join('');
+
+      // Prepend safe image elements via DOM properties
+      state.items.forEach(item => {
+        const itemEl = itemsContainer.querySelector(`[data-variant-id="${String(item.variant_id)}"]`);
+        if (itemEl) {
+          const img = createSafeImageElement({
+            src: item.image_url,
+            alt: item.title || 'Cart item',
+            className: 'cart-item-img',
+          });
+          itemEl.prepend(img);
+        }
+      });
 
       // Add quantity & remove listeners
       itemsContainer.querySelectorAll('.cart-item').forEach(el => {

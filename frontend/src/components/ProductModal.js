@@ -1,7 +1,7 @@
 import { cart } from '../utils/cart.js';
 import { fetchProductBySlug } from '../utils/api.js';
-import { formatPkr } from '../utils/money.js';
-import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
+import { extractPriceMinor, formatDisplayPrice } from '../utils/money.js';
+import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
 
 export function createProductModal(onAddedToCart) {
   const modalContainer = document.createElement('div');
@@ -15,6 +15,7 @@ export function createProductModal(onAddedToCart) {
   let selectedColor = null;
   let isLoading = false;
   let errorMessage = null;
+  let activeModalRequestId = 0;
 
   modalContainer.innerHTML = `
     <div class="drawer-backdrop is-open" style="z-index: 1;"></div>
@@ -62,50 +63,73 @@ export function createProductModal(onAddedToCart) {
     const sizes = [...new Set(variants.map(v => v.size).filter(Boolean))];
     const colors = [...new Set(variants.map(v => v.color).filter(Boolean))];
 
-    if (sizes.length > 0 && !selectedSize) selectedSize = sizes[0];
-    if (colors.length > 0 && !selectedColor) selectedColor = colors[0];
+    if (variants.length > 0) {
+      if (sizes.length > 0 && !selectedSize) selectedSize = variants[0].size || sizes[0];
+      if (colors.length > 0 && !selectedColor) selectedColor = variants[0].color || colors[0];
+    } else {
+      if (sizes.length > 0 && !selectedSize) selectedSize = sizes[0];
+      if (colors.length > 0 && !selectedColor) selectedColor = colors[0];
+    }
 
-    // Find the active variant matching selectedSize and selectedColor
+    // Find the active variant strictly matching selectedSize and selectedColor
     const activeVariant = variants.find(v => {
       const sizeMatch = sizes.length === 0 ? true : v.size === selectedSize;
       const colorMatch = colors.length === 0 ? true : v.color === selectedColor;
       return sizeMatch && colorMatch;
-    }) || variants[0];
+    }) || (sizes.length === 0 && colors.length === 0 ? variants[0] : null);
 
-    const isAvailable = activeVariant?.availability === 'available';
-    const priceText = activeVariant ? formatPkr(activeVariant.price_minor) : 'Price unavailable';
-    const statusText = isAvailable ? 'Available — Ready to ship' : 'Currently Unavailable';
+    const activePriceMinor = activeVariant
+      ? extractPriceMinor(activeVariant.price ?? activeVariant.price_minor)
+      : null;
+    const hasValidPrice = activePriceMinor !== null;
+    const isAvailable = Boolean(activeVariant && activeVariant.availability === 'available');
+    const priceText = activeVariant
+      ? (hasValidPrice ? formatDisplayPrice(activeVariant.price ?? activePriceMinor) : 'Price unavailable')
+      : 'Combination unavailable';
+    const canAddToCart = Boolean(activeVariant && isAvailable && hasValidPrice);
+    const statusText = !activeVariant
+      ? 'Combination Unavailable'
+      : (!hasValidPrice ? 'Price Unavailable' : (isAvailable ? 'Available' : 'Currently Unavailable'));
     const safeTitle = escapeHtml(currentProduct.title);
-    const safeDesc = escapeHtml(currentProduct.description || 'Architectural fit crafted with premium combed cotton.');
-    const safeImage = sanitizeMediaUrl(currentProduct.image_url, 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80');
+    const safeDesc = escapeHtml(currentProduct.description || '');
+    const safeImage = sanitizeMediaUrl(currentProduct.image_url);
 
     body.innerHTML = `
-      <div class="modal-img-wrapper">
-        <img src="${safeImage}" alt="${safeTitle}" class="modal-img" />
-      </div>
+      <div class="modal-img-wrapper"></div>
 
       <div class="modal-details">
-        <span class="badge ${isAvailable ? 'badge-accent' : 'badge-neutral'}" style="align-self: flex-start; margin-bottom: 8px;">
+        <span class="badge ${canAddToCart ? 'badge-accent' : 'badge-neutral'}" style="align-self: flex-start; margin-bottom: 8px;">
           ${statusText}
         </span>
         <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 4px;">${safeTitle}</h2>
         <div style="font-size: 1.35rem; font-weight: 700; color: var(--color-accent); margin-bottom: 12px;">
           ${priceText}
         </div>
-        <p style="font-size: 0.875rem; color: var(--color-text-muted); line-height: 1.5; margin-bottom: 16px;">
-          ${safeDesc}
-        </p>
+        ${safeDesc ? `
+          <p style="font-size: 0.875rem; color: var(--color-text-muted); line-height: 1.5; margin-bottom: 16px;">
+            ${safeDesc}
+          </p>
+        ` : ''}
 
         <!-- Color selector -->
         ${colors.length > 0 ? `
           <div class="option-group">
-            <label class="option-label">Color: <strong>${escapeHtml(selectedColor)}</strong></label>
+            <label class="option-label">Color: <strong>${escapeHtml(selectedColor || 'Select color')}</strong></label>
             <div class="option-pills" id="modal-colors-list">
-              ${colors.map(col => `
-                <button class="option-pill ${col === selectedColor ? 'is-selected' : ''}" data-color="${escapeHtml(col)}">
-                  ${escapeHtml(col)}
-                </button>
-              `).join('')}
+              ${colors.map(col => {
+                const isComboAvailable = selectedSize
+                  ? variants.some(v => v.size === selectedSize && v.color === col)
+                  : true;
+                const isSelected = col === selectedColor;
+                return `
+                  <button 
+                    class="option-pill ${isSelected ? 'is-selected' : ''} ${!isComboAvailable ? 'is-unavailable' : ''}" 
+                    data-color="${escapeHtml(col)}"
+                    style="${!isComboAvailable ? 'opacity: 0.45; text-decoration: line-through;' : ''}">
+                    ${escapeHtml(col)}
+                  </button>
+                `;
+              }).join('')}
             </div>
           </div>
         ` : ''}
@@ -114,36 +138,56 @@ export function createProductModal(onAddedToCart) {
         ${sizes.length > 0 ? `
           <div class="option-group">
             <div style="display: flex; justify-content: space-between; align-items: baseline;">
-              <label class="option-label">Size: <strong>${escapeHtml(selectedSize)}</strong></label>
+              <label class="option-label">Size: <strong>${escapeHtml(selectedSize || 'Select size')}</strong></label>
             </div>
             <div class="option-pills" id="modal-sizes-list">
-              ${sizes.map(sz => `
-                <button class="option-pill ${sz === selectedSize ? 'is-selected' : ''}" data-size="${escapeHtml(sz)}">
-                  ${escapeHtml(sz)}
-                </button>
-              `).join('')}
+              ${sizes.map(sz => {
+                const isComboAvailable = selectedColor
+                  ? variants.some(v => v.color === selectedColor && v.size === sz)
+                  : true;
+                const isSelected = sz === selectedSize;
+                return `
+                  <button 
+                    class="option-pill ${isSelected ? 'is-selected' : ''} ${!isComboAvailable ? 'is-unavailable' : ''}" 
+                    data-size="${escapeHtml(sz)}"
+                    style="${!isComboAvailable ? 'opacity: 0.45; text-decoration: line-through;' : ''}">
+                    ${escapeHtml(sz)}
+                  </button>
+                `;
+              }).join('')}
             </div>
           </div>
         ` : ''}
 
         <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--color-border);">
           <button 
-            class="btn ${isAvailable ? 'btn-primary' : 'btn-secondary'}" 
+            class="btn ${canAddToCart ? 'btn-primary' : 'btn-secondary'}" 
             id="btn-modal-add-to-cart" 
             style="width: 100%; min-height: 48px;"
-            ${!isAvailable ? 'disabled' : ''}>
-            ${isAvailable ? `Add to Cart • ${priceText}` : 'Out of Stock'}
+            ${!canAddToCart ? 'disabled' : ''}>
+            ${!activeVariant ? 'Unavailable Combination' : (!isAvailable ? 'Out of Stock' : (!hasValidPrice ? 'Price Unavailable' : `Add to Cart • ${priceText}`))}
           </button>
           <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.75rem; color: var(--color-text-muted);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="1" y="3" width="15" height="13"></rect>
-              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
             </svg>
-            <span>Delivery: 2–4 business days across Pakistan (COD & Bank Transfer)</span>
+            <span>Delivery: Estimated 3–5 business days nationwide (COD & Bank Transfer)</span>
           </div>
         </div>
       </div>
     `;
+
+    const imgWrapper = body.querySelector('.modal-img-wrapper');
+    if (imgWrapper) {
+      imgWrapper.appendChild(
+        createSafeImageElement({
+          src: currentProduct.image_url,
+          alt: currentProduct.title || 'Product piece',
+          className: 'modal-img',
+        })
+      );
+    }
 
     // Colors click handling
     body.querySelectorAll('#modal-colors-list .option-pill').forEach(btn => {
@@ -163,7 +207,7 @@ export function createProductModal(onAddedToCart) {
 
     // Add to cart click handling
     body.querySelector('#btn-modal-add-to-cart')?.addEventListener('click', () => {
-      if (!activeVariant || !isAvailable) return;
+      if (!activeVariant || !isAvailable || !hasValidPrice) return;
 
       cart.addItem(
         {
@@ -171,11 +215,11 @@ export function createProductModal(onAddedToCart) {
           slug: currentProduct.slug,
           title: currentProduct.title,
           image_url: safeImage,
-          price_minor: activeVariant.price_minor,
+          price_minor: activePriceMinor,
           variant_id: activeVariant.id,
           sku: activeVariant.sku,
-          size: selectedSize,
-          color: selectedColor,
+          size: activeVariant.size,
+          color: activeVariant.color,
         },
         {},
         1
@@ -195,17 +239,22 @@ export function createProductModal(onAddedToCart) {
     document.body.style.overflow = 'hidden';
 
     // If it's a slug or product object missing variants, fetch from API
+    const needsFetch = typeof productOrSlug === 'string' || !Array.isArray(productOrSlug?.variants);
     const slug = typeof productOrSlug === 'string' ? productOrSlug : productOrSlug?.slug;
+    const thisReqId = ++activeModalRequestId;
 
-    if (slug) {
+    if (needsFetch && slug) {
       isLoading = true;
       render();
 
       try {
-        currentProduct = await fetchProductBySlug(slug);
+        const fetched = await fetchProductBySlug(slug);
+        if (thisReqId !== activeModalRequestId) return; // Stale request discarded
+        currentProduct = fetched;
         isLoading = false;
         render();
       } catch (err) {
+        if (thisReqId !== activeModalRequestId) return;
         isLoading = false;
         errorMessage = err.message || 'Unable to retrieve piece details.';
         render();
@@ -218,6 +267,7 @@ export function createProductModal(onAddedToCart) {
   }
 
   function close() {
+    activeModalRequestId++; // Cancel any in-flight requests
     modalContainer.classList.remove('is-open');
     document.body.style.overflow = '';
   }

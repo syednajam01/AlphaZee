@@ -7,6 +7,7 @@ from app.schemas.catalog import (  # noqa: F401
     CollectionSchema,
     CurrencyAmount,
     HeroMetaSchema,
+    HeroProductSchema,
     ProductDetailSchema,
     ProductListResponse,
     ProductSummarySchema,
