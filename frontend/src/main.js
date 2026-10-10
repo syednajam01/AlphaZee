@@ -1,4 +1,5 @@
 import './styles/main.css';
+import { captureLandingUtmParams } from './utils/utm.js';
 import { createHeader } from './components/Header.js';
 import { createHero } from './components/Hero.js';
 import { createCollectionsSection } from './components/Collections.js';
@@ -8,9 +9,11 @@ import { createCartDrawer } from './components/CartDrawer.js';
 import { createProductModal } from './components/ProductModal.js';
 import { createMobileNavDrawer } from './components/MobileNavDrawer.js';
 import { createCheckoutView } from './components/CheckoutView.js';
-import { createAdminPreviewModal } from './components/AdminPreview.js';
+import { createAdminConsoleModal } from './components/AdminConsole.js';
+import { createOrderTrackingModal } from './components/OrderTrackingModal.js';
 
 function initApp() {
+  captureLandingUtmParams();
   const app = document.getElementById('app');
   if (!app) return;
 
@@ -18,7 +21,8 @@ function initApp() {
 
   // 1. Create Overlays & Modals
   const checkoutView = createCheckoutView();
-  const adminPreview = createAdminPreviewModal();
+  const adminConsole = createAdminConsoleModal();
+  const orderTracking = createOrderTrackingModal();
   const cartDrawer = createCartDrawer(() => {
     checkoutView.open();
   });
@@ -48,7 +52,7 @@ function initApp() {
 
   const footer = createReassuranceAndFooter();
 
-  // 3. Connect Header Triggers
+  // 3. Connect Header & Navigation Triggers
   header.querySelector('#btn-cart')?.addEventListener('click', () => {
     cartDrawer.open();
   });
@@ -64,7 +68,12 @@ function initApp() {
     }
   });
 
-  // 4. Assemble Application DOM in Order specified in design.md
+  header.querySelector('#nav-track-order')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    orderTracking.open();
+  });
+
+  // 4. Assemble Application DOM
   app.appendChild(header);
 
   const main = document.createElement('main');
@@ -77,10 +86,10 @@ function initApp() {
   app.appendChild(main);
   app.appendChild(footer);
 
-  // Connect Admin Preview trigger in footer
+  // Connect Admin trigger in footer
   footer.querySelector('a[href="#admin"]')?.addEventListener('click', (e) => {
     e.preventDefault();
-    adminPreview.open();
+    adminConsole.open();
   });
 
   // Append overlay dialogs
@@ -90,7 +99,8 @@ function initApp() {
   app.appendChild(mobileNav.drawer);
   app.appendChild(productModal.element);
   app.appendChild(checkoutView.element);
-  app.appendChild(adminPreview.element);
+  app.appendChild(orderTracking.element);
+  app.appendChild(adminConsole.element);
 }
 
 document.addEventListener('DOMContentLoaded', initApp);

@@ -187,46 +187,178 @@ Updated: 2026-10-09. Owner: Syed Najam.
 - **Automated Configuration Test Suite**:
   - Updated `backend/tests/test_config.py` with unit tests verifying allowed disposable test URLs, rejection of non-test databases, rejection of credential-independent matches targeting the same database, and localhost / 127.0.0.1 canonicalization.
 
+### Phase 15: Catalog Baseline Migration & Disposable PostgreSQL Verification
+- **Catalog Initial Migration Generated & Lifecycle Verified**:
+  - Migration script: `backend/alembic/versions/cdfea0b392b4_create_initial_catalog_tables.py`.
+  - Target database: isolated disposable test database `alphazee_migration_test` (port 5433).
+  - Verified DDL structure:
+    - `availability_status` PostgreSQL enum (`'AVAILABLE'`, `'UNAVAILABLE'`, `'UNKNOWN'`).
+    - `collections` table with UNIQUE on `slug`.
+    - `products` table with FK `collection_id` referencing `collections(id)` `ON DELETE RESTRICT`.
+    - `variants` table with FK `product_id` referencing `products(id)` `ON DELETE CASCADE`.
+    - `uq_variant_product_size_color` UNIQUE index on `(product_id, size, color)` with `NULLS NOT DISTINCT` (PostgreSQL 16+).
+    - `ck_variant_price_nonnegative` CHECK constraint (`price_minor >= 0`).
+  - Added clean enum drop in `downgrade()`: `sa.Enum(name='availability_status').drop(op.get_bind(), checkfirst=True)`.
+  - Full lifecycle tested on isolated database: `upgrade head` -> `downgrade base` -> `upgrade head` completed with zero errors.
+- **PostgreSQL Catalog Integration Test Suite**:
+  - Created `backend/tests/test_catalog_integration.py` covering:
+    - PostgreSQL 16+ `NULLS NOT DISTINCT` preventing duplicate `(product_id, NULL, NULL)` combinations.
+    - Check constraint `ck_variant_price_nonnegative` rejecting negative prices.
+    - FK `ON DELETE RESTRICT` preventing collection deletion when referenced by products.
+    - FK `ON DELETE CASCADE` deleting all variants when a product is deleted.
+    - Global SKU uniqueness across all products.
+    - Enum value persistence and reload.
+
+### Phase 16: Supplier & Inventory Foundation Models, Optimistic Locking & Concurrency Verification
+- **ORM Models Implemented**:
+  - `backend/app/models/suppliers.py`: `UserAccount`, `Supplier`, `SupplierMembership` with validation on `status` (`active`, `inactive`, `suspended`).
+  - `backend/app/models/inventory.py`: `SupplierVariant`, `InventoryBalance`, `StockEvent` with validation on `reason` in approved enum set.
+  - Re-exported all models in `backend/app/models/__init__.py`.
+- **Alembic Foundation Migration**:
+  - Generated revision `38e5f1393859_create_supplier_inventory_foundation.py`.
+  - Verified DDL structure:
+    - `suppliers` table with UUID PK and CHECK on `status`.
+    - `user_accounts` table with UUID PK and UNIQUE on `auth_subject`.
+    - `supplier_memberships` table with composite PK and cascading FKs.
+    - `supplier_variants` table with FKs, `supplier_cost_minor >= 0` check, and partial unique index `uq_sv_one_active_per_variant` on `variant_id` WHERE `active = true`.
+    - `inventory_balances` table with `on_hand >= 0` check and `version BIGINT` optimistic lock counter.
+    - `stock_events` immutable audit log table with CHECK on `reason`.
+  - Executed migration lifecycle: `upgrade head` -> `downgrade -1` -> `upgrade head` on `alphazee_migration_test` with zero errors.
+- **Query & Concurrency Layer**:
+  - Created `backend/app/queries/inventory.py` with `adjust_inventory()`, `StaleInventoryError`, `get_inventory_balance()`, `get_stock_events()`, `get_active_supplier_variant()`, and `get_active_suppliers()`.
+  - Atomic adjustment executes targeted `UPDATE ... WHERE version = :expected_version` and appends `StockEvent` in a single transaction.
+- **Integration & Two-Session Concurrency Test Suite**:
+  - Created `backend/tests/test_suppliers_unit.py` and `backend/tests/test_inventory_unit.py`.
+  - Created `backend/tests/test_inventory_integration.py` containing a genuine two-session concurrency test:
+    - Session A and Session B both read balance at version 0, on_hand 10.
+    - Session A updates to on_hand 8, expected_version 0 and commits -> version becomes 1.
+    - Session B attempts update with stale expected_version 0 -> raises `StaleInventoryError` and rolls back.
+### Phase 17: Stock Reservations & Owner Inventory Reporting Engine
+- **ORM Model Implemented**:
+  - `backend/app/models/inventory.py`: `StockReservation` with `quantity > 0` check, validated `stage` enum set (`held`, `confirmed`, `dispatched`, `fulfilled`, `cancelled`, `returned`), and partial aggregation index `idx_sr_open_stage`.
+  - Re-exported `StockReservation` in `backend/app/models/__init__.py`.
+- **Alembic Reservation Migration**:
+  - Generated revision `138c3538bf20_create_stock_reservations.py`.
+  - Verified DDL structure:
+    - `stock_reservations` table with UUID PK and CHECK on `quantity > 0` and `stage`.
+    - Partial index `idx_sr_open_stage` on `(supplier_variant_id, quantity)` WHERE `stage NOT IN ('fulfilled', 'cancelled', 'returned')`.
+    - FK `supplier_variant_id` referencing `supplier_variants(id)` with `ON DELETE RESTRICT`.
+  - Executed migration lifecycle: `upgrade head` -> `downgrade -1` -> `upgrade head` on `alphazee_migration_test` with zero errors.
+- **Reservation Engine & Reporting Query Layer**:
+  - Created `backend/app/queries/reservations.py`:
+    - `get_inventory_summary()`: Computes real-time `Physical` (`on_hand`), `Held` (sum of open reservations), and `Available` (`max(0, Physical - Held)`).
+    - `create_stock_reservation()`: Atomically guards against over-allocation when `requested > Available` (raising `InsufficientStockError`).
+    - `transition_reservation_stage()`: Advances reservation lifecycle, synchronizes physical on-hand stock and audit events upon `fulfilled`, and releases held stock on `cancelled`.
+- **Integration & Unit Test Suite**:
+  - Created `backend/tests/test_reservation_unit.py` and `backend/tests/test_reservation_integration.py` (10 test cases):
+    - Real-time calculation of owner triple `Physical 10 | Held 2 | Available 8`.
+    - Insufficient stock prevention when reservation exceeds Available.
+    - Cancellation immediately releasing Held stock and restoring Available.
+    - Fulfillment atomically decrementing physical stock and appending `StockEvent(reason='reservation_fulfilled')`.
+    - Terminal stage locking (preventing reopening closed reservations).
+    - Database check constraints on `quantity > 0` and `stage`.
+
+### Phase 18: Orders, Purchase Snapshots, Checkout Processing & Payment Verification
+- **ORM Models Implemented**:
+  - `backend/app/models/orders.py`: `Order`, `OrderLine`, `PaymentReceipt` with phone normalization (`normalize_pakistan_phone`), validated payment/order statuses, and snapshot columns.
+  - Re-exported all order models in `backend/app/models/__init__.py`.
+- **Alembic Orders Migration**:
+  - Generated revision `addb61a5d782_create_orders_and_payment_tables.py`.
+  - Verified DDL structure:
+    - `orders` table with UUID PK, check constraints on subtotal, shipping fee, total, payment method/status, order status.
+    - `order_lines` table with UUID PK, purchase-time snapshots (title, SKU, size, color, customer price, supplier cost), and `quantity > 0` check.
+    - `payment_receipts` table with UUID PK, receipt image URL, and bank reference.
+  - Executed migration lifecycle: `upgrade head` -> `downgrade -1` -> `upgrade head` on `alphazee_migration_test` with zero errors.
+- **Order Service & Processing Layer**:
+  - Created `backend/app/services/orders.py`:
+    - `place_order()`: Recalculates authoritative pricing from catalog, resolves active supplier variants, creates purchase snapshots, and locks stock reservations atomically.
+    - `upload_payment_receipt()`: Uploads bank transfer screenshots.
+    - `verify_bank_payment()`: Confirms received bank funds and advances order/reservation stages to `confirmed`.
+    - `cancel_order()`: Cancels order and immediately releases all held stock reservations.
+    - `deliver_order()`: Marks order delivered and fulfills reservations (decrementing physical inventory and recording `StockEvent`).
+- **Integration & Unit Test Suite**:
+### Phase 20: Interactive Owner Administration Dashboard, Supplier Management & Order Tracking UI
+- **Admin Schemas & Endpoints**:
+  - `backend/app/schemas/admin.py`: Added `AdminOverviewResponse`, `SupplierCreateRequest`, `SupplierVariantAssignRequest`, `SupplierResponseSchema`, `SupplierVariantResponseSchema`.
+  - `backend/app/api/v1/admin.py`:
+    - `GET /api/v1/admin/overview`: Computes live gross revenue from verified payments, order status breakdown (`placed`, `confirmed`, `delivered`), total active SKUs, and low-stock count (`available <= 2`).
+    - `GET /api/v1/admin/suppliers`: Lists registered approved suppliers with active SKU count and settlement currency.
+    - `POST /api/v1/admin/suppliers`: Registers new suppliers with unique slug validation.
+    - `POST /api/v1/admin/suppliers/{supplier_id}/variants`: Maps a catalog variant to a supplier with `supplier_cost_minor`, deactivates competing active supplier variants within the same transaction to uphold partial unique index `uq_sv_one_active_per_variant`, and ensures an `InventoryBalance` row exists.
+  - Re-exported all new schemas in `backend/app/schemas/__init__.py`.
+- **Backend Admin API Tests**:
+  - `backend/tests/test_api_admin.py`: Added `test_admin_overview_metrics` and `test_admin_supplier_crud_and_variant_cost_assignment`.
+  - All 101 backend tests passing (`101 passed, 0 failed`).
+- **Frontend Admin Console & Tracking Modal UI**:
+  - `frontend/src/utils/api.js`: Added `fetchAdminOverview`, `fetchAdminInventory`, `adjustAdminInventory`, `fetchAdminOrders`, `verifyOrderPayment`, `deliverOrder`, `cancelOrder`, `fetchAdminSuppliers`, `createAdminSupplier`, `assignSupplierVariant`.
+  - `frontend/src/components/AdminConsole.js`: Built complete interactive owner administration dashboard with:
+    - Live Overview cards (Gross Verified Revenue, Pending Action Orders, Active SKUs, Low Stock warnings).
+    - Orders management table with inline payment verification, delivery fulfillment, and cancellation actions.
+    - Inventory & Stock table with real-time `Physical | Held | Available` metric chips and optimistic concurrency version-guarded stock adjustment modal.
+    - Suppliers management tab with supplier registration form and variant cost assignment modal.
+  - `frontend/src/components/OrderTrackingModal.js`: Built customer self-service order tracking with order number and Pakistan mobile phone verification, visual step progress indicator, and inline bank transfer receipt screenshot upload.
+  - `frontend/src/components/Header.js` & `frontend/src/main.js`: Added "Track Order" navigation link and mounted `AdminConsoleModal` and `OrderTrackingModal`.
+  - `frontend/tests/admin.test.js`: Added unit tests covering admin API client methods.
+
+### Phase 22: Promotional Discounts, Coupon Codes, Marketing Attribution (UTM), Customer Returns & Size Exchanges
+- **Promotions & Returns ORM Models & Alembic Migration**:
+  - `backend/app/models/promotions.py`: Created `Coupon` model supporting percentage discounts (with optional maximum discount cap), fixed-amount rupee discounts, and free shipping waivers. Enforces nonnegative values, code uniqueness, and validity date constraints.
+  - `backend/app/models/returns.py`: Created `OrderReturn` model supporting bank transfer refunds, size exchanges (linked to replacement variant ID), and store credit. Enforces status lifecycle (`requested`, `approved`, `item_received`, `inspected_passed`, `completed`, `rejected`), return reasons, nonnegative refund amount in paisas, and restocking audit timestamps.
+  - `backend/app/models/orders.py`: Added `discount_amount_minor`, `coupon_code_snapshot`, `utm_source`, `utm_medium`, `utm_campaign`, non-negative discount check constraint, and `returns` cascade relationship.
+  - Generated and verified Alembic revision `8f6817131a9a_create_coupons_and_order_returns_tables.py` on disposable `alphazee_migration_test` (tested full `upgrade` -> `downgrade -1` -> `upgrade` lifecycle).
+- **Service Layer**:
+  - `backend/app/services/promotions.py`: `validate_coupon()`, `record_coupon_usage()`, `create_coupon()`, `list_coupons()`, `delete_coupon()`. Authoritatively calculates discount amounts in integer paisas, validates usage limits, minimum subtotals, and expiry dates.
+  - `backend/app/services/returns.py`: `create_return_request()`, `approve_return_request()`, `complete_return_and_restock()`, `reject_return_request()`, `list_order_returns()`. Completing return atomically adjusts inventory on hand and records `StockEvent(reason='rto_return')`.
+  - `backend/app/services/orders.py`: Enhanced `CreateOrderDTO` and `place_order()` to validate promo codes, apply discount amounts to total payable, snapshot coupon codes, and store marketing UTM parameters.
+  - `backend/app/services/analytics.py`: Added `get_marketing_attribution_summary()` aggregating orders, gross revenue, and promotional discounts by campaign/source.
+- **Storefront & Admin API Routing**:
+  - `POST /api/v1/coupons/validate` (storefront coupon validation against live cart subtotal).
+  - `POST /api/v1/returns/request` (customer return / exchange request submission).
+  - `GET /api/v1/admin/coupons`, `POST /api/v1/admin/coupons`, `DELETE /api/v1/admin/coupons/{id}`.
+  - `GET /api/v1/admin/returns`, `POST /api/v1/admin/returns/{id}/approve`, `POST /api/v1/admin/returns/{id}/complete`, `POST /api/v1/admin/returns/{id}/reject`.
+  - `GET /api/v1/admin/analytics/marketing` (marketing campaign conversion and discount report).
+- **Frontend Integration**:
+  - `frontend/src/utils/utm.js`: Utility to automatically capture landing UTM query parameters and cache in session storage.
+  - `frontend/src/utils/api.js`: Added `validateCoupon`, `requestOrderReturn`, coupon CRUD, return management, and marketing analytics methods.
+  - `frontend/src/components/CheckoutView.js`: Added promo code box with live validation, discount breakdown row, and UTM parameter forwarding in order placement payload.
+  - `frontend/src/components/OrderTrackingModal.js`: Added customer return & exchange request submission panel and status display.
+  - `frontend/src/components/AdminConsole.js`: Added **Coupons & Promos** management tab, **Returns & Refunds** resolution tab, and **Marketing Attribution (UTM)** performance breakdown in Analytics.
+- **Comprehensive Verification**:
+  - `backend/tests/test_api_coupons.py`: Percentage, fixed, and free-shipping coupon validation and API endpoint tests.
+  - `backend/tests/test_api_returns.py`: Customer return request, admin approval, and inventory restock tests.
+  - `backend/tests/test_analytics.py`: Added marketing attribution analytics tests.
+  - `frontend/tests/promotions.test.js`: Unit tests for UTM capture, coupon validation, return workflows, and admin methods.
+  - Full backend test suite: **113 passed, 0 failed** in 11.08s.
+  - Full frontend test suite: **63 passed, 0 failed** in 1.61s.
+  - Vite production build: Clean compile with zero errors in 956ms.
+
 ---
 
 ## 2. Checks Executed & Results
 
-1. **Backend Unit & Configuration Suite (Python 3.13)**:
-   - Command: `pytest tests/test_catalog_unit.py tests/test_config.py -v`
-   - **Result**: `18 passed, 0 failed` in 0.15s.
-   - Covers: `validate_test_database_url` target normalization, CORS origins parser, environment helpers, `HeroProductSchema` and `_build_hero_product`, `CurrencyAmount.from_minor` fractional formatting, query compilation (`JOIN collections`, active filters, deterministic pagination, and hero ordering), model constraint inspection (`NULLS NOT DISTINCT`, aligned cascades, automated option normalization with `@validates`, and price helpers).
-2. **Backend Standalone Health Probe**:
-   - Command: `pytest tests/test_health.py -k test_health -v`
-   - **Result**: `2 passed, 1 deselected` in 0.08s (requires no database connection).
-3. **Frontend Unit & Component Suite (Node.js 25 built-in runner)**:
-   - Command: `npm test` (executes `node --test tests/*.test.js`)
-   - **Result**: `49 passed, 0 failed` across 11 suites in 1.2s.
-   - Covers:
-     - `pagination.test.js`: "Load More" pagination appending, "Showing all pieces" notice, request sequencing discarding out-of-order filter responses, modal sequencing discarding out-of-order detail responses, Header prototype banner presence, and storeConfig claim cleanup.
-     - `dom.test.js`: URL protocol checking, quote breakout prevention, tag breakout prevention, newlines, and DOM property image creation.
-     - `options.test.js`: sparse variant combinations, impossible combination rejection, out-of-stock variant deactivation, invalid price deactivation, and exact attribute copying.
-     - `hero.test.js`: on-demand video loading, inactive video pausing, benefit text rendering, structured price display, and fallback rendering.
-     - `collections.test.js`: populated, empty, and failed collections contract unpacking and FeaturedProducts filter tabs.
-     - `cart.test.js`: `CartStore` `alphazee_cart_v2` storage, items missing slugs marked unverified, active reconciliation guarding (`isReconciling`), safe-integer `variant_id` validation, fractional quantity/delta rejection, negative/missing price rejection, live invalid price deactivation, offline unverified availability preservation, 404 deactivation, item removal, and quantity clamping.
-     - `money.test.js`: `formatPkr`, `extractPriceMinor`, `formatDisplayPrice`, `pkrToMinor`.
-4. **Frontend Production Build**:
-   - Command: `npm run build` in `frontend/`
-   - **Result**: `✓ built in 549ms`, 20 modules transformed, zero errors.
-5. **Import & Syntax Verification**:
-   - Python 3.13 clean import of schemas, queries, models, and config.
+1. **Full Backend Test Suite (Python 3.13 / PostgreSQL 16)**:
+   - Command: `pytest -v` (in `backend/`)
+   - **Result**: `113 passed, 0 failed` in 11.08s.
+   - Includes: unit tests, API tests, configuration safety guards, readiness probes, catalog integration, supplier/inventory model tests, two-session concurrency tests, reservation lifecycle tests, order checkout/payment tests, storefront order API tests, admin overview/inventory/supplier endpoints, courier dispatch/tracking, P&L unit economics, coupon validations, return requests/restocks, and marketing UTM analytics.
+2. **Frontend Test Suite (Node.js 25 built-in runner)**:
+   - Command: `npm test` (in `frontend/`)
+   - **Result**: `63 passed, 0 failed` across 14 suites in 1.61s.
+3. **Frontend Production Build**:
+   - Command: `npm run build` (in `frontend/`)
+   - **Result**: `✓ built in 956ms`, 22 modules transformed, zero errors.
 
 ---
 
-## 3. Checks Deferred Due to Database Pause
+## 3. Current Scope & Safety Confirmation
 
-- Full database-backed integration tests in `backend/tests/test_catalog.py` (which invoke `conftest.py`'s `create_all()`).
-- Database seed script execution (`seed.py`).
-- Alembic migration generation (`alembic revision --autogenerate`).
-- Alembic migration execution (`alembic upgrade head`).
+- **Application Database Safety**: `alphazee_dev` remains completely untouched.
+- **Storefront, Logistics, Promotions & Admin Safety**: Verified end-to-end against disposable PostgreSQL test databases (`alphazee_test` / `alphazee_migration_test`).
 
----
 
-## 4. Safety Confirmation
 
-**No migrations were generated or applied. No database schemas were altered. No databases were dropped or reset. No seed commands were run.**
+
+
+
+
+
 

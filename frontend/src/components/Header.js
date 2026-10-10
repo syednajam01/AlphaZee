@@ -7,9 +7,9 @@ export function createHeader() {
   header.id = 'site-header';
 
   header.innerHTML = `
-    <!-- MVP Prototype Announcement Bar -->
-    <div class="announcement-bar" role="region" aria-label="Prototype announcement">
-      <span>MVP Concept Preview — Orders and payments are currently disabled.</span>
+    <!-- Store Announcement Bar -->
+    <div class="announcement-bar" role="region" aria-label="Store announcement">
+      <span>AlphaZee MVP Concept Preview • Free delivery across Pakistan • Cash on Delivery & Verified Bank Transfer (Checkout Disabled)</span>
     </div>
 
     <div class="container">
@@ -21,6 +21,7 @@ export function createHeader() {
         <nav class="nav-desktop" aria-label="Primary navigation">
           <a href="#featured" class="nav-link">Shop</a>
           <a href="#collections" class="nav-link">Collections</a>
+          <a href="#track" id="nav-track-order" class="nav-link">Track Order</a>
           <a href="#reassurance" class="nav-link">About & Delivery</a>
           <a href="#faq" class="nav-link">FAQ</a>
         </nav>

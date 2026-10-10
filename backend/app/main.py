@@ -14,8 +14,12 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import admin as admin_router
 from app.api.v1 import catalog as catalog_router
+from app.api.v1 import coupons as coupons_router
 from app.api.v1 import health as health_router
+from app.api.v1 import orders as orders_router
+from app.api.v1 import returns as returns_router
 from app.config import settings
 
 # ── Application instance ──────────────────────────────────────────────────────
@@ -25,9 +29,9 @@ app = FastAPI(
     title=settings.app_title,
     version=settings.app_version,
     description=(
-        "AlphaZee catalog API — Milestone 1.\n\n"
-        "Read-only endpoints for product catalog and application diagnostics. "
-        "Admin, order, and payment endpoints are out of scope for this milestone."
+        "AlphaZee Commerce API.\n\n"
+        "Endpoints for product catalog, storefront orders, payment verification, "
+        "and owner inventory administration."
     ),
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
@@ -36,19 +40,23 @@ app = FastAPI(
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Allowed origins are configured via ALLOWED_ORIGINS in .env.
-# Only GET is permitted — no write operations are exposed by this milestone.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=False,
-    allow_methods=["GET", "OPTIONS"],
-    allow_headers=["Accept", "Content-Type"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Accept", "Content-Type", "Authorization"],
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 # All public endpoints are versioned under /api/v1.
 app.include_router(health_router.router, prefix="/api/v1")
 app.include_router(catalog_router.router, prefix="/api/v1")
+app.include_router(orders_router.router, prefix="/api/v1")
+app.include_router(coupons_router.router, prefix="/api/v1")
+app.include_router(returns_router.router, prefix="/api/v1")
+app.include_router(admin_router.router, prefix="/api/v1")
+
 
 
 # ── Root ──────────────────────────────────────────────────────────────────────

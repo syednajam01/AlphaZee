@@ -1,0 +1,219 @@
+"""
+Pydantic schemas for AlphaZee Owner Administration APIs (v1).
+
+Covers:
+- Inventory summary and real-time physical/held/available stock metrics.
+- Optimistically-guarded inventory adjustments.
+- Owner order management and payment verification.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.orders import OrderResponseSchema
+
+
+class InventoryMetricResponse(BaseModel):
+    """
+    Real-time inventory metric triple (Physical | Held | Available)
+    for a specific supplier variant.
+    """
+
+    supplier_variant_id: uuid.UUID
+    variant_id: int
+    product_title: str
+    sku: str
+    size: Optional[str] = None
+    color: Optional[str] = None
+    physical_on_hand: int = Field(description="Total physical units in warehouse/supplier premises")
+    held_reservations: int = Field(description="Units held in open active reservations (held/confirmed/dispatched)")
+    available_to_sell: int = Field(description="Net available units for new orders (Physical - Held)")
+    version: int = Field(description="Optimistic concurrency control version")
+
+
+class InventorySummaryResponse(BaseModel):
+    """List of all active catalog inventory metrics."""
+
+    items: list[InventoryMetricResponse]
+    total_variants: int
+
+
+class InventoryAdjustRequest(BaseModel):
+    """Optimistically guarded stock adjustment request."""
+
+    supplier_variant_id: uuid.UUID = Field(description="Supplier variant UUID")
+    quantity_delta: int = Field(description="Positive (stock received) or negative (damaged/shrinkage) delta")
+    expected_version: int = Field(ge=1, description="Expected concurrency version number")
+    reason: str = Field(min_length=3, max_length=100, description="Reason for stock movement")
+    reference_id: Optional[str] = Field(default=None, max_length=100, description="Optional invoice/PO/audit ref")
+
+
+class AdminOrderListResponse(BaseModel):
+    """Paginated list of orders for owner dashboard."""
+
+    orders: list[OrderResponseSchema]
+    total: int
+    page: int
+    page_size: int
+
+
+class SupplierCreateRequest(BaseModel):
+    """Payload to create or update an approved supplier."""
+
+    name: str = Field(min_length=2, max_length=200, description="Supplier trade name")
+    slug: str = Field(min_length=2, max_length=100, description="URL/admin portal slug")
+    status: str = Field(default="active", description="'active', 'inactive', or 'suspended'")
+    notes: Optional[str] = Field(default=None, max_length=500, description="Contact/settlement notes")
+
+
+class SupplierResponseSchema(BaseModel):
+    """Approved supplier details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    status: str
+    notes: Optional[str] = None
+
+
+class SupplierListResponse(BaseModel):
+    """List of all registered suppliers."""
+
+    suppliers: list[SupplierResponseSchema]
+    total: int
+
+
+class SupplierVariantAssignRequest(BaseModel):
+    """Assign or update a catalog variant supplier cost."""
+
+    variant_id: int = Field(ge=1, description="Catalog variant ID")
+    supplier_cost_minor: int = Field(ge=0, description="Wholesale cost in PKR minor units (paisas)")
+    active: bool = Field(default=True, description="Whether this is the primary active supplying vendor")
+
+
+class SupplierVariantResponseSchema(BaseModel):
+    """Supplier variant linkage details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    supplier_id: uuid.UUID
+    variant_id: int
+    supplier_cost_minor: int
+    active: bool
+
+
+class AdminOverviewMetricsResponse(BaseModel):
+    """Real-time store metrics for owner dashboard header."""
+
+    gross_revenue_minor: int
+    formatted_gross_revenue: str
+    total_orders: int
+    pending_orders: int
+    confirmed_orders: int
+    delivered_orders: int
+    total_skus: int
+    low_stock_skus: int
+
+
+class ShipmentCreateRequest(BaseModel):
+    """Payload to dispatch an order via courier."""
+
+    courier_code: str = Field(description="Courier company: trax, leopards, call_courier, postex, tcs, mnp, manual")
+    tracking_number: str = Field(min_length=3, max_length=64, description="Tracking number / waybill ID")
+    shipping_cost_minor: int = Field(default=0, ge=0, description="Actual courier shipping fee in paisas")
+    tracking_url: Optional[str] = Field(default=None, max_length=512, description="Direct web tracking link")
+
+
+class ShipmentStatusUpdateRequest(BaseModel):
+    """Payload to update delivery status or record RTO."""
+
+    status: str = Field(description="New status: in_transit, out_for_delivery, delivered, rto_initiated, rto_delivered")
+    rto_reason: Optional[str] = Field(default=None, max_length=200, description="Customer refusal or address issue reason")
+    rto_courier_cost_minor: int = Field(default=0, ge=0, description="Courier return penalty charge in paisas")
+
+
+class CodRemittanceRequest(BaseModel):
+    """Payload to record courier COD cash remittance into bank account."""
+
+    remitted_amount_minor: int = Field(ge=1, description="Actual cash remitted into bank account in paisas")
+    reference: Optional[str] = Field(default=None, max_length=100, description="Bank deposit ref / courier payout invoice number")
+
+
+class ShipmentAdminResponseSchema(BaseModel):
+    """Full courier shipment details for owner console."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    order_id: uuid.UUID
+    courier_code: str
+    tracking_number: str
+    tracking_url: Optional[str] = None
+    shipping_cost_minor: int
+    status: str
+    cod_amount_minor: int
+    cod_remitted_amount_minor: int
+    cod_remittance_status: str
+    cod_remittance_reference: Optional[str] = None
+    cod_remitted_at: Optional[datetime] = None
+    rto_reason: Optional[str] = None
+    rto_courier_cost_minor: int
+    rto_restocked_at: Optional[datetime] = None
+    dispatched_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
+
+
+class ProfitLossResponseSchema(BaseModel):
+    """Financial gross profit, COGS, courier expenses, and unit economics report."""
+
+    gross_revenue_minor: int
+    formatted_gross_revenue: str
+    subtotal_revenue_minor: int
+    shipping_revenue_minor: int
+    cogs_minor: int
+    formatted_cogs: str
+    outbound_courier_cost_minor: int
+    rto_courier_cost_minor: int
+    total_courier_expenses_minor: int
+    formatted_courier_expenses: str
+    gross_profit_minor: int
+    formatted_gross_profit: str
+    gross_margin_percent: float
+    total_orders_count: int
+    total_shipments_count: int
+    delivered_shipments_count: int
+    rto_shipments_count: int
+    rto_rate_percent: float
+    cod_pending_remittance_minor: int
+    cod_remitted_minor: int
+
+
+class MarketingAttributionItemSchema(BaseModel):
+    """UTM campaign performance item."""
+
+    utm_source: str
+    utm_medium: str
+    utm_campaign: str
+    orders_count: int
+    revenue_minor: int
+    formatted_revenue: str
+    discount_minor: int
+    formatted_discount: str
+
+
+class MarketingAttributionResponseSchema(BaseModel):
+    """Marketing campaign attribution performance summary."""
+
+    channels: list[MarketingAttributionItemSchema]
+    total_campaigns: int
+
+
+
