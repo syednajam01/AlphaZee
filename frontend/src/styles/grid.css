@@ -303,6 +303,15 @@
   max-width: 320px;
 }
 
+.footer-quote-img {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  margin-top: 20px;
+  object-fit: contain;
+}
+
 .footer-heading {
   color: #FFFFFF;
   font-size: var(--font-size-base);

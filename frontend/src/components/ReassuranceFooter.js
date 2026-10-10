@@ -60,6 +60,14 @@ export function createReassuranceAndFooter() {
             <p class="footer-brand-desc">
               ${storeConfig.tagline}. Purpose-built apparel combining timeless cuts with dependable construction.
             </p>
+            <img
+              src="/logo/huda-brand-quote.png"
+              alt="A vision by Syed Najam. A name carried with pride: Huda."
+              class="footer-quote-img"
+              width="2172"
+              height="724"
+              loading="lazy"
+            />
           </div>
 
           <div>

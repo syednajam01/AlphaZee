@@ -11,7 +11,7 @@
 export const LOGO_ASSETS = {
   symbol: '/logo/Modern black AZ monogram-1.png',
   wordmark: '/logo/Bold AlphaZee geometric wordmark-2.png',
-  combined: '/logo/AlphaZee monogram and wordmark-3.png',
+  combined: '/logo/AlphaZee monogram and wordmark-3_withsign.png',
 };
 
 export function createBrandLogo({
