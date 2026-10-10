@@ -10,10 +10,20 @@ const MAX_QUANTITY_PER_ITEM = 99;
  * Returns null if the item cannot be safely coerced to a valid CartItem.
  */
 function validateCartItem(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
-  const variantId = raw.variant_id !== undefined && raw.variant_id !== null ? raw.variant_id : null;
-  if (variantId === null || variantId === '') return null;
+  // Strictly validate variant_id: must be a positive integer or non-empty string of digits
+  let variantId = null;
+  if (typeof raw.variant_id === 'number' && Number.isInteger(raw.variant_id) && raw.variant_id > 0) {
+    variantId = raw.variant_id;
+  } else if (typeof raw.variant_id === 'string') {
+    const trimmed = raw.variant_id.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const parsed = parseInt(trimmed, 10);
+      if (parsed > 0) variantId = parsed;
+    }
+  }
+  if (variantId === null) return null;
 
   const quantity = Number.isInteger(raw.quantity) && raw.quantity > 0
     ? Math.min(raw.quantity, MAX_QUANTITY_PER_ITEM)
@@ -21,7 +31,9 @@ function validateCartItem(raw) {
 
   const priceMinor = typeof raw.price_minor === 'number' && Number.isInteger(raw.price_minor) && raw.price_minor >= 0
     ? raw.price_minor
-    : (typeof raw.price === 'number' && raw.price >= 0 ? Math.round(raw.price * 100) : 0);
+    : (typeof raw.price?.minor === 'number'
+      ? raw.price.minor
+      : (typeof raw.price === 'number' && raw.price >= 0 ? Math.round(raw.price * 100) : 0));
 
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : 'AlphaZee Essential';
   const productId = typeof raw.product_id === 'string' ? raw.product_id : (typeof raw.id === 'string' ? raw.id : '');
@@ -231,16 +243,29 @@ class CartStore {
               );
 
               if (liveVariant) {
-                item.price_minor = liveVariant.price_minor;
-                item.is_available = liveVariant.availability === 'available' && liveVariant.is_active;
+                const liveMinor = typeof liveVariant.price?.minor === 'number'
+                  ? liveVariant.price.minor
+                  : liveVariant.price_minor;
+                if (typeof liveMinor === 'number') {
+                  item.price_minor = liveMinor;
+                }
+                item.is_available = liveVariant.availability === 'available' && liveVariant.is_active !== false;
               } else {
                 // Variant no longer exists in active catalog
                 item.is_available = false;
               }
             }
           }
-        } catch {
-          // If a single product fetch fails, keep cached values without crashing
+        } catch (err) {
+          // If product is 404 (deactivated or deleted), mark all items for this product as unavailable
+          if (err && (err.status === 404 || err.message?.includes('404'))) {
+            for (const item of this.items) {
+              if (item.slug === slug) {
+                item.is_available = false;
+              }
+            }
+          }
+          // If network or transient failure, keep cached values without crashing
         }
       }
 

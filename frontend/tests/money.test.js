@@ -19,9 +19,9 @@ describe('formatPkr', () => {
     assert.equal(formatPkr(NaN), 'PKR 0');
   });
 
-  it('handles fractional paisas by integer division without floating errors', () => {
-    // 345099 paisas = 3450 rupees
-    assert.equal(formatPkr(345099), 'PKR 3,450');
+  it('formats fractional paisas with exact two-decimal precision', () => {
+    assert.equal(formatPkr(345050), 'PKR 3,450.50');
+    assert.equal(formatPkr(345099), 'PKR 3,450.99');
   });
 });
 

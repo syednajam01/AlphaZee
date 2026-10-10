@@ -109,6 +109,16 @@ def test_variant_option_normalization():
     assert Variant.normalize_option("  Large  ") == "Large"
     assert Variant.normalize_option("\tOatmeal\n") == "Oatmeal"
 
+    # Test automatic normalization via SQLAlchemy @validates on init and assignment
+    v = Variant(size="  M  ", color="   ")
+    assert v.size == "M"
+    assert v.color is None
+
+    v.size = "   "
+    v.color = "  Chalk White  "
+    assert v.size is None
+    assert v.color == "Chalk White"
+
 
 def test_variant_price_helpers():
     """Verify price_pkr integer division and get_min_price_minor."""

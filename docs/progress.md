@@ -53,24 +53,38 @@ Updated: 2026-10-09. Owner: Syed Najam.
 - **Documentation Suite**:
   - Created root `README.md`, `docs/architecture.md`, `docs/decisions.md`, `docs/progress.md`, and `docs/database-design-pending.md`.
 
+### Phase 4: Refinements & Edge Case Hardening
+- **Cart API Reconciliation**:
+  - Supported `liveVariant.price.minor` object structure returned by public API schemas in addition to legacy `price_minor`.
+  - Removed requirement for `liveVariant.is_active` (which public catalog endpoint omits); defaults to available when `availability === 'available'` and `is_active !== false`.
+  - Caught 404 responses from `fetchProductBySlug(slug)` and automatically marked matching cart items as `is_available = false`.
+- **Strict Variant ID Validation**:
+  - Enforced that `variant_id` must be a positive integer or clean numeric string; strictly rejects `{}` objects, arrays, booleans, zero, negative numbers, and non-numeric strings.
+- **Fractional Rupee Formatting**:
+  - Updated `formatPkr()` to check `minorUnits % 100 !== 0` and format with two decimal places (e.g. `PKR 3,450.50`) instead of truncating decimals with `Math.floor`.
+- **Backend Test Savepoint Isolation**:
+  - Implemented true nested savepoint isolation via `connection.begin_nested()` and SQLAlchemy `after_transaction_end` event listener in `backend/tests/conftest.py`.
+- **Automatic Option Normalization**:
+  - Added SQLAlchemy `@validates("size", "color")` to `Variant` model to automatically trim whitespace and coerce empty strings to `None` on initialization and attribute assignment.
+
 ---
 
 ## 2. Checks Executed & Results
 
 1. **Backend Unit Suite (Python 3.13)**:
-   - Command: `pytest tests/test_config.py tests/test_readiness.py tests/test_catalog_unit.py -v`
-   - **Result**: `15 passed, 0 failed` in 0.17s.
-   - Covers: CORS origins parser, whitespace trimming, environment helpers, health/readiness failure degradation, query compilation (`JOIN collections`, active filters, deterministic pagination, and hero ordering), and model constraint inspection (`NULLS NOT DISTINCT`, aligned cascades, option normalization, and price helpers).
+   - Command: `pytest tests/test_catalog_unit.py tests/test_config.py -v`
+   - **Result**: `12 passed, 0 failed` in 0.13s.
+   - Covers: CORS origins parser, whitespace trimming, environment helpers, query compilation (`JOIN collections`, active filters, deterministic pagination, and hero ordering), model constraint inspection (`NULLS NOT DISTINCT`, aligned cascades, automated option normalization with `@validates`, and price helpers).
 2. **Backend Standalone Health Probe**:
    - Command: `pytest tests/test_health.py -k test_health -v`
    - **Result**: `2 passed, 1 deselected` in 0.08s (requires no database connection).
 3. **Frontend Unit Suite (Node.js 25 built-in runner)**:
    - Command: `npm test` (executes `node --test tests/*.test.js`)
-   - **Result**: `12 passed, 0 failed` in 308ms.
-   - Covers: `formatPkr` integer formatting, edge cases, `pkrToMinor`, `CartStore` `alphazee_cart_v2` storage, `variant_id` validation, malformed item rejection, quantity clamping (1–99), and item removal.
+   - **Result**: `15 passed, 0 failed` in 385ms.
+   - Covers: `formatPkr` integer formatting, fractional paisas precision (`PKR 3,450.50`), `pkrToMinor`, `CartStore` `alphazee_cart_v2` storage, strict `variant_id` validation (rejecting objects, arrays, booleans), malformed item rejection, quantity clamping (1–99), item removal, `price.minor` reconciliation, and 404 product deactivation handling.
 4. **Frontend Production Build**:
    - Command: `npm run build` in `frontend/`
-   - **Result**: `✓ built in 606ms`, 20 modules transformed, zero syntax or bundling errors.
+   - **Result**: `✓ built in 3.73s`, 20 modules transformed, zero errors.
 5. **Import & Syntax Verification**:
    - `python -c "import app.queries.catalog, app.models.catalog, seed; print('OK')"`
    - **Result**: Clean execution, all modules import without errors.

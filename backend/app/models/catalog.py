@@ -32,7 +32,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.database import Base
 
@@ -261,6 +261,11 @@ class Variant(Base):
             return None
         stripped = value.strip()
         return stripped if stripped else None
+
+    @validates("size", "color")
+    def _validate_options(self, key: str, value: str | None) -> str | None:
+        """Automatically normalize size and color on assignment."""
+        return self.normalize_option(value)
 
     @property
     def price_pkr(self) -> int:

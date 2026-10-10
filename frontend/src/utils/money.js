@@ -15,8 +15,12 @@ export function formatPkr(minorUnits) {
   if (minorUnits === null || minorUnits === undefined || isNaN(minorUnits)) {
     return 'PKR 0';
   }
-  const wholeRupees = Math.floor(minorUnits / 100);
-  return `PKR ${wholeRupees.toLocaleString('en-PK')}`;
+  const hasFractions = minorUnits % 100 !== 0;
+  const rupees = minorUnits / 100;
+  return `PKR ${rupees.toLocaleString('en-PK', {
+    minimumFractionDigits: hasFractions ? 2 : 0,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 /**
