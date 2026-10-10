@@ -12,28 +12,33 @@ const MAX_QUANTITY_PER_ITEM = 99;
 function validateCartItem(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
-  // Strictly validate variant_id: must be a positive integer or non-empty string of digits
+  // Strictly validate variant_id: must be a positive safe integer or string of digits
   let variantId = null;
-  if (typeof raw.variant_id === 'number' && Number.isInteger(raw.variant_id) && raw.variant_id > 0) {
+  if (typeof raw.variant_id === 'number' && Number.isSafeInteger(raw.variant_id) && raw.variant_id > 0) {
     variantId = raw.variant_id;
   } else if (typeof raw.variant_id === 'string') {
     const trimmed = raw.variant_id.trim();
     if (/^\d+$/.test(trimmed)) {
-      const parsed = parseInt(trimmed, 10);
-      if (parsed > 0) variantId = parsed;
+      const parsed = Number(trimmed);
+      if (Number.isSafeInteger(parsed) && parsed > 0) {
+        variantId = parsed;
+      }
     }
   }
   if (variantId === null) return null;
 
-  const quantity = Number.isInteger(raw.quantity) && raw.quantity > 0
+  const quantity = Number.isSafeInteger(raw.quantity) && raw.quantity > 0
     ? Math.min(raw.quantity, MAX_QUANTITY_PER_ITEM)
     : 1;
 
-  const priceMinor = typeof raw.price_minor === 'number' && Number.isInteger(raw.price_minor) && raw.price_minor >= 0
-    ? raw.price_minor
-    : (typeof raw.price?.minor === 'number'
-      ? raw.price.minor
-      : (typeof raw.price === 'number' && raw.price >= 0 ? Math.round(raw.price * 100) : 0));
+  let priceMinor = 0;
+  if (typeof raw.price_minor === 'number' && Number.isSafeInteger(raw.price_minor) && raw.price_minor >= 0) {
+    priceMinor = raw.price_minor;
+  } else if (typeof raw.price?.minor === 'number' && Number.isSafeInteger(raw.price.minor) && raw.price.minor >= 0) {
+    priceMinor = raw.price.minor;
+  } else if (typeof raw.price === 'number' && Number.isFinite(raw.price) && raw.price >= 0) {
+    priceMinor = Math.round(raw.price * 100);
+  }
 
   const title = typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : 'AlphaZee Essential';
   const productId = typeof raw.product_id === 'string' ? raw.product_id : (typeof raw.id === 'string' ? raw.id : '');
@@ -42,7 +47,8 @@ function validateCartItem(raw) {
   const size = raw.size ? String(raw.size) : (raw.options?.size ? String(raw.options.size) : null);
   const color = raw.color ? String(raw.color) : (raw.options?.color ? String(raw.options.color) : null);
   const imageUrl = typeof raw.image_url === 'string' ? raw.image_url : (typeof raw.image === 'string' ? raw.image : '');
-  const isAvailable = raw.is_available !== false;
+  const isAvailable = raw.is_available === false ? false : (raw.availability === 'unverified' ? false : true);
+  const availability = raw.availability || (isAvailable ? 'available' : 'unavailable');
 
   return {
     variant_id: variantId,
@@ -56,6 +62,7 @@ function validateCartItem(raw) {
     image_url: imageUrl,
     quantity,
     is_available: isAvailable,
+    availability,
   };
 }
 
@@ -140,16 +147,25 @@ class CartStore {
   }
 
   getState() {
-    const count = this.items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalMinor = this.items.reduce((sum, item) => sum + (item.price_minor * item.quantity), 0);
+    const count = this.items.reduce((sum, item) => {
+      const q = (typeof item.quantity === 'number' && Number.isSafeInteger(item.quantity) && item.quantity > 0) ? item.quantity : 0;
+      return sum + q;
+    }, 0);
+    const totalMinor = this.items.reduce((sum, item) => {
+      const price = (typeof item.price_minor === 'number' && Number.isSafeInteger(item.price_minor) && item.price_minor >= 0) ? item.price_minor : 0;
+      const q = (typeof item.quantity === 'number' && Number.isSafeInteger(item.quantity) && item.quantity > 0) ? item.quantity : 0;
+      return sum + (price * q);
+    }, 0);
     const hasUnavailable = this.items.some(item => !item.is_available);
+    const hasUnverified = this.items.some(item => item.availability === 'unverified');
 
     return {
       items: [...this.items],
       count,
-      total_minor: totalMinor,
-      formattedTotal: formatPkr(totalMinor),
+      total_minor: Math.max(0, totalMinor),
+      formattedTotal: formatPkr(Math.max(0, totalMinor)),
       hasUnavailable,
+      hasUnverified,
       isReconciling: this.isReconciling,
     };
   }
@@ -159,7 +175,11 @@ class CartStore {
    * Keyed strictly by variant_id.
    */
   addItem(itemData, options = {}, quantity = 1) {
-    const parsedQty = Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
+    if (typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity <= 0) {
+      console.warn('[CartStore] Refusing to add invalid cart item quantity:', quantity);
+      return false;
+    }
+    const parsedQty = Math.min(quantity, MAX_QUANTITY_PER_ITEM);
     const raw = {
       ...itemData,
       ...options,
@@ -182,6 +202,7 @@ class CartStore {
       // Update price/availability if newer data provided
       this.items[existingIndex].price_minor = valid.price_minor;
       this.items[existingIndex].is_available = valid.is_available;
+      this.items[existingIndex].availability = valid.availability;
     } else {
       this.items.push(valid);
     }
@@ -191,6 +212,10 @@ class CartStore {
   }
 
   updateQuantity(variantId, delta) {
+    if (typeof delta !== 'number' || !Number.isInteger(delta)) {
+      console.warn('[CartStore] Rejected non-integer quantity delta:', delta);
+      return;
+    }
     const itemIndex = this.items.findIndex(
       (item) => String(item.variant_id) === String(variantId)
     );
@@ -234,7 +259,16 @@ class CartStore {
       for (const slug of slugsToCheck) {
         try {
           const product = await fetchProductBySlug(slug);
-          if (!product || !Array.isArray(product.variants)) continue;
+          if (!product || !Array.isArray(product.variants)) {
+            // Malformed product payload: mark matching items unverified
+            for (const item of this.items) {
+              if (item.slug === slug) {
+                item.is_available = false;
+                item.availability = 'unverified';
+              }
+            }
+            continue;
+          }
 
           for (const item of this.items) {
             if (item.slug === slug) {
@@ -243,16 +277,19 @@ class CartStore {
               );
 
               if (liveVariant) {
-                const liveMinor = typeof liveVariant.price?.minor === 'number'
+                const liveMinor = typeof liveVariant.price?.minor === 'number' && Number.isSafeInteger(liveVariant.price.minor) && liveVariant.price.minor >= 0
                   ? liveVariant.price.minor
-                  : liveVariant.price_minor;
+                  : (typeof liveVariant.price_minor === 'number' && Number.isSafeInteger(liveVariant.price_minor) && liveVariant.price_minor >= 0 ? liveVariant.price_minor : null);
                 if (typeof liveMinor === 'number') {
                   item.price_minor = liveMinor;
                 }
-                item.is_available = liveVariant.availability === 'available' && liveVariant.is_active !== false;
+                const isAvailable = liveVariant.availability === 'available' && liveVariant.is_active !== false;
+                item.is_available = isAvailable;
+                item.availability = isAvailable ? 'available' : (liveVariant.availability || 'unavailable');
               } else {
                 // Variant no longer exists in active catalog
                 item.is_available = false;
+                item.availability = 'unavailable';
               }
             }
           }
@@ -262,10 +299,18 @@ class CartStore {
             for (const item of this.items) {
               if (item.slug === slug) {
                 item.is_available = false;
+                item.availability = 'unavailable';
+              }
+            }
+          } else {
+            // Network failure or offline: preserve item in cart but mark availability as unverified
+            for (const item of this.items) {
+              if (item.slug === slug) {
+                item.is_available = false;
+                item.availability = 'unverified';
               }
             }
           }
-          // If network or transient failure, keep cached values without crashing
         }
       }
 

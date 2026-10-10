@@ -5,8 +5,8 @@ Schema: Collection → Product → Variant
 
 Design rules enforced via database constraints:
 - All prices stored as non-negative integer PKR minor units (paisas).
-  At launch AlphaZee prices are quoted in whole PKR, so price = 3450 means
-  PKR 3,450 (no subdivision currently used, but stored correctly for future).
+  1 PKR = 100 paisas, so PKR 3,450 = 345000 paisas.
+  Stored correctly as integer minor units for exact calculations and future subdivision.
 - Slugs are unique so URLs are stable and conflict-free.
 - SKUs are globally unique across all products.
 - Variant (product_id, size, color) combination is unique per product (NULLS NOT DISTINCT).

@@ -80,8 +80,11 @@ export function createCartDrawer(onCheckout) {
 
       if (state.hasUnavailable) {
         alertBox.style.display = 'block';
+        alertBox.textContent = state.hasUnverified
+          ? 'Some items have unverified availability due to a network connection issue.'
+          : 'Some items in your cart are currently out of stock or unavailable. Please adjust before checkout.';
         checkoutBtn.disabled = true;
-        checkoutBtn.textContent = 'Unavailable Items in Cart';
+        checkoutBtn.textContent = state.hasUnverified ? 'Availability Unverified' : 'Unavailable Items in Cart';
         checkoutBtn.classList.remove('btn-primary');
         checkoutBtn.classList.add('btn-secondary');
       } else {
@@ -107,8 +110,8 @@ export function createCartDrawer(onCheckout) {
               <div class="cart-item-title">${safeTitle}</div>
               <div class="cart-item-meta">${metaParts.join(' • ')}</div>
               ${!item.is_available ? `
-                <span class="badge badge-neutral" style="color: #C53030; background: #FFF5F5; font-size: 0.7rem; align-self: flex-start; margin: 4px 0;">
-                  Currently Unavailable
+                <span class="badge badge-neutral" style="color: ${item.availability === 'unverified' ? '#B45309' : '#C53030'}; background: ${item.availability === 'unverified' ? '#FEF3C7' : '#FFF5F5'}; font-size: 0.7rem; align-self: flex-start; margin: 4px 0;">
+                  ${item.availability === 'unverified' ? 'Availability Unverified (Offline)' : 'Currently Unavailable'}
                 </span>
               ` : ''}
               <div class="cart-item-price">${formattedItemPrice}</div>

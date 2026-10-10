@@ -1,9 +1,9 @@
-Remaining issue	Actual result
-Cart reads variant.price_minor, but the API returns variant.price.minor.	Reconciliation loses the price and produces an invalid total.
-Cart requires variant.is_active, which the public API doesn’t return.	An available variant becomes marked unavailable.
-Product lookup returns 404.	Cart keeps the deleted/inactive product marked available.
-Variant-ID validation accepts objects and other invalid values.	An invalid object ID was accepted.
-Money formatter removes fractional rupees.	345050 paisas displays as PKR 3,450, losing 0.50.
+Three remaining corrections:
+Issue	What I found
+Backend still truncates money	CurrencyAmount.from_minor(345050) formats PKR 3,450, losing .50. The frontend fix did not cover the backend.
+Network failure retains confirmed availability	I simulated an offline request; the cart still reported is_available: true. It should preserve the item but show availability as unverified.
+Cart validation remains incomplete	I reproduced quantity 1.5 through updateQuantity, and a negative total through nested price.minor. IDs also need safe-integer validation.
 
 
-Also, the test fixture’s comments claim savepoint isolation, but the implementation shown doesn’t create a savepoint. Option normalization exists as a helper, but the model itself doesn’t automatically apply it.
+Relevant files: backend schemas, cart.
+Ask your agent to fix these three and add regression tests covering those exact cases. Also correct the model’s contradictory money comment: PKR 3,450 = 345000 paisas.

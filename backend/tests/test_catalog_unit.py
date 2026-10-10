@@ -12,6 +12,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy import Index
 
 from app.models.catalog import Collection, Product, Variant
+from app.schemas.catalog import CurrencyAmount
 from app.queries.catalog import (
     get_active_products,
     get_hero_products,
@@ -131,3 +132,28 @@ def test_variant_price_helpers():
 
     prod = Product(variants=[v1, v2])
     assert get_min_price_minor(prod) == 345000
+
+
+def test_currency_amount_formatting():
+    """Verify CurrencyAmount.from_minor formats whole rupees and fractional rupees properly."""
+    # Whole rupees without decimal suffix
+    ca_whole = CurrencyAmount.from_minor(345000)
+    assert ca_whole.minor == 345000
+    assert ca_whole.pkr == 3450
+    assert ca_whole.formatted == "PKR 3,450"
+
+    # Fractional rupees with exact 2-decimal precision
+    ca_fraction = CurrencyAmount.from_minor(345050)
+    assert ca_fraction.minor == 345050
+    assert ca_fraction.pkr == 3450
+    assert ca_fraction.formatted == "PKR 3,450.50"
+
+    ca_small = CurrencyAmount.from_minor(50)
+    assert ca_small.minor == 50
+    assert ca_small.pkr == 0
+    assert ca_small.formatted == "PKR 0.50"
+
+    ca_zero = CurrencyAmount.from_minor(0)
+    assert ca_zero.minor == 0
+    assert ca_zero.pkr == 0
+    assert ca_zero.formatted == "PKR 0"

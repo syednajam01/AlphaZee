@@ -187,4 +187,90 @@ describe('CartStore', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('preserves items but marks availability as unverified on network / offline failure', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      cart.addItem({
+        variant_id: 202,
+        product_id: 'prod-tee',
+        slug: 'offline-tee',
+        title: 'Offline Tee',
+        price_minor: 300000,
+      });
+
+      // Initially added item is considered available
+      assert.equal(cart.getState().items[0].is_available, true);
+
+      // Simulate offline / network error (rejecting fetch)
+      globalThis.fetch = async () => {
+        throw new Error('TypeError: Failed to fetch (offline)');
+      };
+
+      await cart.reconcileWithApi();
+
+      const state = cart.getState();
+      assert.equal(state.items.length, 1);
+      assert.equal(state.items[0].is_available, false);
+      assert.equal(state.items[0].availability, 'unverified');
+      assert.equal(state.hasUnavailable, true);
+      assert.equal(state.hasUnverified, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('rejects fractional quantity in addItem and fractional deltas in updateQuantity', () => {
+    // addItem rejects fractional quantities
+    assert.equal(cart.addItem({ variant_id: 301, product_id: 'p1', title: 'Tee', price_minor: 100 }, {}, 1.5), false);
+    assert.equal(cart.addItem({ variant_id: 301, product_id: 'p1', title: 'Tee', price_minor: 100 }, {}, 0), false);
+    assert.equal(cart.addItem({ variant_id: 301, product_id: 'p1', title: 'Tee', price_minor: 100 }, {}, -1), false);
+    assert.equal(cart.getState().count, 0);
+
+    // Add valid item with quantity 2
+    assert.equal(cart.addItem({ variant_id: 301, product_id: 'p1', title: 'Tee', price_minor: 100 }, {}, 2), true);
+    assert.equal(cart.getState().count, 2);
+
+    // updateQuantity rejects fractional deltas like 1.5, -0.5, or strings
+    cart.updateQuantity(301, 1.5);
+    assert.equal(cart.getState().count, 2); // remains 2
+
+    cart.updateQuantity(301, -0.5);
+    assert.equal(cart.getState().count, 2); // remains 2
+
+    cart.updateQuantity(301, '1');
+    assert.equal(cart.getState().count, 2); // remains 2
+
+    // Integer delta works
+    cart.updateQuantity(301, 1);
+    assert.equal(cart.getState().count, 3);
+  });
+
+  it('strictly validates safe integers for variant_id', () => {
+    // Non-safe integer or float variant IDs rejected
+    assert.equal(cart.addItem({ variant_id: 1.5, product_id: 'p1', title: 'Tee', price_minor: 100 }), false);
+    assert.equal(cart.addItem({ variant_id: Number.MAX_SAFE_INTEGER + 1, product_id: 'p1', title: 'Tee', price_minor: 100 }), false);
+    assert.equal(cart.addItem({ variant_id: Infinity, product_id: 'p1', title: 'Tee', price_minor: 100 }), false);
+    assert.equal(cart.addItem({ variant_id: NaN, product_id: 'p1', title: 'Tee', price_minor: 100 }), false);
+    assert.equal(cart.addItem({ variant_id: '9007199254740992', product_id: 'p1', title: 'Tee', price_minor: 100 }), false);
+
+    // Safe integer variant ID accepted
+    assert.equal(cart.addItem({ variant_id: Number.MAX_SAFE_INTEGER, product_id: 'p1', title: 'Tee', price_minor: 100 }), true);
+    assert.equal(cart.getState().items[0].variant_id, Number.MAX_SAFE_INTEGER);
+  });
+
+  it('rejects negative nested prices and prevents negative cart total', () => {
+    // Negative nested price.minor coerced to 0, preventing negative totals
+    assert.equal(cart.addItem({
+      variant_id: 401,
+      product_id: 'p1',
+      title: 'Tee',
+      price: { minor: -500 },
+    }), true);
+
+    const state = cart.getState();
+    assert.equal(state.items[0].price_minor, 0);
+    assert.equal(state.total_minor, 0);
+    assert.equal(state.formattedTotal, 'PKR 0');
+  });
 });

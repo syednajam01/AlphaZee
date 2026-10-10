@@ -33,11 +33,15 @@ class CurrencyAmount(BaseModel):
     @classmethod
     def from_minor(cls, minor: int) -> "CurrencyAmount":
         pkr = minor // 100
+        if minor % 100 != 0:
+            formatted = f"PKR {minor / 100:,.2f}"
+        else:
+            formatted = f"PKR {pkr:,}"
         return cls(
             minor=minor,
             pkr=pkr,
             currency="PKR",
-            formatted=f"PKR {pkr:,}",
+            formatted=formatted,
         )
 
 

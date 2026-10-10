@@ -67,24 +67,36 @@ Updated: 2026-10-09. Owner: Syed Najam.
 - **Automatic Option Normalization**:
   - Added SQLAlchemy `@validates("size", "color")` to `Variant` model to automatically trim whitespace and coerce empty strings to `None` on initialization and attribute assignment.
 
+### Phase 5: Backend Money Precision, Safe-Integer Validation & Offline State
+- **Backend Money Formatting & Model Comment**:
+  - Updated `CurrencyAmount.from_minor()` in `backend/app/schemas/catalog.py` to format with two decimals when fractional paisas exist (`f"PKR {minor / 100:,.2f}"`), while whole rupees format without decimals (`f"PKR {pkr:,}"`).
+  - Corrected contradictory model comment in `backend/app/models/catalog.py` to state that 1 PKR = 100 paisas, PKR 3,450 = 345000 paisas.
+- **Network / Offline Cart Availability**:
+  - Updated `cart.reconcileWithApi()` so network errors/offline states preserve cart items but mark availability as `is_available: false` and `availability: 'unverified'`.
+  - Updated `CartDrawer.js` to render an `"Availability Unverified (Offline)"` amber badge and disable checkout button when cart contains unverified items.
+- **Complete Cart Validation**:
+  - Enforced `Number.isSafeInteger(id) && id > 0` on `variant_id` for both numeric and string-parsed inputs, rejecting floats and values exceeding `Number.MAX_SAFE_INTEGER`.
+  - Guarded `updateQuantity` and `addItem` to reject fractional quantities (e.g. `1.5`) and fractional deltas.
+  - Guarded nested `price.minor` to strictly require non-negative safe integers; guarded `getState()` total computation to prevent negative cart totals.
+
 ---
 
 ## 2. Checks Executed & Results
 
 1. **Backend Unit Suite (Python 3.13)**:
    - Command: `pytest tests/test_catalog_unit.py tests/test_config.py -v`
-   - **Result**: `12 passed, 0 failed` in 0.13s.
-   - Covers: CORS origins parser, whitespace trimming, environment helpers, query compilation (`JOIN collections`, active filters, deterministic pagination, and hero ordering), model constraint inspection (`NULLS NOT DISTINCT`, aligned cascades, automated option normalization with `@validates`, and price helpers).
+   - **Result**: `13 passed, 0 failed` in 0.17s.
+   - Covers: `CurrencyAmount.from_minor` fractional formatting, CORS origins parser, whitespace trimming, environment helpers, query compilation (`JOIN collections`, active filters, deterministic pagination, and hero ordering), model constraint inspection (`NULLS NOT DISTINCT`, aligned cascades, automated option normalization with `@validates`, and price helpers).
 2. **Backend Standalone Health Probe**:
    - Command: `pytest tests/test_health.py -k test_health -v`
    - **Result**: `2 passed, 1 deselected` in 0.08s (requires no database connection).
 3. **Frontend Unit Suite (Node.js 25 built-in runner)**:
    - Command: `npm test` (executes `node --test tests/*.test.js`)
-   - **Result**: `15 passed, 0 failed` in 385ms.
-   - Covers: `formatPkr` integer formatting, fractional paisas precision (`PKR 3,450.50`), `pkrToMinor`, `CartStore` `alphazee_cart_v2` storage, strict `variant_id` validation (rejecting objects, arrays, booleans), malformed item rejection, quantity clamping (1–99), item removal, `price.minor` reconciliation, and 404 product deactivation handling.
+   - **Result**: `19 passed, 0 failed` in 393ms.
+   - Covers: `formatPkr` integer/fractional precision, `pkrToMinor`, `CartStore` `alphazee_cart_v2` storage, safe-integer `variant_id` validation, fractional quantity/delta rejection, negative nested price rejection, offline unverified availability preservation, 404 deactivation, item removal, and quantity clamping.
 4. **Frontend Production Build**:
    - Command: `npm run build` in `frontend/`
-   - **Result**: `✓ built in 3.73s`, 20 modules transformed, zero errors.
+   - **Result**: `✓ built in 1.67s`, 20 modules transformed, zero errors.
 5. **Import & Syntax Verification**:
    - `python -c "import app.queries.catalog, app.models.catalog, seed; print('OK')"`
    - **Result**: Clean execution, all modules import without errors.
