@@ -18,6 +18,8 @@ class OrderReturnCreateRequest(BaseModel):
 
     order_id: uuid.UUID = Field(description="Order ID")
     order_line_id: uuid.UUID = Field(description="Purchased line item ID to return")
+    customer_phone: Optional[str] = Field(default=None, description="Customer phone number for ownership verification")
+    phone: Optional[str] = Field(default=None, description="Alias for customer_phone")
     return_type: str = Field(description="'refund_bank_transfer', 'size_exchange', or 'store_credit'")
     reason: str = Field(description="'size_too_small', 'size_too_large', 'damaged_defective', 'not_as_described', or 'changed_mind'")
     customer_notes: Optional[str] = Field(default=None, max_length=1000, description="Customer explanation")

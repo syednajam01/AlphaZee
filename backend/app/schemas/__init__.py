@@ -30,6 +30,8 @@ from app.schemas.admin import (  # noqa: F401
     InventoryAdjustRequest,
     InventoryMetricResponse,
     InventorySummaryResponse,
+    OrderRtoInitiateRequest,
+    RtoInspectionRequest,
     ProfitLossResponseSchema,
     ShipmentAdminResponseSchema,
     ShipmentCreateRequest,
@@ -39,6 +41,7 @@ from app.schemas.admin import (  # noqa: F401
     SupplierResponseSchema,
     SupplierVariantAssignRequest,
     SupplierVariantResponseSchema,
+    SupplierAcceptanceRequest,
 )
 
 

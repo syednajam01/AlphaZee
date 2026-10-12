@@ -18,6 +18,7 @@ from app.services.orders import (
     CreateOrderDTO,
     OrderItemDTO,
     cancel_order,
+    confirm_supplier_acceptance,
     deliver_order,
     place_order,
     upload_payment_receipt,
@@ -201,6 +202,12 @@ class TestOrderLifecycleAndPayments:
         db_session.expire_all()
         reloaded_order = db_session.get(Order, order.id)
         assert reloaded_order.payment_status == "verified"
+        assert reloaded_order.order_status == "placed"
+
+        # Supplier acceptance confirms order
+        confirm_supplier_acceptance(db_session, order_id=order.id)
+        db_session.expire_all()
+        reloaded_order = db_session.get(Order, order.id)
         assert reloaded_order.order_status == "confirmed"
 
         reloaded_receipt = db_session.get(PaymentReceipt, receipt.id)

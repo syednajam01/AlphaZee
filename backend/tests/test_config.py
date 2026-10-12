@@ -71,9 +71,35 @@ def test_environment_helpers():
     assert dev_settings.is_development is True
     assert dev_settings.is_production is False
 
-    prod_settings = Settings(app_env="production", _env_file=None)
+    prod_settings = Settings(
+        app_env="production",
+        admin_api_key="secure-prod-key-with-over-32-chars-long!",
+        _env_file=None,
+    )
     assert prod_settings.is_development is False
     assert prod_settings.is_production is True
+
+
+def test_admin_key_production_validation():
+    """Verify production requires a secure non-default ADMIN_API_KEY with at least 32 characters."""
+    import pytest
+    from pydantic import ValidationError
+
+    # Default dev key in production must fail
+    with pytest.raises(ValidationError):
+        Settings(app_env="production", _env_file=None)
+
+    # Short key in production must fail
+    with pytest.raises(ValidationError):
+        Settings(app_env="production", admin_api_key="too-short", _env_file=None)
+
+    # Valid >= 32 char key succeeds
+    valid = Settings(
+        app_env="production",
+        admin_api_key="a" * 32,
+        _env_file=None,
+    )
+    assert valid.admin_api_key == "a" * 32
 
 
 def test_validate_test_database_url_allowed():

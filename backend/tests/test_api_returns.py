@@ -88,6 +88,7 @@ def test_return_lifecycle_and_restock(db_session: Session, setup_order_with_stoc
         db_session,
         order_id=order.id,
         order_line_id=line.id,
+        customer_phone=order.customer_phone,
         return_type="size_exchange",
         reason="size_too_small",
         customer_notes="Please exchange with size L",
@@ -120,17 +121,18 @@ def test_return_lifecycle_and_restock(db_session: Session, setup_order_with_stoc
     assert bal_m.on_hand == initial_on_hand + line.quantity
 
 
-def test_returns_api_endpoints(client: TestClient, db_session: Session, setup_order_with_stock):
+def test_returns_api_endpoints(admin_client: TestClient, db_session: Session, setup_order_with_stock):
     data = setup_order_with_stock
     order = data["order"]
     line = data["line"]
 
     # 1. Storefront submits return
-    sub_res = client.post(
+    sub_res = admin_client.post(
         "/api/v1/returns/request",
         json={
             "order_id": str(order.id),
             "order_line_id": str(line.id),
+            "customer_phone": order.customer_phone,
             "return_type": "refund_bank_transfer",
             "reason": "damaged_defective",
             "customer_notes": "Stitching unraveled at collar",
@@ -140,17 +142,17 @@ def test_returns_api_endpoints(client: TestClient, db_session: Session, setup_or
     ret_id = sub_res.json()["id"]
 
     # 2. Admin views return list
-    list_res = client.get("/api/v1/admin/returns")
+    list_res = admin_client.get("/api/v1/admin/returns")
     assert list_res.status_code == 200
     assert any(r["id"] == ret_id for r in list_res.json())
 
     # 3. Admin approves return
-    app_res = client.post(f"/api/v1/admin/returns/{ret_id}/approve", json={"refund_amount_minor": 600000})
+    app_res = admin_client.post(f"/api/v1/admin/returns/{ret_id}/approve", json={"refund_amount_minor": 600000})
     assert app_res.status_code == 200
     assert app_res.json()["status"] == "approved"
 
     # 4. Admin completes return
-    comp_res = client.post(
+    comp_res = admin_client.post(
         f"/api/v1/admin/returns/{ret_id}/complete",
         json={"refund_reference": "MEZN-REF-9988", "should_restock": True},
     )

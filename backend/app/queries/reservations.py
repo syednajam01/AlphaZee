@@ -108,21 +108,59 @@ def create_stock_reservation(
     supplier_variant_id: uuid.UUID,
     order_line_id: uuid.UUID,
     quantity: int,
+    idempotency_key: str | None = None,
 ) -> StockReservation:
     """
     Atomically hold stock for an order line item.
 
-    Guards against over-allocation by checking that Available >= quantity.
+    Concurrency & Idempotency Invariants:
+    1. If idempotency_key is provided and an open reservation with that key exists, returns it.
+    2. Acquires exclusive row-level lock (SELECT ... FOR UPDATE) on inventory_balances to serialize
+       concurrent reservations for the same supplier variant and prevent overselling.
+    3. Re-checks available stock under lock and raises InsufficientStockError if requested > available.
     """
     if quantity <= 0:
         raise ValueError(f"Reservation quantity must be strictly positive, got {quantity}")
 
-    summary = get_inventory_summary(db, supplier_variant_id)
-    if summary.available < quantity:
+    clean_idemp = idempotency_key.strip() if idempotency_key and idempotency_key.strip() else None
+
+    # 1. Idempotency check: if open reservation already exists for this key, return it immediately
+    if clean_idemp:
+        existing = db.scalars(
+            select(StockReservation)
+            .where(
+                StockReservation.idempotency_key == clean_idemp,
+                StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
+            )
+        ).first()
+        if existing is not None:
+            return existing
+
+    # 2. Acquire exclusive row lock on the inventory balance row
+    stmt = (
+        select(InventoryBalance)
+        .where(InventoryBalance.supplier_variant_id == supplier_variant_id)
+        .with_for_update()
+    )
+    balance = db.scalars(stmt).one_or_none()
+    physical = balance.on_hand if balance is not None else 0
+
+    # 3. Sum open reservations under lock
+    held_stmt = (
+        select(StockReservation.quantity)
+        .where(
+            StockReservation.supplier_variant_id == supplier_variant_id,
+            StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
+        )
+    )
+    held = sum(db.scalars(held_stmt).all())
+    available = max(0, physical - held)
+
+    if available < quantity:
         raise InsufficientStockError(
             f"Insufficient stock for supplier variant {supplier_variant_id}. "
-            f"Requested: {quantity}, Available: {summary.available} "
-            f"(Physical: {summary.physical}, Held: {summary.held})"
+            f"Requested: {quantity}, Available: {available} "
+            f"(Physical: {physical}, Held: {held})"
         )
 
     reservation = StockReservation(
@@ -130,6 +168,7 @@ def create_stock_reservation(
         order_line_id=order_line_id,
         quantity=quantity,
         stage="held",
+        idempotency_key=clean_idemp,
     )
     db.add(reservation)
     db.flush()

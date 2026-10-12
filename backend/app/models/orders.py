@@ -97,6 +97,13 @@ class Order(Base):
         Index("idx_orders_customer_phone", "customer_phone"),
         Index("idx_orders_status", "order_status", "payment_status"),
         Index("idx_orders_placed_at", "placed_at"),
+        Index(
+            "uq_orders_idempotency_key",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
+        Index("idx_orders_payment_deadline", "payment_deadline_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -105,6 +112,12 @@ class Order(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
+
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+    """Client submission key preventing duplicate order creations."""
 
     order_number: Mapped[str] = mapped_column(
         String(50),
@@ -221,6 +234,24 @@ class Order(Base):
         Text,
         nullable=True,
     )
+
+    payment_deadline_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    """Four-hour deadline for bank transfer customers to submit payment proof."""
+
+    supplier_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    """Timestamp when supplier confirmed order stock and acceptance for fulfillment."""
+
+    supplier_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    """Operational notes from owner/supplier regarding order fulfillment."""
 
     placed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

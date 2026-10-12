@@ -16,6 +16,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.config import settings
 from app.models.orders import ALLOWED_PAYMENT_METHODS, normalize_pakistan_phone
 from app.schemas.catalog import CurrencyAmount
 from app.schemas.returns import OrderReturnResponseSchema
@@ -45,6 +46,7 @@ class OrderCreateRequest(BaseModel):
     utm_medium: Optional[str] = Field(default=None, max_length=100, description="Marketing medium")
     utm_campaign: Optional[str] = Field(default=None, max_length=100, description="Marketing campaign")
     customer_notes: Optional[str] = Field(default=None, max_length=500, description="Special delivery instructions")
+    idempotency_key: Optional[str] = Field(default=None, max_length=128, description="Optional idempotency key preventing duplicate orders")
     items: list[OrderItemRequest] = Field(min_length=1, description="Cart items to purchase")
 
     @field_validator("customer_phone")
@@ -94,10 +96,10 @@ class PaymentReceiptResponseSchema(BaseModel):
 class BankInstructionsSchema(BaseModel):
     """Honest bank transfer instructions provided to customer upon checkout."""
 
-    bank_name: str = "Meezan Bank Ltd."
-    account_title: str = "AlphaZee Private Limited"
-    account_number: str = "01020304050607"
-    iban: str = "PK00MEZN0001020304050607"
+    bank_name: str = Field(default_factory=lambda: settings.bank_name)
+    account_title: str = Field(default_factory=lambda: settings.bank_account_title)
+    account_number: str = Field(default_factory=lambda: settings.bank_account_number)
+    iban: str = Field(default_factory=lambda: settings.bank_iban)
     instructions: str = (
         "Please transfer the total order amount to the bank account above and upload "
         "a screenshot of the transaction receipt. Funds will be verified by the owner "
@@ -152,6 +154,7 @@ class OrderResponseSchema(BaseModel):
 
     id: uuid.UUID
     order_number: str
+    idempotency_key: Optional[str] = None
     customer_name: str
     customer_phone: str
     customer_email: Optional[str] = None
@@ -172,6 +175,9 @@ class OrderResponseSchema(BaseModel):
     utm_medium: Optional[str] = None
     utm_campaign: Optional[str] = None
     customer_notes: Optional[str] = None
+    payment_deadline_at: Optional[datetime] = None
+    supplier_confirmed_at: Optional[datetime] = None
+    supplier_notes: Optional[str] = None
     placed_at: datetime
     lines: list[OrderLineResponseSchema]
     receipts: list[PaymentReceiptResponseSchema] = []

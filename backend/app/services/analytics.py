@@ -8,6 +8,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.orders import Order, OrderLine
+from app.models.returns import OrderReturn
 from app.models.shipments import Shipment
 
 
@@ -23,13 +24,17 @@ def get_profit_loss_summary(db: Session) -> dict:
     - COD Cash Remittance progress
     """
     # 1. Orders financial totals
+    # Realized revenue counts only orders where payment has been verified (bank) or collected on delivery (COD)
     order_stmt = select(
         func.coalesce(func.sum(Order.total_minor), 0).label("gross_revenue"),
         func.coalesce(func.sum(Order.subtotal_minor), 0).label("subtotal_revenue"),
         func.coalesce(func.sum(Order.discount_amount_minor), 0).label("discount_total"),
         func.coalesce(func.sum(Order.shipping_fee_minor), 0).label("shipping_revenue"),
         func.count(Order.id).label("total_orders"),
-    ).where(Order.order_status.in_(["placed", "confirmed", "dispatched", "delivered"]))
+    ).where(
+        Order.order_status.in_(["placed", "confirmed", "dispatched", "delivered"]),
+        Order.payment_status.in_(["verified", "verified_received", "cod_collected"]),
+    )
 
     res_orders = db.execute(order_stmt).one()
     gross_revenue_minor = int(res_orders.gross_revenue)
@@ -38,11 +43,27 @@ def get_profit_loss_summary(db: Session) -> dict:
     shipping_revenue_minor = int(res_orders.shipping_revenue)
     total_orders_count = int(res_orders.total_orders)
 
-    # 2. COGS (Cost of Goods Sold) from line item snapshots
+    # 1b. Customer return refund deductions linked to verified orders
+    refund_stmt = (
+        select(func.coalesce(func.sum(OrderReturn.refund_amount_minor), 0))
+        .join(Order, OrderReturn.order_id == Order.id)
+        .where(
+            Order.order_status.in_(["placed", "confirmed", "dispatched", "delivered"]),
+            Order.payment_status.in_(["verified", "verified_received", "cod_collected"]),
+            OrderReturn.status == "completed",
+        )
+    )
+    refund_total_minor = int(db.scalar(refund_stmt) or 0)
+    net_revenue_minor = max(0, gross_revenue_minor - refund_total_minor)
+
+    # 2. COGS (Cost of Goods Sold) from line item snapshots of realized orders
     cogs_stmt = (
         select(func.coalesce(func.sum(OrderLine.unit_cost_minor * OrderLine.quantity), 0))
         .join(Order, OrderLine.order_id == Order.id)
-        .where(Order.order_status.in_(["placed", "confirmed", "dispatched", "delivered"]))
+        .where(
+            Order.order_status.in_(["placed", "confirmed", "dispatched", "delivered"]),
+            Order.payment_status.in_(["verified", "verified_received", "cod_collected"]),
+        )
     )
     cogs_minor = int(db.scalar(cogs_stmt) or 0)
 
@@ -103,8 +124,8 @@ def get_profit_loss_summary(db: Session) -> dict:
     cod_pending_remittance_minor = int(res_ship.cod_pending_minor)
     cod_remitted_minor = int(res_ship.cod_remitted_minor)
 
-    # Calculate Net Gross Profit
-    gross_profit_minor = gross_revenue_minor - cogs_minor - total_courier_expenses_minor
+    # Calculate Net Gross Profit: Net Revenue - COGS - Courier Expenses
+    gross_profit_minor = net_revenue_minor - cogs_minor - total_courier_expenses_minor
 
     # RTO Rate
     if total_shipments_count > 0:
@@ -114,6 +135,8 @@ def get_profit_loss_summary(db: Session) -> dict:
 
     return {
         "gross_revenue_minor": gross_revenue_minor,
+        "net_revenue_minor": net_revenue_minor,
+        "refund_total_minor": refund_total_minor,
         "subtotal_revenue_minor": subtotal_revenue_minor,
         "discount_total_minor": discount_total_minor,
         "shipping_revenue_minor": shipping_revenue_minor,

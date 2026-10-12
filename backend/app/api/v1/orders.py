@@ -9,9 +9,11 @@ Handles:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models.orders import Order, normalize_pakistan_phone
@@ -96,6 +98,7 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
     return OrderResponseSchema(
         id=order.id,
         order_number=order.order_number,
+        idempotency_key=order.idempotency_key,
         customer_name=order.customer_name,
         customer_phone=order.customer_phone,
         customer_email=order.customer_email,
@@ -116,6 +119,9 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
         utm_medium=order.utm_medium,
         utm_campaign=order.utm_campaign,
         customer_notes=order.customer_notes,
+        payment_deadline_at=order.payment_deadline_at,
+        supplier_confirmed_at=order.supplier_confirmed_at,
+        supplier_notes=order.supplier_notes,
         placed_at=order.placed_at,
         lines=lines,
         receipts=receipts,
@@ -137,8 +143,11 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
 )
 def create_customer_order(
     payload: OrderCreateRequest,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
 ) -> OrderResponseSchema:
+    effective_idemp = (idempotency_key or payload.idempotency_key or "").strip() or None
+
     dto = CreateOrderDTO(
         customer_name=payload.customer_name,
         customer_phone=payload.customer_phone,
@@ -154,6 +163,7 @@ def create_customer_order(
         utm_medium=payload.utm_medium,
         utm_campaign=payload.utm_campaign,
         customer_notes=payload.customer_notes,
+        idempotency_key=effective_idemp,
         items=[
             OrderItemDTO(variant_id=item.variant_id, quantity=item.quantity)
             for item in payload.items
@@ -236,9 +246,18 @@ def track_order(
             detail=str(err),
         ) from err
 
-    stmt = select(Order).where(
-        Order.order_number == order_number.strip(),
-        Order.customer_phone == clean_phone,
+    stmt = (
+        select(Order)
+        .where(
+            Order.order_number == order_number.strip(),
+            Order.customer_phone == clean_phone,
+        )
+        .options(
+            selectinload(Order.lines),
+            selectinload(Order.receipts),
+            selectinload(Order.shipments),
+            selectinload(Order.returns),
+        )
     )
     order = db.scalars(stmt).first()
 

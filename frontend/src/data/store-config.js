@@ -7,6 +7,14 @@ export const storeConfig = {
     standardTime: 'Estimated delivery: 3–5 business days nationwide upon confirmation',
     standardRate: 'Calculated at checkout',
   },
+  bankTransfer: {
+    bankName: 'Meezan Bank Ltd.',
+    accountTitle: 'AlphaZee Private Limited',
+    accountNumber: 'PENDING_CONFIGURATION',
+    iban: 'PENDING_IBAN_CONFIGURATION',
+    status: 'pending_configuration',
+    warning: 'Official bank transfer details are pending administrative setup. Manual transfer payments are not yet finalized.',
+  },
   reassurance: [
     {
       id: 'delivery',

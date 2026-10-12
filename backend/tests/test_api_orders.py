@@ -14,6 +14,7 @@ import uuid
 import pytest
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
 from app.models.inventory import InventoryBalance, SupplierVariant
 from app.models.suppliers import Supplier
@@ -143,9 +144,10 @@ def test_post_order_bank_transfer_includes_instructions(client, db_session):
 
     assert data["customer_phone"] == "03001234567"  # Normalized
     assert data["payment_method"] == "bank_transfer"
+    assert data["payment_deadline_at"] is not None
     assert data["bank_instructions"] is not None
     assert "Meezan Bank" in data["bank_instructions"]["bank_name"]
-    assert "PK00MEZN0001020304050607" in data["bank_instructions"]["iban"]
+    assert settings.bank_iban in data["bank_instructions"]["iban"]
 
 
 def test_post_order_insufficient_stock_returns_409(client, db_session):

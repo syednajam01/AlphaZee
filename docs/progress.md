@@ -328,9 +328,156 @@ Updated: 2026-10-09. Owner: Syed Najam.
   - `backend/tests/test_api_returns.py`: Customer return request, admin approval, and inventory restock tests.
   - `backend/tests/test_analytics.py`: Added marketing attribution analytics tests.
   - `frontend/tests/promotions.test.js`: Unit tests for UTM capture, coupon validation, return workflows, and admin methods.
-  - Full backend test suite: **113 passed, 0 failed** in 11.08s.
-  - Full frontend test suite: **63 passed, 0 failed** in 1.61s.
-  - Vite production build: Clean compile with zero errors in 956ms.
+### Phase 23: Admin Authentication Gate (Launch Blocker 1)
+- **Defect Reproduction (Red Test Stage)**:
+  - Created `backend/tests/test_api_auth.py` asserting `401 Unauthorized` for anonymous admin requests and invalid credentials across all privileged endpoints (`/overview`, `/inventory/summary`, `/inventory/adjust`, `/orders`, `/suppliers`, `/analytics/profit-loss`, `/coupons`, `/returns`).
+  - Formally reproduced defect: anonymous requests originally succeeded with `200 OK`.
+- **Backend Configuration & Security Hardening**:
+  - `backend/app/config.py`: Added `admin_api_key` configuration with strict production safety validation (raises `ValidationError` if empty, default, or under 32 characters when `app_env="production"`).
+  - Updated `backend/.env.example` documenting `ADMIN_API_KEY`.
+  - `backend/app/dependencies/auth.py`: Implemented `require_admin_key` using constant-time `secrets.compare_digest` to prevent timing attacks. Supports both `X-Admin-Key` custom header and `Authorization: Bearer <token>`.
+  - `backend/app/api/v1/admin.py`: Attached `dependencies=[Depends(require_admin_key)]` directly to the `APIRouter` declaration, locking all 16 current and future administrative endpoints.
+  - `backend/app/main.py`: Whitelisted `X-Admin-Key` in CORS middleware `allow_headers`.
+- **Test Suite Modernization**:
+  - `backend/tests/conftest.py`: Added `admin_headers` and `admin_client` fixtures pre-authenticated with the owner admin key.
+  - Updated `test_api_admin.py`, `test_api_shipments.py`, `test_analytics.py`, `test_api_returns.py`, `test_api_coupons.py`, and `test_config.py` to use authenticated fixtures while `test_api_auth.py` tests unauthenticated/invalid rejection.
+- **Frontend Integration**:
+  - `frontend/src/utils/api.js`: Added `getAdminKey`, `setAdminKey`, and `clearAdminKey` with automatic `X-Admin-Key` header injection on `/admin/*` requests.
+  - `frontend/src/components/AdminConsole.js`: Added interactive **Owner Authorization Required** unlock prompt on `401 Unauthorized` responses and a lock console button (`🔒 Lock`) in the sidebar footer.
+  - `frontend/tests/admin.test.js`: Added unit tests verifying session key management and header injection.
+
+### Phase 24: Reservation Concurrency & Checkout Idempotency (Launch Blocker 2)
+- **Defect Reproduction (Red Test Stage)**:
+  - Created `backend/tests/test_reservation_concurrency.py`:
+    - `test_concurrent_reservations_cannot_oversell`: Simulated two concurrent threads attempting to hold the last remaining unit of an inventory balance. Formally reproduced oversell defect before row locking.
+    - `test_reservation_idempotency_returns_existing_record`: Verified that repeated reservation requests with an identical `idempotency_key` return the existing held reservation rather than creating duplicate holds.
+    - `test_order_checkout_idempotency_header`: Verified that duplicate `POST /api/v1/orders` requests with the same `Idempotency-Key` return the original order without creating duplicate database orders or duplicate stock holds.
+- **ORM Models & Alembic Schema Migration**:
+  - `backend/app/models/inventory.py`: Added `idempotency_key` (String 128, nullable) to `StockReservation` and partial unique index `uq_sr_idempotency_open` (`WHERE stage NOT IN ('cancelled', 'returned') AND idempotency_key IS NOT NULL`).
+  - `backend/app/models/orders.py`: Added `idempotency_key` (String 128, nullable) to `Order` and partial unique index `uq_orders_idempotency_key` (`WHERE idempotency_key IS NOT NULL`).
+  - Generated revision `e5c83f14a091_add_reservation_and_order_idempotency_keys.py`.
+  - Executed full migration lifecycle (`upgrade head` -> `downgrade -1` -> `upgrade head`) on disposable test database `alphazee_migration_test` with zero errors.
+- **Pessimistic Locking & Idempotent Hold Query Layer**:
+  - `backend/app/queries/reservations.py`: In `create_stock_reservation()`:
+    - Checked for existing active reservation matching `idempotency_key`.
+    - Acquired exclusive row lock: `SELECT ... FROM inventory_balances WHERE supplier_variant_id = :id FOR UPDATE` (`with_for_update()`).
+    - Recalculated available stock strictly under the row lock: `available = balance.on_hand - active_held`.
+    - Enforced `requested <= available`, raising `InsufficientStockError` if stock is exhausted by a concurrent transaction.
+- **Checkout Service & Endpoint Idempotency**:
+  - `backend/app/schemas/orders.py`: Added `idempotency_key` to `OrderCreateRequest` and `OrderResponseSchema`.
+  - `backend/app/services/orders.py`: Handled idempotent lookups in `place_order()`, returning existing orders on match and passing line-derived keys (`{order_idempotency_key}:{variant.id}`) to `create_stock_reservation()`.
+  - `backend/app/api/v1/orders.py`: Accepted `Idempotency-Key` header and mapped to order creation request.
+  - `backend/app/main.py`: Added `"Idempotency-Key"` to CORS middleware `allow_headers`.
+- **Frontend Integration**:
+  - `frontend/src/utils/api.js`: Generated unique client UUID for `Idempotency-Key` header and payload in `submitOrder()`.
+  - `frontend/tests/checkout.test.js`: Verified transmission of `Idempotency-Key` header.
+
+### Phase 25: Payment & Supplier Confirmation Separation (Launch Blocker 3)
+- **Defect Reproduction (Red Test Stage)**:
+  - Created `backend/tests/test_payment_separation.py`:
+    - `test_dispatch_unverified_bank_transfer_rejected`: Verified that attempting to dispatch an unpaid bank-transfer order raises `OrderNotDispatchableError` (422) instead of allowing dispatch.
+    - `test_verify_payment_does_not_confirm_supplier_or_advance_reservations`: Verified that `verify_bank_payment()` only updates `payment_status = "verified"`, leaving `order_status = "placed"` and stock reservations in `"held"` stage.
+    - `test_confirm_supplier_acceptance_advances_order_and_reservations`: Verified that `confirm_supplier_acceptance()` explicitly sets `order_status = "confirmed"`, records `supplier_confirmed_at`, and advances open reservations from `"held"` to `"confirmed"`.
+    - `test_four_hour_payment_window_and_expired_order_cancellation`: Verified that bank transfer orders receive a 4-hour `payment_deadline_at`, while COD orders receive `None`. Calling `cancel_expired_bank_orders()` auto-cancels elapsed unverified orders and releases held stock.
+- **ORM Models & Alembic Schema Migration**:
+  - `backend/app/models/orders.py`: Added `payment_deadline_at`, `supplier_confirmed_at`, and `supplier_notes` to `Order` with `idx_orders_payment_deadline` index.
+  - Generated revision `13b1315d1395_add_payment_deadline_and_supplier_.py`.
+  - Verified full migration lifecycle (`upgrade head` -> `downgrade -1` -> `upgrade head`) on disposable test database `alphazee_migration_test` with zero errors.
+- **Service & Dispatch Safety Layer**:
+  - `backend/app/services/orders.py`:
+    - Updated `place_order()` to calculate 4-hour deadline for bank transfer orders.
+    - Refactored `verify_bank_payment()` to strictly execute financial verification without altering order status or reservations.
+    - Created `confirm_supplier_acceptance()` and `cancel_expired_bank_orders()`.
+  - `backend/app/services/shipments.py`:
+    - Hardened `create_shipment()` to reject unpaid bank transfer orders and require `order.order_status == "confirmed"`.
+    - Updated `update_shipment_status()` to fulfill `"confirmed"` reservations upon courier delivery.
+- **Honest Bank Configuration & Administrative UI**:
+  - `backend/app/config.py` & `.env.example`: Added configurable bank transfer settings with `bank_iban = "PENDING_IBAN_CONFIGURATION"`.
+  - `backend/app/schemas/orders.py`: Dynamic `BankInstructionsSchema` defaults and added deadline/supplier fields to `OrderResponseSchema`.
+  - `backend/app/api/v1/admin.py`: Added `POST /orders/{order_id}/confirm-supplier` and `POST /orders/cancel-expired`.
+  - `frontend/src/data/store-config.js` & `CheckoutView.js`: Added pending IBAN notice and 4-hour payment window alert.
+  - `frontend/src/components/AdminConsole.js`: Separated "Verify Bank Transfer", "Confirm Supplier", and "Dispatch Courier" action flows, plus added toolbar button to purge expired bank orders.
+  - `frontend/tests/admin.test.js`: Added unit tests for supplier confirmation and expired order cancellation.
+
+### Phase 26 (Phase D: Delivery, Cancellation & Stock Transitions — Launch Blocker 4)
+
+- **Red-Green-Refactor Reproduction**:
+  - Created `backend/tests/test_delivery_transitions.py` covering:
+    - `test_cancelling_dispatched_order_rejected_with_422`: Verified cancelling a dispatched order raises `OrderNotCancellableError` and returns HTTP 422.
+    - `test_deliver_order_transitions_reservations_sequentially`: Verified reservations progress through `held` -> `confirmed` -> `dispatched` -> `fulfilled` sequentially without skipping stages.
+    - `test_rto_in_transit_does_not_release_stock`: Verified initiating RTO marks shipment as `rto_initiated` while held stock remains reserved.
+    - `test_rto_received_releases_stock_back_to_available`: Verified warehouse physical arrival (`rto_delivered`) cancels reservations and releases held inventory back to available stock.
+- **Service & Domain Invariants**:
+  - `backend/app/services/orders.py`: Added `OrderNotCancellableError` and enforced sequential reservation progression upon delivery.
+  - `backend/app/services/shipments.py`:
+    - Updated `create_shipment()` to advance line reservations from `confirmed` to `dispatched`.
+    - Updated `update_shipment_status()` to advance reservations sequentially to `fulfilled` on delivery.
+    - Added `initiate_rto_order()` and `receive_rto_parcel()` implementing the safe two-step RTO lifecycle.
+- **Admin API & Frontend Management**:
+  - `backend/app/schemas/admin.py`: Added `OrderRtoInitiateRequest`.
+  - `backend/app/api/v1/admin.py`:
+    - Guarded `POST /orders/{order_id}/cancel` to catch `OrderNotCancellableError` and return 422.
+    - Added `POST /orders/{order_id}/rto` and `POST /orders/{order_id}/rto-received`.
+  - `frontend/src/utils/api.js`: Added `initiateOrderRto` and `receiveOrderRto`.
+  - `frontend/src/components/AdminConsole.js`: Added contextual RTO actions for dispatched and in-transit orders, hiding direct cancellation for dispatched orders.
+  - `frontend/tests/admin.test.js`: Added two-step RTO integration tests.
+
+### Phase 27 (Phase E: Safe RTO Restocking & Return Supplier Fix — Launch Blocker 5)
+
+- **Red-Green-Refactor Reproduction**:
+  - Created `backend/tests/test_rto_restock.py` covering:
+    - `test_rto_received_does_not_automatically_restock`: Verified physical arrival records presence without touching inventory balance.
+    - `test_inspect_and_restock_condition_ok_increases_stock_with_audit`: Verified explicit inspection increases physical on-hand inventory via `adjust_inventory` with `StockEvent` delta.
+    - `test_inspect_and_restock_damaged_condition_does_not_restock`: Verified damaged goods are logged without returning to sellable inventory.
+    - `test_customer_return_restocks_fulfilling_supplier_not_new_active_supplier`: Verified customer returns restock the fulfilling supplier snapshot from `StockReservation` rather than the current active supplier.
+- **Service & Domain Invariants**:
+  - `backend/app/services/shipments.py`: Decoupled `rto_delivered` arrival from inventory changes; added `inspect_and_restock_order()` requiring explicit condition inspection; fixed `StockEvent` missing delta bug.
+  - `backend/app/services/returns.py`: Updated `complete_return_and_restock()` to resolve the historical fulfilling supplier variant from `StockReservation`.
+- **Admin API & Frontend UI**:
+  - `backend/app/api/v1/admin.py`: Added `POST /api/v1/admin/orders/{order_id}/rto-inspect`.
+  - `frontend/src/utils/api.js`: Added `inspectAndRestockRtoOrder()`.
+  - `frontend/src/components/AdminConsole.js`: Added interactive inspection and restocking buttons for uninspected RTO parcels.
+
+### Phase 28 (Phase F: Accurate Financial Reporting & Remittance Guards — Launch Blocker 6)
+
+- **Red-Green-Refactor Reproduction**:
+  - Created `backend/tests/test_financial_reporting.py` covering:
+    - `test_unpaid_placed_orders_excluded_from_revenue`: Verified unpaid placed orders (`payment_status == 'pending'`) are strictly excluded from gross revenue, COGS, and profit.
+    - `test_verified_bank_and_cod_collected_included_in_revenue`: Verified only verified bank transfers and collected/delivered COD orders count toward realized revenue and COGS.
+    - `test_completed_returns_deducted_from_revenue`: Verified completed customer returns deduct `refund_amount_minor` from net revenue and gross profit.
+    - `test_zero_or_negative_cod_remittance_rejected_with_422`: Verified zero and negative COD remittances are rejected with HTTP 422.
+    - `test_partial_cod_remittance_requires_explicit_flag_and_reason`: Verified short courier settlements are rejected with HTTP 422 unless explicit `is_partial=True` and `partial_reason` are provided.
+    - `test_mark_cod_remitted_by_order_id_endpoint`: Verified recording remittance by order ID endpoint and model properties `remittance_amount_minor` and `is_partial_remittance`.
+- **Financial Calculation & Analytics Layer**:
+  - `backend/app/services/analytics.py`:
+    - Updated `get_profit_loss_summary()`: Filtered orders strictly by `payment_status.in_(["verified", "verified_received", "cod_collected"])`.
+    - Deducted `SUM(OrderReturn.refund_amount_minor)` from completed returns.
+    - Realized COGS calculated only on paid/collected lines.
+    - Net Gross Profit computed as `net_revenue_minor - cogs_minor - total_courier_expenses_minor`.
+- **Logistics & COD Remittance Security**:
+  - `backend/app/models/shipments.py`: Added `remittance_amount_minor` and `is_partial_remittance` ORM model properties.
+  - `backend/app/services/shipments.py`: Added `InvalidRemittanceError`, enforced remittance amount and partial guards, and added `mark_cod_remitted()` helper.
+  - `backend/app/schemas/admin.py`: Added partial remittance fields to `CodRemittanceRequest`, properties to `ShipmentAdminResponseSchema`, and net revenue/refund fields to `ProfitLossResponseSchema`.
+  - `backend/app/api/v1/admin.py`: Added `POST /api/v1/admin/orders/{order_id}/remittance`, wired remittance guards with HTTP 422 mapping, and enriched `/analytics/profit-loss` endpoint.
+
+### Phase 29 (Phase G: End-to-End Exchange Completion & Ownership Verification — Launch Blocker 7)
+
+- **Red-Green-Refactor Reproduction**:
+  - Created `backend/tests/test_exchange_flow.py` covering:
+    - `test_return_request_with_wrong_phone_rejected_with_403`: Verified returns submitted with unverified/mismatched phone are rejected with HTTP 403 Forbidden.
+    - `test_return_request_with_valid_phone_accepted`: Verified returns with matching normalized phone are accepted with HTTP 201 Created.
+    - `test_approve_exchange_creates_replacement_reservation_and_shipment`: Verified approving size exchanges atomically creates replacement `StockReservation` with `stage == "held"` and new replacement `Shipment` with `status == "booked"`.
+    - `test_approve_exchange_with_no_stock_raises_422`: Verified approving size exchange when replacement variant stock is exhausted raises `InsufficientStockError` and returns HTTP 422 Unprocessable Entity.
+    - `test_approve_refund_return_does_not_create_replacement_shipment`: Verified standard refund return approvals do not create extra shipments or reservations.
+- **Service & Domain Invariants**:
+  - `backend/app/services/returns.py`:
+    - Added `CustomerOwnershipError`.
+    - Enforced phone normalization and ownership verification in `create_return_request()`.
+    - In `approve_return_request()`: Resolved active supplier variant for `exchange_variant_id`, created replacement stock reservation under row lock, and created replacement `Shipment` record with status `"booked"` and `cod_remittance_status="not_applicable"`.
+- **API & Schemas**:
+  - `backend/app/schemas/returns.py`: Enforced required `customer_phone` on `OrderReturnCreateRequest`.
+  - `backend/app/api/v1/returns.py`: Mapped `CustomerOwnershipError` to HTTP 403 Forbidden.
+  - `backend/app/api/v1/admin.py`: Mapped `InsufficientStockError` in return approval to HTTP 422 Unprocessable Entity.
 
 ---
 
@@ -338,21 +485,24 @@ Updated: 2026-10-09. Owner: Syed Najam.
 
 1. **Full Backend Test Suite (Python 3.13 / PostgreSQL 16)**:
    - Command: `pytest -v` (in `backend/`)
-   - **Result**: `113 passed, 0 failed` in 11.08s.
-   - Includes: unit tests, API tests, configuration safety guards, readiness probes, catalog integration, supplier/inventory model tests, two-session concurrency tests, reservation lifecycle tests, order checkout/payment tests, storefront order API tests, admin overview/inventory/supplier endpoints, courier dispatch/tracking, P&L unit economics, coupon validations, return requests/restocks, and marketing UTM analytics.
+   - **Result**: `144 passed, 0 failed` in 23.89s.
+   - Includes: All 7 launch blocker test suites (Phase A auth gate, Phase B reservation concurrency & idempotency, Phase C payment/supplier separation, Phase D delivery transitions & 2-step RTO, Phase E safe RTO restocking, Phase F financial reporting & remittance guards, Phase G exchange completion & phone ownership verification), plus all catalog integration, inventory balances, order lifecycle, courier logistics, unit economics, readiness probes, and marketing UTM attribution tests.
 2. **Frontend Test Suite (Node.js 25 built-in runner)**:
    - Command: `npm test` (in `frontend/`)
-   - **Result**: `63 passed, 0 failed` across 14 suites in 1.61s.
+   - **Result**: `67 passed, 0 failed` across 14 suites in 1.38s.
 3. **Frontend Production Build**:
    - Command: `npm run build` (in `frontend/`)
-   - **Result**: `✓ built in 956ms`, 22 modules transformed, zero errors.
+   - **Result**: `✓ built in 1.17s`, 22 modules transformed, zero errors.
 
 ---
 
 ## 3. Current Scope & Safety Confirmation
 
-- **Application Database Safety**: `alphazee_dev` remains completely untouched.
-- **Storefront, Logistics, Promotions & Admin Safety**: Verified end-to-end against disposable PostgreSQL test databases (`alphazee_test` / `alphazee_migration_test`).
+- **All 7 Launch Blockers Resolved**: The core foundation is completely hardened and verified end-to-end.
+- **Application Database Safety**: `alphazee_dev` remains completely untouched. Zero schema modifications or migrations required for Phase G.
+- **Disposable PostgreSQL Verification**: Verified end-to-end against disposable PostgreSQL test databases (`alphazee_test` / `alphazee_migration_test`).
+- **Storefront Checkout Preview**: Storefront checkout prototype preview remains intact until business go-ahead to launch real live checkout.
+
 
 
 

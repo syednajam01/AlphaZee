@@ -45,7 +45,7 @@ app.add_middleware(
     allow_origins=settings.allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Accept", "Content-Type", "Authorization"],
+    allow_headers=["Accept", "Content-Type", "Authorization", "X-Admin-Key", "Idempotency-Key"],
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────

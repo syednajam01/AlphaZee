@@ -23,7 +23,7 @@ from app.models.inventory import InventoryBalance, SupplierVariant
 from app.models.orders import Order
 from app.models.suppliers import Supplier, UserAccount
 from app.queries.inventory import StaleInventoryError, adjust_inventory
-from app.queries.reservations import get_inventory_summary as get_stock_summary
+from app.queries.reservations import InsufficientStockError, get_inventory_summary as get_stock_summary
 from app.schemas.admin import (
     AdminOrderListResponse,
     AdminOverviewMetricsResponse,
@@ -33,7 +33,9 @@ from app.schemas.admin import (
     InventorySummaryResponse,
     MarketingAttributionItemSchema,
     MarketingAttributionResponseSchema,
+    OrderRtoInitiateRequest,
     ProfitLossResponseSchema,
+    RtoInspectionRequest,
     ShipmentAdminResponseSchema,
     ShipmentCreateRequest,
     ShipmentStatusUpdateRequest,
@@ -42,6 +44,7 @@ from app.schemas.admin import (
     SupplierResponseSchema,
     SupplierVariantAssignRequest,
     SupplierVariantResponseSchema,
+    SupplierAcceptanceRequest,
 )
 from app.schemas.catalog import CurrencyAmount
 from app.schemas.orders import OrderResponseSchema
@@ -52,7 +55,14 @@ from app.schemas.returns import (
     OrderReturnResponseSchema,
 )
 from app.services.analytics import get_marketing_attribution_summary, get_profit_loss_summary
-from app.services.orders import cancel_order, deliver_order, verify_bank_payment
+from app.services.orders import (
+    OrderNotCancellableError,
+    cancel_expired_bank_orders,
+    cancel_order,
+    confirm_supplier_acceptance,
+    deliver_order,
+    verify_bank_payment,
+)
 from app.services.promotions import create_coupon, delete_coupon, list_coupons
 from app.services.returns import (
     approve_return_request,
@@ -61,14 +71,25 @@ from app.services.returns import (
     reject_return_request,
 )
 from app.services.shipments import (
+    OrderNotDispatchableError,
+    InvalidRemittanceError,
     ShipmentError,
     ShipmentNotFoundError,
     create_shipment,
+    initiate_rto_order,
+    inspect_and_restock_order,
+    mark_cod_remitted,
+    receive_rto_parcel,
     record_cod_remittance,
     update_shipment_status,
 )
+from app.dependencies.auth import require_admin_key
 
-router = APIRouter(prefix="/admin", tags=["Owner Administration"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["Owner Administration"],
+    dependencies=[Depends(require_admin_key)],
+)
 
 
 @router.get(
@@ -250,6 +271,50 @@ def verify_payment_endpoint(
 
 
 @router.post(
+    "/orders/{order_id}/confirm-supplier",
+    response_model=OrderResponseSchema,
+    summary="Record operational supplier acceptance and allocate inventory for fulfillment",
+)
+def confirm_supplier_endpoint(
+    order_id: uuid.UUID,
+    payload: Optional[SupplierAcceptanceRequest] = None,
+    db: Session = Depends(get_db),
+) -> OrderResponseSchema:
+    notes = payload.notes if payload else None
+    try:
+        order = confirm_supplier_acceptance(
+            db,
+            order_id=order_id,
+            supplier_notes=notes,
+        )
+        db.commit()
+        db.refresh(order)
+    except ValueError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(err),
+        ) from err
+
+    return _order_to_response(order)
+
+
+@router.post(
+    "/orders/cancel-expired",
+    summary="Cancel placed bank transfer orders that exceeded the 4-hour payment window",
+)
+def cancel_expired_orders_endpoint(
+    db: Session = Depends(get_db),
+) -> dict:
+    cancelled_orders = cancel_expired_bank_orders(db)
+    db.commit()
+    return {
+        "cancelled_count": len(cancelled_orders),
+        "cancelled_order_ids": [str(o.id) for o in cancelled_orders],
+    }
+
+
+@router.post(
     "/orders/{order_id}/deliver",
     response_model=OrderResponseSchema,
     summary="Mark order as delivered, fulfilling reservations and decrementing inventory",
@@ -285,6 +350,12 @@ def cancel_order_endpoint(
         order = cancel_order(db, order_id=order_id)
         db.commit()
         db.refresh(order)
+    except OrderNotCancellableError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(err),
+        ) from err
     except ValueError as err:
         db.rollback()
         raise HTTPException(
@@ -293,6 +364,94 @@ def cancel_order_endpoint(
         ) from err
 
     return _order_to_response(order)
+
+
+@router.post(
+    "/orders/{order_id}/rto",
+    response_model=OrderResponseSchema,
+    summary="Initiate RTO return for a dispatched order in transit with courier",
+)
+def initiate_rto_endpoint(
+    order_id: uuid.UUID,
+    payload: Optional[OrderRtoInitiateRequest] = None,
+    db: Session = Depends(get_db),
+) -> OrderResponseSchema:
+    reason = payload.reason if payload else None
+    courier_cost = payload.rto_courier_cost_minor if payload else 0
+    try:
+        shipment = initiate_rto_order(
+            db,
+            order_id=order_id,
+            rto_reason=reason,
+            rto_courier_cost_minor=courier_cost,
+        )
+        db.commit()
+        db.refresh(shipment.order)
+        return _order_to_response(shipment.order)
+    except OrderNotDispatchableError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(err),
+        ) from err
+    except ShipmentError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(err),
+        ) from err
+
+
+@router.post(
+    "/orders/{order_id}/rto-received",
+    response_model=OrderResponseSchema,
+    summary="Confirm physical receipt of RTO parcel, releasing stock hold back to available",
+)
+def receive_rto_endpoint(
+    order_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> OrderResponseSchema:
+    try:
+        shipment = receive_rto_parcel(db, order_id=order_id)
+        db.commit()
+        db.refresh(shipment.order)
+        return _order_to_response(shipment.order)
+    except ShipmentError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(err),
+        ) from err
+
+
+@router.post(
+    "/orders/{order_id}/rto-inspect",
+    response_model=OrderResponseSchema,
+    summary="Record physical condition inspection and restock resalable RTO inventory",
+)
+def inspect_rto_endpoint(
+    order_id: uuid.UUID,
+    payload: RtoInspectionRequest,
+    db: Session = Depends(get_db),
+) -> OrderResponseSchema:
+    try:
+        shipment = inspect_and_restock_order(
+            db,
+            order_id=order_id,
+            condition_ok=payload.condition_ok,
+            notes=payload.notes,
+        )
+        db.commit()
+        db.refresh(shipment.order)
+        return _order_to_response(shipment.order)
+    except ShipmentError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(err),
+        ) from err
+
+
 
 
 @router.get(
@@ -574,10 +733,61 @@ def record_cod_remittance_endpoint(
             shipment_id=shipment_id,
             remitted_amount_minor=payload.remitted_amount_minor,
             reference=payload.reference,
+            is_partial=payload.is_partial or bool(payload.partial),
+            partial_reason=payload.partial_reason,
         )
         db.commit()
         db.refresh(shipment)
         return ShipmentAdminResponseSchema.model_validate(shipment)
+    except InvalidRemittanceError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    except ShipmentNotFoundError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except ShipmentError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+@router.post(
+    "/orders/{order_id}/remittance",
+    response_model=ShipmentAdminResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Record courier COD cash remittance for an order by order ID",
+)
+def record_order_cod_remittance_endpoint(
+    order_id: uuid.UUID,
+    payload: CodRemittanceRequest,
+    db: Session = Depends(get_db),
+) -> ShipmentAdminResponseSchema:
+    try:
+        shipment = mark_cod_remitted(
+            db,
+            order_id=order_id,
+            amount_minor=payload.remitted_amount_minor,
+            reference=payload.reference,
+            is_partial=payload.is_partial or bool(payload.partial),
+            partial_reason=payload.partial_reason,
+        )
+        db.commit()
+        db.refresh(shipment)
+        return ShipmentAdminResponseSchema.model_validate(shipment)
+    except InvalidRemittanceError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
     except ShipmentNotFoundError as e:
         db.rollback()
         raise HTTPException(
@@ -601,8 +811,13 @@ def get_profit_loss_endpoint(db: Session = Depends(get_db)) -> ProfitLossRespons
     data = get_profit_loss_summary(db)
 
     gross_rev = data["gross_revenue_minor"]
+    net_rev = data.get("net_revenue_minor", gross_rev)
+    refund_tot = data.get("refund_total_minor", 0)
     gross_prof = data["gross_profit_minor"]
-    if gross_rev > 0:
+
+    if net_rev > 0:
+        margin_pct = round((gross_prof / net_rev) * 100.0, 2)
+    elif gross_rev > 0:
         margin_pct = round((gross_prof / gross_rev) * 100.0, 2)
     else:
         margin_pct = 0.0
@@ -610,6 +825,10 @@ def get_profit_loss_endpoint(db: Session = Depends(get_db)) -> ProfitLossRespons
     return ProfitLossResponseSchema(
         gross_revenue_minor=gross_rev,
         formatted_gross_revenue=CurrencyAmount.from_minor(gross_rev).formatted,
+        net_revenue_minor=net_rev,
+        formatted_net_revenue=CurrencyAmount.from_minor(net_rev).formatted,
+        refund_total_minor=refund_tot,
+        formatted_refund_total=CurrencyAmount.from_minor(refund_tot).formatted,
         subtotal_revenue_minor=data["subtotal_revenue_minor"],
         shipping_revenue_minor=data["shipping_revenue_minor"],
         cogs_minor=data["cogs_minor"],
@@ -822,6 +1041,12 @@ def approve_admin_return_endpoint(
             created_at=ret.created_at,
             updated_at=ret.updated_at,
         )
+    except InsufficientStockError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(err),
+        ) from err
     except ValueError as err:
         db.rollback()
         raise HTTPException(

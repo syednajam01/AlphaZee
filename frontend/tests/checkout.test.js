@@ -71,6 +71,7 @@ describe('Storefront Order API Client & Checkout Cart State', () => {
 
     assert.ok(calledUrl.endsWith('/api/v1/orders'));
     assert.equal(calledOptions.method, 'POST');
+    assert.ok(calledOptions.headers['Idempotency-Key'], 'Expected Idempotency-Key header to be present');
     assert.equal(result.order_number, 'AZ-20261011-A1B2C3');
     assert.equal(result.total.formatted, 'PKR 7,000');
     assert.equal(result.bank_instructions.bank_name, 'Meezan Bank Ltd.');

@@ -388,9 +388,21 @@ export function createCheckoutView(onClose) {
         <div style="font-size: 0.8125rem; font-family: monospace; background: #FFFFFF; border: 1px solid #DCFCE7; border-radius: var(--radius-sm); padding: 12px; line-height: 1.6; color: #14532D;">
           <div><strong>Bank:</strong> ${escapeHtml(order.bank_instructions?.bank_name || 'Meezan Bank Ltd.')}</div>
           <div><strong>Title:</strong> ${escapeHtml(order.bank_instructions?.account_title || 'AlphaZee Private Limited')}</div>
-          <div><strong>Account #:</strong> ${escapeHtml(order.bank_instructions?.account_number || '01020304050607')}</div>
-          <div><strong>IBAN:</strong> ${escapeHtml(order.bank_instructions?.iban || 'PK00MEZN0001020304050607')}</div>
+          <div><strong>Account #:</strong> ${escapeHtml(order.bank_instructions?.account_number || 'PENDING_CONFIGURATION')}</div>
+          <div><strong>IBAN:</strong> ${escapeHtml(order.bank_instructions?.iban || 'PENDING_IBAN_CONFIGURATION')}</div>
         </div>
+
+        ${(order.bank_instructions?.iban?.includes('PENDING') || !order.bank_instructions?.iban) ? `
+          <div style="margin-top: 10px; padding: 8px 12px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 4px; font-size: 0.75rem; color: #B45309; line-height: 1.4;">
+            ⚠️ <strong>Configuration Notice:</strong> Official bank transfer accounts are currently pending administrative setup. Manual transfer payments are not yet finalized for real customer transactions.
+          </div>
+        ` : ''}
+
+        ${order.payment_deadline_at ? `
+          <div style="margin-top: 10px; font-size: 0.75rem; color: #15803D; font-weight: 600;">
+            ⏳ <strong>Payment Window:</strong> Please submit transfer receipt proof within 4 hours. Unverified reservations will be cancelled automatically.
+          </div>
+        ` : ''}
 
         <div style="margin-top: 16px;">
           <h4 style="font-size: 0.8125rem; font-weight: 700; color: #166534; margin-bottom: 6px;">

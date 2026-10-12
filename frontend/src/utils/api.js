@@ -6,6 +6,35 @@
  */
 
 const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) || '/api/v1';
+const ADMIN_KEY_STORAGE_KEY = 'alphazee_admin_key';
+
+export function getAdminKey() {
+  try {
+    return (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(ADMIN_KEY_STORAGE_KEY)) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function setAdminKey(key) {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      if (key && key.trim()) {
+        sessionStorage.setItem(ADMIN_KEY_STORAGE_KEY, key.trim());
+      } else {
+        sessionStorage.removeItem(ADMIN_KEY_STORAGE_KEY);
+      }
+    }
+  } catch {}
+}
+
+export function clearAdminKey() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(ADMIN_KEY_STORAGE_KEY);
+    }
+  } catch {}
+}
 
 export class ApiError extends Error {
   constructor(message, status = 0, data = null) {
@@ -18,13 +47,22 @@ export class ApiError extends Error {
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
+  const headers = {
+    'Accept': 'application/json',
+    ...options.headers,
+  };
+
+  if (endpoint.startsWith('/admin')) {
+    const adminKey = getAdminKey();
+    if (adminKey) {
+      headers['X-Admin-Key'] = adminKey;
+    }
+  }
+
   try {
     const res = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        ...options.headers,
-      },
       ...options,
+      headers,
     });
 
     if (!res.ok) {
@@ -93,16 +131,23 @@ export async function fetchProductBySlug(slug, { signal = null } = {}) {
 
 /**
  * Submit customer checkout order to backend.
+ * Automatically attaches an Idempotency-Key to prevent duplicate order placement.
  * @param {Object} orderData
+ * @param {string|null} [idempotencyKey=null]
  * @returns {Promise<Object>} Created order details
  */
-export async function submitOrder(orderData) {
+export async function submitOrder(orderData, idempotencyKey = null) {
+  const effectiveIdemp = idempotencyKey || orderData.idempotency_key || `chk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   return request('/orders', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Idempotency-Key': effectiveIdemp,
     },
-    body: JSON.stringify(orderData),
+    body: JSON.stringify({
+      ...orderData,
+      idempotency_key: effectiveIdemp,
+    }),
   });
 }
 
@@ -192,6 +237,29 @@ export async function verifyOrderPayment(orderId, receiptId = null) {
 }
 
 /**
+ * Record operational supplier acceptance and allocate inventory for fulfillment.
+ * @param {string} orderId
+ * @param {string|null} [notes]
+ * @returns {Promise<Object>} Updated order details
+ */
+export async function confirmSupplierAcceptance(orderId, notes = null) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/confirm-supplier`, {
+    method: 'POST',
+    body: JSON.stringify({ notes }),
+  });
+}
+
+/**
+ * Trigger cancellation of expired bank transfer orders exceeding the 4-hour window.
+ * @returns {Promise<{ cancelled_count: number, cancelled_order_ids: string[] }>}
+ */
+export async function cancelExpiredOrders() {
+  return request('/admin/orders/cancel-expired', {
+    method: 'POST',
+  });
+}
+
+/**
  * Mark order as delivered.
  * @param {string} orderId
  * @returns {Promise<Object>} Updated order details
@@ -212,6 +280,47 @@ export async function cancelOrder(orderId) {
     method: 'POST',
   });
 }
+
+/**
+ * Initiate RTO return for a dispatched order in transit with courier.
+ * @param {string} orderId
+ * @param {Object} [payload] { reason, rto_courier_cost_minor }
+ * @returns {Promise<Object>} Updated order details
+ */
+export async function initiateOrderRto(orderId, payload = {}) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/rto`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Confirm physical receipt of RTO parcel at store, releasing stock back to available.
+ * @param {string} orderId
+ * @returns {Promise<Object>} Updated order details
+ */
+export async function receiveOrderRto(orderId) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/rto-received`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Record physical condition inspection and restock an RTO parcel.
+ * @param {string} orderId
+ * @param {Object} payload { condition_ok, notes }
+ * @returns {Promise<Object>} Updated order details
+ */
+export async function inspectAndRestockRtoOrder(orderId, { condition_ok = true, notes = '' } = {}) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/rto-inspect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ condition_ok: Boolean(condition_ok), notes: notes || undefined }),
+  });
+}
+
+
 
 /**
  * Fetch all registered suppliers.

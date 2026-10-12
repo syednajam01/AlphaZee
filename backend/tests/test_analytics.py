@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
@@ -25,7 +26,7 @@ def client(db_session: Session):
             pass
 
     app.dependency_overrides[get_db] = _override_get_db
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-Admin-Key": settings.admin_api_key}) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
@@ -145,6 +146,9 @@ def test_profit_loss_analytics_computes_exact_cogs_and_gross_profit(
     )
     db_session.commit()
 
+    # Confirm Order 1 supplier acceptance
+    client.post(f"/api/v1/admin/orders/{order1.id}/confirm-supplier")
+
     # Dispatch Order 1 via Trax (Courier cost PKR 250 = 25000 paisas)
     d1 = client.post(
         f"/api/v1/admin/orders/{order1.id}/dispatch",
@@ -155,6 +159,10 @@ def test_profit_loss_analytics_computes_exact_cogs_and_gross_profit(
         },
     )
     s1_id = d1.json()["id"]
+
+    # Verify Order 2 payment and confirm supplier acceptance
+    client.post(f"/api/v1/admin/orders/{order2.id}/verify-payment")
+    client.post(f"/api/v1/admin/orders/{order2.id}/confirm-supplier")
 
     # Dispatch Order 2 via Leopards (Courier cost PKR 200 = 20000 paisas)
     d2 = client.post(

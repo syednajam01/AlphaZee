@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
@@ -27,7 +28,7 @@ def client(db_session: Session):
             pass
 
     app.dependency_overrides[get_db] = _override_get_db
-    with TestClient(app) as test_client:
+    with TestClient(app, headers={"X-Admin-Key": settings.admin_api_key}) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
@@ -125,6 +126,9 @@ def test_order_dispatch_creates_shipment_and_updates_order_status(
     db_session.commit()
     assert order.order_status == "placed"
 
+    # Confirm supplier acceptance
+    client.post(f"/api/v1/admin/orders/{order.id}/confirm-supplier")
+
     # 2. Dispatch order via Trax Logistics
     res = client.post(
         f"/api/v1/admin/orders/{order.id}/dispatch",
@@ -170,8 +174,14 @@ def test_public_order_tracking_endpoint_returns_courier_details(
     )
     db_session.commit()
 
+    # Verify bank payment and confirm supplier acceptance
+    vp_res = client.post(f"/api/v1/admin/orders/{order.id}/verify-payment")
+    assert vp_res.status_code == 200, vp_res.text
+    cs_res = client.post(f"/api/v1/admin/orders/{order.id}/confirm-supplier")
+    assert cs_res.status_code == 200, cs_res.text
+
     # Dispatch via Leopards
-    client.post(
+    disp_res = client.post(
         f"/api/v1/admin/orders/{order.id}/dispatch",
         json={
             "courier_code": "leopards",
@@ -179,6 +189,7 @@ def test_public_order_tracking_endpoint_returns_courier_details(
             "shipping_cost_minor": 20000,
         },
     )
+    assert disp_res.status_code == 201, disp_res.text
 
     # Fetch public tracking
     res = client.get(f"/api/v1/orders/{order.order_number}?phone=03219876543")
@@ -214,6 +225,9 @@ def test_shipment_status_delivered_fulfills_stock_and_marks_cod_payment_verified
         ),
     )
     db_session.commit()
+
+    # Confirm supplier acceptance
+    client.post(f"/api/v1/admin/orders/{order.id}/confirm-supplier")
 
     # Initial physical = 10, held = 2, available = 8
     db_session.refresh(balance)
@@ -269,6 +283,9 @@ def test_shipment_rto_return_restocks_inventory(
     )
     db_session.commit()
 
+    # Confirm supplier acceptance
+    client.post(f"/api/v1/admin/orders/{order.id}/confirm-supplier")
+
     disp_res = client.post(
         f"/api/v1/admin/orders/{order.id}/dispatch",
         json={
@@ -319,6 +336,9 @@ def test_cod_remittance_lifecycle(
     )
     db_session.commit()
 
+    # Confirm supplier acceptance
+    client.post(f"/api/v1/admin/orders/{order.id}/confirm-supplier")
+
     disp_res = client.post(
         f"/api/v1/admin/orders/{order.id}/dispatch",
         json={
@@ -341,6 +361,8 @@ def test_cod_remittance_lifecycle(
         json={
             "remitted_amount_minor": 580000,  # PKR 5,800 (net of 200 courier fee)
             "reference": "POSTEX-WEEKLY-PAYOUT-OCT11",
+            "is_partial": True,
+            "partial_reason": "Net of 200 courier fee",
         },
     )
     assert remit_res.status_code == 200

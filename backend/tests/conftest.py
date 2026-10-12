@@ -143,3 +143,25 @@ def client(db_session):
     finally:
         app.dependency_overrides.pop(get_db, None)
 
+
+@pytest.fixture()
+def admin_headers():
+    """Valid admin authorization headers for testing privileged endpoints."""
+    return {"X-Admin-Key": settings.admin_api_key}
+
+
+@pytest.fixture()
+def admin_client(db_session, admin_headers):
+    """FastAPI test client pre-authenticated with valid owner admin key."""
+
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(app, headers=admin_headers) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+

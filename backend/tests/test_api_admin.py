@@ -101,12 +101,12 @@ def _create_admin_setup(db: Session, on_hand: int = 10):
     }
 
 
-def test_admin_inventory_summary_and_adjust(client, db_session):
+def test_admin_inventory_summary_and_adjust(admin_client, db_session):
     setup = _create_admin_setup(db_session, on_hand=10)
     sv_id = setup["sv"].id
 
     # 1. Fetch summary
-    res = client.get("/api/v1/admin/inventory/summary")
+    res = admin_client.get("/api/v1/admin/inventory/summary")
     assert res.status_code == 200
     data = res.json()
     assert data["total_variants"] >= 1
@@ -125,7 +125,7 @@ def test_admin_inventory_summary_and_adjust(client, db_session):
         "reason": "supplier_receipt",
         "reference_id": "PO-2026-001",
     }
-    adj_res = client.post("/api/v1/admin/inventory/adjust", json=adjust_payload)
+    adj_res = admin_client.post("/api/v1/admin/inventory/adjust", json=adjust_payload)
     assert adj_res.status_code == 200
     adj_data = adj_res.json()
     assert adj_data["physical_on_hand"] == 15
@@ -139,12 +139,12 @@ def test_admin_inventory_summary_and_adjust(client, db_session):
         "expected_version": 1,  # Stale! Expected is now 2
         "reason": "manual_count",
     }
-    stale_res = client.post("/api/v1/admin/inventory/adjust", json=stale_payload)
+    stale_res = admin_client.post("/api/v1/admin/inventory/adjust", json=stale_payload)
     assert stale_res.status_code == 409
     assert "modified concurrently" in stale_res.json()["detail"]
 
 
-def test_admin_order_lifecycle_payment_and_delivery(client, db_session):
+def test_admin_order_lifecycle_payment_and_delivery(admin_client, db_session):
     setup = _create_admin_setup(db_session, on_hand=10)
     var = setup["variant"]
     sv_id = setup["sv"].id
@@ -159,37 +159,46 @@ def test_admin_order_lifecycle_payment_and_delivery(client, db_session):
         "payment_method": "bank_transfer",
         "items": [{"variant_id": var.id, "quantity": 2}],
     }
-    order_res = client.post("/api/v1/orders", json=order_payload)
+    order_res = admin_client.post("/api/v1/orders", json=order_payload)
     assert order_res.status_code == 201
     order_id = order_res.json()["id"]
 
     # 2. Check stock metrics: Physical 10 | Held 2 | Available 8
-    sum_res = client.get("/api/v1/admin/inventory/summary")
+    sum_res = admin_client.get("/api/v1/admin/inventory/summary")
     match = next(item for item in sum_res.json()["items"] if item["supplier_variant_id"] == str(sv_id))
     assert match["physical_on_hand"] == 10
     assert match["held_reservations"] == 2
     assert match["available_to_sell"] == 8
 
     # 3. Owner verifies payment
-    vp_res = client.post(f"/api/v1/admin/orders/{order_id}/verify-payment")
+    vp_res = admin_client.post(f"/api/v1/admin/orders/{order_id}/verify-payment")
     assert vp_res.status_code == 200
     assert vp_res.json()["payment_status"] == "verified"
-    assert vp_res.json()["order_status"] == "confirmed"
+    assert vp_res.json()["order_status"] == "placed"
+
+    # 3b. Confirm supplier acceptance
+    conf_res = admin_client.post(
+        f"/api/v1/admin/orders/{order_id}/confirm-supplier",
+        json={"notes": "Packed and ready"},
+    )
+    assert conf_res.status_code == 200
+    assert conf_res.json()["order_status"] == "confirmed"
+    assert conf_res.json()["supplier_notes"] == "Packed and ready"
 
     # 4. Owner marks order delivered -> reservations fulfilled, physical balance decremented
-    del_res = client.post(f"/api/v1/admin/orders/{order_id}/deliver")
+    del_res = admin_client.post(f"/api/v1/admin/orders/{order_id}/deliver")
     assert del_res.status_code == 200
     assert del_res.json()["order_status"] == "delivered"
 
     # 5. Check stock metrics after delivery: Physical 8 | Held 0 | Available 8
-    sum_res2 = client.get("/api/v1/admin/inventory/summary")
+    sum_res2 = admin_client.get("/api/v1/admin/inventory/summary")
     match2 = next(item for item in sum_res2.json()["items"] if item["supplier_variant_id"] == str(sv_id))
     assert match2["physical_on_hand"] == 8
     assert match2["held_reservations"] == 0
     assert match2["available_to_sell"] == 8
 
 
-def test_admin_order_cancellation_releases_held_stock(client, db_session):
+def test_admin_order_cancellation_releases_held_stock(admin_client, db_session):
     setup = _create_admin_setup(db_session, on_hand=10)
     var = setup["variant"]
     sv_id = setup["sv"].id
@@ -204,36 +213,36 @@ def test_admin_order_cancellation_releases_held_stock(client, db_session):
         "payment_method": "cod",
         "items": [{"variant_id": var.id, "quantity": 3}],
     }
-    order_res = client.post("/api/v1/orders", json=order_payload)
+    order_res = admin_client.post("/api/v1/orders", json=order_payload)
     assert order_res.status_code == 201
     order_id = order_res.json()["id"]
 
     # 2. Stock metrics: Physical 10 | Held 3 | Available 7
-    sum_res = client.get("/api/v1/admin/inventory/summary")
+    sum_res = admin_client.get("/api/v1/admin/inventory/summary")
     match = next(item for item in sum_res.json()["items"] if item["supplier_variant_id"] == str(sv_id))
     assert match["physical_on_hand"] == 10
     assert match["held_reservations"] == 3
     assert match["available_to_sell"] == 7
 
     # 3. Owner cancels order
-    cancel_res = client.post(f"/api/v1/admin/orders/{order_id}/cancel")
+    cancel_res = admin_client.post(f"/api/v1/admin/orders/{order_id}/cancel")
     assert cancel_res.status_code == 200
     assert cancel_res.json()["order_status"] == "cancelled"
 
     # 4. Stock metrics immediately released: Physical 10 | Held 0 | Available 10
-    sum_res2 = client.get("/api/v1/admin/inventory/summary")
+    sum_res2 = admin_client.get("/api/v1/admin/inventory/summary")
     match2 = next(item for item in sum_res2.json()["items"] if item["supplier_variant_id"] == str(sv_id))
     assert match2["physical_on_hand"] == 10
     assert match2["held_reservations"] == 0
     assert match2["available_to_sell"] == 10
 
 
-def test_admin_overview_metrics(client, db_session):
+def test_admin_overview_metrics(admin_client, db_session):
     setup = _create_admin_setup(db_session, on_hand=1)  # Low stock (1 <= 2)
     var = setup["variant"]
 
     # 1. Overview initially
-    ov_res = client.get("/api/v1/admin/overview")
+    ov_res = admin_client.get("/api/v1/admin/overview")
     assert ov_res.status_code == 200
     ov_data = ov_res.json()
     assert ov_data["total_skus"] >= 1
@@ -249,15 +258,16 @@ def test_admin_overview_metrics(client, db_session):
         "payment_method": "bank_transfer",
         "items": [{"variant_id": var.id, "quantity": 1}],
     }
-    ord_res = client.post("/api/v1/orders", json=order_payload)
+    ord_res = admin_client.post("/api/v1/orders", json=order_payload)
     assert ord_res.status_code == 201
     ord_id = ord_res.json()["id"]
 
     # Verify payment -> turns payment_status to 'verified'
-    client.post(f"/api/v1/admin/orders/{ord_id}/verify-payment")
+    admin_client.post(f"/api/v1/admin/orders/{ord_id}/verify-payment")
+    admin_client.post(f"/api/v1/admin/orders/{ord_id}/confirm-supplier")
 
     # 3. Check updated overview
-    ov_res2 = client.get("/api/v1/admin/overview")
+    ov_res2 = admin_client.get("/api/v1/admin/overview")
     assert ov_res2.status_code == 200
     ov_data2 = ov_res2.json()
     assert ov_data2["gross_revenue_minor"] >= 320000
@@ -266,7 +276,7 @@ def test_admin_overview_metrics(client, db_session):
     assert ov_data2["confirmed_orders"] >= 1
 
 
-def test_admin_supplier_crud_and_variant_cost_assignment(client, db_session):
+def test_admin_supplier_crud_and_variant_cost_assignment(admin_client, db_session):
     unique_suffix = uuid.uuid4().hex[:6]
     setup = _create_admin_setup(db_session, on_hand=5)
     var_id = setup["variant"].id
@@ -278,18 +288,18 @@ def test_admin_supplier_crud_and_variant_cost_assignment(client, db_session):
         "status": "active",
         "notes": "Net 15 days credit terms",
     }
-    create_res = client.post("/api/v1/admin/suppliers", json=sup_payload)
+    create_res = admin_client.post("/api/v1/admin/suppliers", json=sup_payload)
     assert create_res.status_code == 201
     sup_data = create_res.json()
     sup_id = sup_data["id"]
     assert sup_data["name"] == f"Textile Hub {unique_suffix}"
 
     # Duplicate slug returns 409
-    dup_res = client.post("/api/v1/admin/suppliers", json=sup_payload)
+    dup_res = admin_client.post("/api/v1/admin/suppliers", json=sup_payload)
     assert dup_res.status_code == 409
 
     # 2. List suppliers
-    list_res = client.get("/api/v1/admin/suppliers")
+    list_res = admin_client.get("/api/v1/admin/suppliers")
     assert list_res.status_code == 200
     assert list_res.json()["total"] >= 1
     assert any(s["id"] == sup_id for s in list_res.json()["suppliers"])
@@ -300,7 +310,7 @@ def test_admin_supplier_crud_and_variant_cost_assignment(client, db_session):
         "supplier_cost_minor": 175000,
         "active": True,
     }
-    assign_res = client.post(f"/api/v1/admin/suppliers/{sup_id}/variants", json=assign_payload)
+    assign_res = admin_client.post(f"/api/v1/admin/suppliers/{sup_id}/variants", json=assign_payload)
     assert assign_res.status_code == 200
     assign_data = assign_res.json()
     assert assign_data["supplier_id"] == sup_id

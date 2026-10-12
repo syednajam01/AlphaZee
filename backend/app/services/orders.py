@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
 from sqlalchemy import select
@@ -67,6 +67,7 @@ class CreateOrderDTO:
     utm_medium: str | None = None
     utm_campaign: str | None = None
     customer_notes: str | None = None
+    idempotency_key: str | None = None
 
 
 def generate_order_number() -> str:
@@ -79,13 +80,26 @@ def generate_order_number() -> str:
 def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
     """
     Atomically place an order:
-    1. Validates and normalizes customer data.
-    2. Recalculates authoritative prices from the catalog database.
-    3. Resolves active supplier variants for each item.
-    4. Validates promotional coupon codes and computes discounts.
-    5. Creates immutable Order and OrderLine purchase snapshots.
-    6. Holds stock reservations for each item (reverts entire transaction if stock unavailable).
+    1. Checks idempotency_key to prevent duplicate order submissions.
+    2. Validates and normalizes customer data.
+    3. Recalculates authoritative prices from the catalog database.
+    4. Resolves active supplier variants for each item.
+    5. Validates promotional coupon codes and computes discounts.
+    6. Creates immutable Order and OrderLine purchase snapshots.
+    7. Holds stock reservations for each item with row-level locking (reverts if stock unavailable).
     """
+    clean_idemp = (
+        order_data.idempotency_key.strip()
+        if order_data.idempotency_key and order_data.idempotency_key.strip()
+        else None
+    )
+
+    if clean_idemp:
+        existing_order = db.scalars(
+            select(Order).where(Order.idempotency_key == clean_idemp)
+        ).first()
+        if existing_order is not None:
+            return existing_order
     if not order_data.items:
         raise ValueError("Order must contain at least one item.")
 
@@ -154,6 +168,10 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
 
     total_minor = max(0, subtotal_minor - discount_amount_minor + order_data.shipping_fee_minor)
 
+    payment_deadline_at = None
+    if order_data.payment_method == "bank_transfer":
+        payment_deadline_at = _utcnow() + timedelta(hours=4)
+
     # 3. Create Order Header
     order = Order(
         order_number=generate_order_number(),
@@ -177,6 +195,8 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         utm_medium=order_data.utm_medium.strip() if order_data.utm_medium else None,
         utm_campaign=order_data.utm_campaign.strip() if order_data.utm_campaign else None,
         customer_notes=order_data.customer_notes.strip() if order_data.customer_notes else None,
+        payment_deadline_at=payment_deadline_at,
+        idempotency_key=clean_idemp,
     )
     db.add(order)
     db.flush()
@@ -202,12 +222,15 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         db.add(order_line)
         db.flush()
 
+        line_idemp = f"{clean_idemp}:{variant.id}" if clean_idemp else None
+
         # Hold stock reservation against the supplier variant
         create_stock_reservation(
             db,
             supplier_variant_id=active_sv.id,
             order_line_id=order_line.id,
             quantity=prep["quantity"],
+            idempotency_key=line_idemp,
         )
 
     db.flush()
@@ -245,14 +268,13 @@ def verify_bank_payment(
 ) -> Order:
     """
     Owner confirms cleared funds in AlphaZee's bank account.
-    Marks payment as verified, order as confirmed, and advances reservations to 'confirmed'.
+    Marks payment as verified only. Does NOT mark supplier confirmed or advance reservations.
     """
     order = db.get(Order, order_id)
     if order is None:
         raise ValueError(f"Order {order_id} not found.")
 
     order.payment_status = "verified"
-    order.order_status = "confirmed"
 
     now = _utcnow()
     if receipt_id:
@@ -261,7 +283,34 @@ def verify_bank_payment(
             receipt.verified_at = now
             receipt.verified_by_user_id = verified_by_user_id
 
-    # Advance all open reservations for this order's lines
+    db.flush()
+    return order
+
+
+def confirm_supplier_acceptance(
+    db: Session,
+    *,
+    order_id: uuid.UUID,
+    supplier_notes: str | None = None,
+) -> Order:
+    """
+    Confirm operational supplier acceptance and readiness to fulfill.
+    Advances order_status to 'confirmed' and all open reservations to 'confirmed'.
+    """
+    order = db.get(Order, order_id)
+    if order is None:
+        raise ValueError(f"Order {order_id} not found.")
+
+    if order.order_status != "placed":
+        raise ValueError(f"Cannot confirm supplier acceptance for order in status '{order.order_status}'.")
+
+    now = _utcnow()
+    order.order_status = "confirmed"
+    order.supplier_confirmed_at = now
+    if supplier_notes:
+        order.supplier_notes = supplier_notes.strip()
+
+    # Advance all open reservations for this order's lines to 'confirmed'
     stmt = (
         select(StockReservation)
         .where(
@@ -277,6 +326,38 @@ def verify_bank_payment(
     return order
 
 
+def cancel_expired_bank_orders(db: Session) -> list[Order]:
+    """
+    Find and cancel all placed bank transfer orders whose 4-hour payment
+    deadline has elapsed without payment verification. Releases held stock.
+    """
+    now = _utcnow()
+    stmt = (
+        select(Order)
+        .where(
+            Order.order_status == "placed",
+            Order.payment_method == "bank_transfer",
+            Order.payment_status == "pending",
+            Order.payment_deadline_at.is_not(None),
+            Order.payment_deadline_at < now,
+        )
+    )
+    expired_orders = db.scalars(stmt).all()
+    cancelled = []
+    for order in expired_orders:
+        cancelled_order = cancel_order(
+            db,
+            order_id=order.id,
+            reason="Expired 4-hour bank transfer payment window.",
+        )
+        cancelled.append(cancelled_order)
+    return cancelled
+
+
+class OrderNotCancellableError(ValueError):
+    """Raised when attempting to cancel an order in a non-cancellable state (e.g. dispatched/in-transit)."""
+
+
 def cancel_order(
     db: Session,
     *,
@@ -285,10 +366,17 @@ def cancel_order(
 ) -> Order:
     """
     Cancel an order and immediately release all held stock reservations.
+    Refuses cancellation if order is already dispatched (must go through RTO flow).
     """
     order = db.get(Order, order_id)
     if order is None:
         raise ValueError(f"Order {order_id} not found.")
+
+    if order.order_status == "dispatched":
+        raise OrderNotCancellableError(
+            f"Cannot cancel order {order.order_number} in 'dispatched' status. "
+            f"Parcel is in transit with courier; initiate RTO instead."
+        )
 
     if order.order_status in ("delivered", "cancelled"):
         raise ValueError(f"Cannot cancel order in {order.order_status!r} status.")
@@ -321,7 +409,8 @@ def deliver_order(
     Mark an order as delivered:
     - Sets order_status = 'delivered'.
     - If COD, marks payment_status = 'verified'.
-    - Fulfills all associated reservations (which decrements physical inventory and records StockEvent).
+    - Advances open reservations sequentially (held -> confirmed -> dispatched -> fulfilled).
+    - Decrements physical inventory and records StockEvent upon fulfillment.
     """
     order = db.get(Order, order_id)
     if order is None:
@@ -331,7 +420,7 @@ def deliver_order(
     if order.payment_method == "cod":
         order.payment_status = "verified"
 
-    # Fulfill all open reservations
+    # Fulfill all open reservations through all sequential lifecycle stages
     stmt = (
         select(StockReservation)
         .where(
@@ -341,6 +430,20 @@ def deliver_order(
     )
     reservations = db.scalars(stmt).all()
     for res in reservations:
+        if res.stage == "held":
+            transition_reservation_stage(
+                db,
+                reservation_id=res.id,
+                new_stage="confirmed",
+                actor_user_id=actor_user_id,
+            )
+        if res.stage in ("held", "confirmed"):
+            transition_reservation_stage(
+                db,
+                reservation_id=res.id,
+                new_stage="dispatched",
+                actor_user_id=actor_user_id,
+            )
         transition_reservation_stage(
             db,
             reservation_id=res.id,
@@ -351,3 +454,4 @@ def deliver_order(
 
     db.flush()
     return order
+

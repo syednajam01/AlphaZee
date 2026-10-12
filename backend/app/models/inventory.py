@@ -304,6 +304,12 @@ class StockReservation(Base):
             "quantity",
             postgresql_where=text("stage NOT IN ('fulfilled', 'cancelled', 'returned')"),
         ),
+        Index(
+            "uq_sr_idempotency_open",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("stage NOT IN ('cancelled', 'returned') AND idempotency_key IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -312,6 +318,12 @@ class StockReservation(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
+
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+    )
+    """Client/service idempotency key guarding against duplicate holds."""
 
     supplier_variant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

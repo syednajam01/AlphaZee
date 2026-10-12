@@ -5,8 +5,13 @@ import {
   adjustAdminInventory,
   fetchAdminOrders,
   verifyOrderPayment,
+  confirmSupplierAcceptance,
+  cancelExpiredOrders,
   deliverOrder,
   cancelOrder,
+  initiateOrderRto,
+  receiveOrderRto,
+  inspectAndRestockRtoOrder,
   dispatchAdminOrder,
   updateAdminShipmentStatus,
   recordAdminCodRemittance,
@@ -23,6 +28,9 @@ import {
   rejectAdminReturn,
   fetchAdminMarketingAnalytics,
   ApiError,
+  setAdminKey,
+  clearAdminKey,
+  getAdminKey,
 } from '../utils/api.js';
 import { escapeHtml } from '../utils/dom.js';
 import { formatPkr, pkrToMinor } from '../utils/money.js';
@@ -119,8 +127,9 @@ export function createAdminConsoleModal() {
           </button>
         </nav>
 
-        <div style="padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 0.75rem; color: rgba(255, 255, 255, 0.4);">
-          <span class="admin-nav-label">Owner Operations v1.2</span>
+        <div style="padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: rgba(255, 255, 255, 0.4);">
+          <span class="admin-nav-label">Owner Ops v1.2</span>
+          <button id="btn-admin-logout" title="Lock Console" style="background: none; border: none; color: rgba(255, 255, 255, 0.5); cursor: pointer; padding: 2px 4px; font-size: 0.75rem;">🔒 Lock</button>
         </div>
       </aside>
 
@@ -278,6 +287,11 @@ export function createAdminConsoleModal() {
     loadActiveTabData();
   });
 
+  modal.querySelector('#btn-admin-logout')?.addEventListener('click', () => {
+    clearAdminKey();
+    loadActiveTabData();
+  });
+
   async function loadActiveTabData() {
     if (!contentArea) return;
     contentArea.innerHTML = '<div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 40px 0;">Loading data...</div>';
@@ -299,6 +313,39 @@ export function createAdminConsoleModal() {
         await renderAnalyticsTab(contentArea);
       }
     } catch (err) {
+      if (err.status === 401) {
+        contentArea.innerHTML = `
+          <div style="max-width: 440px; margin: 40px auto; padding: 28px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; text-align: center;">
+            <div style="width: 44px; height: 44px; margin: 0 auto 16px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); display: flex; align-items: center; justify-content: center; color: #F87171;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <h3 style="font-size: 1.125rem; font-weight: 700; margin: 0 0 8px 0; color: #FFFFFF;">Owner Authorization Required</h3>
+            <p style="font-size: 0.8125rem; color: rgba(255, 255, 255, 0.6); margin: 0 0 20px 0;">All store administrative operations require authentication. Enter your owner secret key to access console controls.</p>
+            <form id="admin-auth-form" style="display: flex; flex-direction: column; gap: 12px; text-align: left;">
+              <div>
+                <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Admin Access Key</label>
+                <input type="password" id="admin-auth-key-input" required placeholder="Enter ADMIN_API_KEY..." style="width: 100%; padding: 10px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.875rem;" />
+              </div>
+              <button type="submit" class="btn btn-primary" style="padding: 10px; font-size: 0.875rem; font-weight: 600; width: 100%; margin-top: 4px;">Unlock Admin Console</button>
+            </form>
+          </div>
+        `;
+        const authForm = contentArea.querySelector('#admin-auth-form');
+        const authInput = contentArea.querySelector('#admin-auth-key-input');
+        authForm?.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const key = authInput?.value?.trim();
+          if (key) {
+            setAdminKey(key);
+            loadActiveTabData();
+          }
+        });
+        return;
+      }
+
       contentArea.innerHTML = `
         <div style="padding: 16px; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 6px; color: #FCA5A5; font-size: 0.875rem;">
           Failed to load administrative data: ${escapeHtml(err.message)}
@@ -376,17 +423,37 @@ export function createAdminConsoleModal() {
             </span>
           </td>
           <td style="padding: 12px 8px; text-align: right;">
-            ${!isCancelled && !hasShipment ? `
-              <button class="btn btn-secondary btn-dispatch-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
-                Dispatch Courier
-              </button>
-            ` : ''}
             ${!isPaid && isBank && !isCancelled ? `
               <button class="btn btn-primary btn-verify-payment" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
                 Verify Bank Transfer
               </button>
             ` : ''}
-            ${!isCancelled && !isDelivered ? `
+            ${o.order_status === 'placed' && !isCancelled ? `
+              <button class="btn btn-secondary btn-confirm-supplier" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; border-color: rgba(74, 222, 128, 0.4); color: #4ADE80;">
+                Confirm Supplier
+              </button>
+            ` : ''}
+            ${o.order_status === 'confirmed' && !hasShipment && !isCancelled ? `
+              <button class="btn btn-secondary btn-dispatch-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
+                Dispatch Courier
+              </button>
+            ` : ''}
+            ${o.order_status === 'dispatched' ? `
+              <button class="btn btn-secondary btn-rto-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; color: #FBBF24; border-color: rgba(251, 191, 36, 0.4);">
+                Initiate RTO
+              </button>
+            ` : ''}
+            ${o.order_status === 'rto' && (!shipment || shipment.status === 'rto_initiated') ? `
+              <button class="btn btn-primary btn-rto-receive" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; background: #E11D48; border-color: #E11D48;">
+                Confirm RTO Received
+              </button>
+            ` : ''}
+            ${o.order_status === 'rto' && shipment && shipment.status === 'rto_delivered' && !shipment.rto_restocked_at ? `
+              <button class="btn btn-secondary btn-rto-inspect" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; color: #38BDF8; border-color: rgba(56, 189, 248, 0.4);">
+                Inspect & Restock
+              </button>
+            ` : ''}
+            ${!isCancelled && !isDelivered && o.order_status !== 'dispatched' && o.order_status !== 'rto' ? `
               <button class="btn btn-secondary btn-cancel-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; color: #F87171; border-color: rgba(248, 113, 113, 0.3);">
                 Cancel
               </button>
@@ -397,6 +464,11 @@ export function createAdminConsoleModal() {
     }).join('');
 
     container.innerHTML = `
+      <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+        <button id="btn-purge-expired-orders" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
+          🧹 Cancel Expired Bank Orders (>4h)
+        </button>
+      </div>
       <div style="overflow-x: auto;">
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
           <thead>
@@ -414,6 +486,21 @@ export function createAdminConsoleModal() {
       </div>
     `;
 
+    const purgeBtn = container.querySelector('#btn-purge-expired-orders');
+    if (purgeBtn) {
+      purgeBtn.addEventListener('click', async () => {
+        purgeBtn.disabled = true;
+        try {
+          const res = await cancelExpiredOrders();
+          alert(`Cancelled ${res.cancelled_count || 0} expired unpaid bank orders.`);
+          await loadActiveTabData();
+        } catch (err) {
+          alert(err.message || 'Failed to cancel expired orders');
+          purgeBtn.disabled = false;
+        }
+      });
+    }
+
     container.querySelectorAll('.btn-verify-payment').forEach(b => {
       b.addEventListener('click', async () => {
         const orderId = b.getAttribute('data-order-id');
@@ -423,13 +510,88 @@ export function createAdminConsoleModal() {
       });
     });
 
+    container.querySelectorAll('.btn-confirm-supplier').forEach(b => {
+      b.addEventListener('click', async () => {
+        const orderId = b.getAttribute('data-order-id');
+        const notes = prompt('Enter supplier / warehouse fulfillment notes (optional):');
+        if (notes !== null) {
+          b.disabled = true;
+          try {
+            await confirmSupplierAcceptance(orderId, notes);
+            await loadActiveTabData();
+          } catch (err) {
+            alert(err.message || 'Failed to confirm supplier acceptance');
+            b.disabled = false;
+          }
+        }
+      });
+    });
+
+    container.querySelectorAll('.btn-rto-order').forEach(b => {
+      b.addEventListener('click', async () => {
+        const orderId = b.getAttribute('data-order-id');
+        const reason = prompt('Enter RTO reason (e.g. customer refused, unreachable, bad address):');
+        if (reason !== null) {
+          const costInput = prompt('Enter courier return shipping cost in PKR (optional, default 0):', '0');
+          const costMinor = costInput ? pkrToMinor(parseFloat(costInput) || 0) : 0;
+          b.disabled = true;
+          try {
+            await initiateOrderRto(orderId, { reason, rto_courier_cost_minor: costMinor });
+            await loadActiveTabData();
+          } catch (err) {
+            alert(err.message || 'Failed to initiate RTO');
+            b.disabled = false;
+          }
+        }
+      });
+    });
+
+    container.querySelectorAll('.btn-rto-receive').forEach(b => {
+      b.addEventListener('click', async () => {
+        const orderId = b.getAttribute('data-order-id');
+        if (confirm('Confirm parcel has arrived back at store?')) {
+          b.disabled = true;
+          try {
+            await receiveOrderRto(orderId);
+            await loadActiveTabData();
+          } catch (err) {
+            alert(err.message || 'Failed to confirm RTO receipt');
+            b.disabled = false;
+          }
+        }
+      });
+    });
+
+    container.querySelectorAll('.btn-rto-inspect').forEach(b => {
+      b.addEventListener('click', async () => {
+        const orderId = b.getAttribute('data-order-id');
+        const pass = confirm('Did the returned parcel pass physical condition inspection? Click OK if in resalable condition (restocks inventory), or Cancel if damaged/soiled.');
+        const notes = prompt('Enter inspection notes (optional):', pass ? 'Physical condition verified pristine' : 'Item damaged during courier transit');
+        if (notes !== null) {
+          b.disabled = true;
+          try {
+            await inspectAndRestockRtoOrder(orderId, { condition_ok: pass, notes });
+            await loadActiveTabData();
+          } catch (err) {
+            alert(err.message || 'Failed to complete RTO inspection');
+            b.disabled = false;
+          }
+        }
+      });
+    });
+
     container.querySelectorAll('.btn-cancel-order').forEach(b => {
       b.addEventListener('click', async () => {
         const orderId = b.getAttribute('data-order-id');
         if (confirm('Are you sure you want to cancel this order and release held stock?')) {
           b.disabled = true;
-          await cancelOrder(orderId);
-          await loadActiveTabData();
+          try {
+            await cancelOrder(orderId);
+            await loadActiveTabData();
+          } catch (err) {
+            alert(err.message || 'Failed to cancel order');
+            b.disabled = false;
+          }
         }
       });
     });

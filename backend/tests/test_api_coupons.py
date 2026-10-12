@@ -64,9 +64,9 @@ def test_fixed_and_free_shipping_coupons(db_session: Session):
     assert res_ship.discount_amount_minor == 25000
 
 
-def test_coupon_api_endpoints(client: TestClient, db_session: Session):
+def test_coupon_api_endpoints(admin_client: TestClient, db_session: Session):
     # 1. Admin creates coupon
-    create_res = client.post(
+    create_res = admin_client.post(
         "/api/v1/admin/coupons",
         json={
             "code": "LAUNCH20",
@@ -79,7 +79,7 @@ def test_coupon_api_endpoints(client: TestClient, db_session: Session):
     created_id = create_res.json()["id"]
 
     # 2. Storefront validates coupon
-    val_res = client.post(
+    val_res = admin_client.post(
         "/api/v1/coupons/validate",
         json={
             "code": "LAUNCH20",
@@ -93,7 +93,7 @@ def test_coupon_api_endpoints(client: TestClient, db_session: Session):
     assert data["discount_amount"]["minor"] == 40000  # 20% of 200,000
 
     # 3. Invalid coupon validation
-    val_bad = client.post(
+    val_bad = admin_client.post(
         "/api/v1/coupons/validate",
         json={
             "code": "NONEXISTENT",
@@ -103,10 +103,10 @@ def test_coupon_api_endpoints(client: TestClient, db_session: Session):
     assert val_bad.status_code == 400
 
     # 4. Admin lists coupons
-    list_res = client.get("/api/v1/admin/coupons")
+    list_res = admin_client.get("/api/v1/admin/coupons")
     assert list_res.status_code == 200
     assert any(c["code"] == "LAUNCH20" for c in list_res.json())
 
     # 5. Admin deletes coupon
-    del_res = client.delete(f"/api/v1/admin/coupons/{created_id}")
+    del_res = admin_client.delete(f"/api/v1/admin/coupons/{created_id}")
     assert del_res.status_code == 204

@@ -218,6 +218,18 @@ class Shipment(Base):
         back_populates="shipments",
     )
 
+    @property
+    def remittance_amount_minor(self) -> int:
+        return self.cod_remitted_amount_minor
+
+    @property
+    def is_partial_remittance(self) -> bool:
+        return bool(
+            self.cod_remittance_status == "remitted"
+            and self.cod_amount_minor > 0
+            and self.cod_remitted_amount_minor < self.cod_amount_minor
+        )
+
     @validates("courier_code")
     def validate_courier(self, key: str, value: str) -> str:
         if value not in ALLOWED_COURIER_CODES:

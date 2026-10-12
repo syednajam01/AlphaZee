@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     app_title: str = "AlphaZee API"
     app_version: str = "0.1.0"
 
+    # ── Security & Authentication ─────────────────────────────────────────────
+    # Secret key required to access privileged /api/v1/admin endpoints.
+    # In production, must be explicitly set via ADMIN_API_KEY environment variable.
+    admin_api_key: str = "alphazee-dev-admin-key-change-in-prod"
+
+    # ── Bank Transfer Configuration ───────────────────────────────────────────
+    bank_name: str = "Meezan Bank Ltd."
+    bank_account_title: str = "AlphaZee Private Limited"
+    bank_account_number: str = "PENDING_CONFIGURATION"
+    bank_iban: str = "PENDING_IBAN_CONFIGURATION"
+
     # ── CORS ──────────────────────────────────────────────────────────────────
     # In development: localhost Vite dev servers.
     # In production: set to the actual domain serving the frontend.
@@ -48,6 +59,18 @@ class Settings(BaseSettings):
             import json
             return json.loads(v)
         return []
+
+    @field_validator("admin_api_key")
+    @classmethod
+    def validate_admin_key(cls, v: str, info) -> str:
+        app_env = str(info.data.get("app_env", "development")).lower()
+        if app_env == "production":
+            if not v or v == "alphazee-dev-admin-key-change-in-prod" or len(v) < 32:
+                raise ValueError(
+                    "ADMIN_API_KEY must be configured with a secure random secret "
+                    "of at least 32 characters in production."
+                )
+        return v
 
     @property
     def is_production(self) -> bool:

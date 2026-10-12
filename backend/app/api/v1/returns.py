@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.catalog import CurrencyAmount
 from app.schemas.returns import OrderReturnCreateRequest, OrderReturnResponseSchema
-from app.services.returns import create_return_request
+from app.services.returns import CustomerOwnershipError, create_return_request
 
 router = APIRouter(prefix="/returns", tags=["Storefront Returns"])
 
@@ -25,6 +25,12 @@ def submit_return_request(
     payload: OrderReturnCreateRequest,
     db: Session = Depends(get_db),
 ) -> OrderReturnResponseSchema:
+    raw_phone = payload.customer_phone or payload.phone
+    if not raw_phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer phone number is required for ownership verification.",
+        )
     try:
         ret = create_return_request(
             db,
@@ -32,6 +38,7 @@ def submit_return_request(
             order_line_id=payload.order_line_id,
             return_type=payload.return_type,
             reason=payload.reason,
+            customer_phone=raw_phone,
             customer_notes=payload.customer_notes,
             exchange_variant_id=payload.exchange_variant_id,
         )
@@ -52,6 +59,12 @@ def submit_return_request(
             created_at=ret.created_at,
             updated_at=ret.updated_at,
         )
+    except CustomerOwnershipError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(err),
+        ) from err
     except ValueError as err:
         db.rollback()
         raise HTTPException(

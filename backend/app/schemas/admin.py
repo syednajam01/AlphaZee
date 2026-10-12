@@ -140,11 +140,28 @@ class ShipmentStatusUpdateRequest(BaseModel):
     rto_courier_cost_minor: int = Field(default=0, ge=0, description="Courier return penalty charge in paisas")
 
 
+class OrderRtoInitiateRequest(BaseModel):
+    """Payload to initiate RTO on a dispatched order."""
+
+    reason: Optional[str] = Field(default=None, max_length=200, description="Customer refusal or courier issue reason")
+    rto_courier_cost_minor: int = Field(default=0, ge=0, description="Estimated or charged RTO courier shipping fee in paisas")
+
+
+class RtoInspectionRequest(BaseModel):
+    """Payload to record physical condition inspection and restock an RTO parcel."""
+
+    condition_ok: bool = Field(description="True if item passed physical inspection and can be returned to inventory")
+    notes: Optional[str] = Field(default=None, max_length=500, description="Inspection findings or defect/damage notes")
+
+
 class CodRemittanceRequest(BaseModel):
     """Payload to record courier COD cash remittance into bank account."""
 
     remitted_amount_minor: int = Field(ge=1, description="Actual cash remitted into bank account in paisas")
     reference: Optional[str] = Field(default=None, max_length=100, description="Bank deposit ref / courier payout invoice number")
+    is_partial: bool = Field(default=False, description="Flag explicitly confirming this is a partial remittance")
+    partial: Optional[bool] = Field(default=None, description="Alias for is_partial")
+    partial_reason: Optional[str] = Field(default=None, max_length=255, description="Reason for short remittance from courier")
 
 
 class ShipmentAdminResponseSchema(BaseModel):
@@ -161,7 +178,9 @@ class ShipmentAdminResponseSchema(BaseModel):
     status: str
     cod_amount_minor: int
     cod_remitted_amount_minor: int
+    remittance_amount_minor: int = 0
     cod_remittance_status: str
+    is_partial_remittance: bool = False
     cod_remittance_reference: Optional[str] = None
     cod_remitted_at: Optional[datetime] = None
     rto_reason: Optional[str] = None
@@ -176,6 +195,10 @@ class ProfitLossResponseSchema(BaseModel):
 
     gross_revenue_minor: int
     formatted_gross_revenue: str
+    net_revenue_minor: int = 0
+    formatted_net_revenue: Optional[str] = None
+    refund_total_minor: int = 0
+    formatted_refund_total: Optional[str] = None
     subtotal_revenue_minor: int
     shipping_revenue_minor: int
     cogs_minor: int
@@ -214,6 +237,13 @@ class MarketingAttributionResponseSchema(BaseModel):
 
     channels: list[MarketingAttributionItemSchema]
     total_campaigns: int
+
+
+class SupplierAcceptanceRequest(BaseModel):
+    """Payload to record operational supplier acceptance for order fulfillment."""
+
+    notes: Optional[str] = Field(default=None, max_length=500, description="Supplier / warehouse acceptance notes")
+
 
 
 

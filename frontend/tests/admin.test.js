@@ -6,8 +6,13 @@ import {
   adjustAdminInventory,
   fetchAdminOrders,
   verifyOrderPayment,
+  confirmSupplierAcceptance,
+  cancelExpiredOrders,
   deliverOrder,
   cancelOrder,
+  initiateOrderRto,
+  receiveOrderRto,
+  inspectAndRestockRtoOrder,
   dispatchAdminOrder,
   updateAdminShipmentStatus,
   recordAdminCodRemittance,
@@ -15,6 +20,9 @@ import {
   createAdminSupplier,
   assignSupplierVariant,
   fetchAdminProfitLoss,
+  getAdminKey,
+  setAdminKey,
+  clearAdminKey,
 } from '../src/utils/api.js';
 
 describe('Admin API Client Methods', () => {
@@ -226,4 +234,141 @@ describe('Admin API Client Methods', () => {
     assert.equal(pnl.formatted_gross_profit, 'PKR 12,000');
     assert.equal(pnl.rto_rate_percent, 10.0);
   });
+
+  it('manages admin authentication key and injects X-Admin-Key header', async () => {
+    let capturedHeaders = {};
+    global.fetch = async (url, options) => {
+      capturedHeaders = options.headers || {};
+      return {
+        ok: true,
+        json: async () => ({}),
+      };
+    };
+
+    // 1. Without key set
+    clearAdminKey();
+    assert.equal(getAdminKey(), '');
+    await fetchAdminOverview();
+    assert.equal(capturedHeaders['X-Admin-Key'], undefined);
+
+    // 2. With key set
+    setAdminKey('my-secret-admin-key');
+    assert.equal(getAdminKey(), 'my-secret-admin-key');
+    await fetchAdminOverview();
+    assert.equal(capturedHeaders['X-Admin-Key'], 'my-secret-admin-key');
+
+    // 3. Clear key
+    clearAdminKey();
+    assert.equal(getAdminKey(), '');
+    await fetchAdminOverview();
+    assert.equal(capturedHeaders['X-Admin-Key'], undefined);
+  });
+
+  it('confirms supplier acceptance and purges expired bank orders', async () => {
+    let confirmBody = null;
+    let cancelCalled = false;
+
+    global.fetch = async (url, options) => {
+      if (url.includes('/confirm-supplier')) {
+        confirmBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'ord-101',
+            order_status: 'confirmed',
+            supplier_notes: confirmBody.notes,
+          }),
+        };
+      }
+      if (url.endsWith('/orders/cancel-expired')) {
+        cancelCalled = true;
+        return {
+          ok: true,
+          json: async () => ({
+            cancelled_count: 2,
+            cancelled_order_ids: ['ord-1', 'ord-2'],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const confirmed = await confirmSupplierAcceptance('ord-101', 'All pieces packed');
+    assert.equal(confirmed.order_status, 'confirmed');
+    assert.equal(confirmBody.notes, 'All pieces packed');
+
+    const cancelled = await cancelExpiredOrders();
+    assert.equal(cancelCalled, true);
+    assert.equal(cancelled.cancelled_count, 2);
+  });
+
+  it('handles two-step RTO return initiation and warehouse receipt confirmation', async () => {
+    let capturedRtoBody = null;
+    let rtoReceivedCalled = false;
+
+    global.fetch = async (url, options) => {
+      if (url.endsWith('/orders/ord-99/rto')) {
+        capturedRtoBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'ord-99',
+            order_status: 'rto',
+          }),
+        };
+      }
+      if (url.endsWith('/orders/ord-99/rto-received')) {
+        rtoReceivedCalled = true;
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'ord-99',
+            order_status: 'rto',
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const rtoRes = await initiateOrderRto('ord-99', {
+      reason: 'Customer doorstep refusal',
+      rto_courier_cost_minor: 15000,
+    });
+    assert.equal(rtoRes.order_status, 'rto');
+    assert.equal(capturedRtoBody.reason, 'Customer doorstep refusal');
+    assert.equal(capturedRtoBody.rto_courier_cost_minor, 15000);
+
+    const receivedRes = await receiveOrderRto('ord-99');
+    assert.equal(rtoReceivedCalled, true);
+    assert.equal(receivedRes.order_status, 'rto');
+  });
+
+  it('handles RTO condition inspection and restock payload', async () => {
+    let capturedInspectBody = null;
+
+    global.fetch = async (url, options) => {
+      if (url.endsWith('/orders/ord-99/rto-inspect')) {
+        capturedInspectBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'ord-99',
+            order_status: 'rto',
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const res = await inspectAndRestockRtoOrder('ord-99', {
+      condition_ok: true,
+      notes: 'Physical condition verified pristine',
+    });
+    assert.equal(res.order_status, 'rto');
+    assert.equal(capturedInspectBody.condition_ok, true);
+    assert.equal(capturedInspectBody.notes, 'Physical condition verified pristine');
+  });
 });
+
+
+
