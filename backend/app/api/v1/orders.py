@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
+from app.dependencies.checkout import require_checkout_enabled
+from app.dependencies.auth import require_trusted_origin
+from app.services.checkout_attempts import mint_checkout_session, require_checkout_session
 from app.models.orders import Order, normalize_pakistan_phone
 from app.queries.reservations import InsufficientStockError
 from app.schemas.catalog import CurrencyAmount
@@ -31,12 +34,19 @@ from app.schemas.orders import (
 from app.schemas.returns import OrderReturnResponseSchema
 from app.services.orders import (
     CreateOrderDTO,
+    CheckoutAttemptConflict,
     OrderItemDTO,
     place_order,
     upload_payment_receipt,
 )
 
 router = APIRouter(prefix="/orders", tags=["Storefront Orders"])
+
+
+@router.get('/checkout-session', dependencies=[Depends(require_checkout_enabled)])
+def start_checkout_session(request: Request, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    return mint_checkout_session(request, response)
 
 
 def _order_to_response(order: Order) -> OrderResponseSchema:
@@ -136,6 +146,7 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
     response_model=OrderResponseSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Place a new customer order",
+    dependencies=[Depends(require_checkout_enabled), Depends(require_trusted_origin)],
     description=(
         "Authoritatively recalculates prices from catalog, holds required stock "
         "reservations, and creates immutable purchase snapshots."
@@ -143,10 +154,14 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
 )
 def create_customer_order(
     payload: OrderCreateRequest,
-    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=16, max_length=64,
+                                  pattern=r'^[A-Za-z0-9_-]+$'),
+    checkout_session_hash: str = Depends(require_checkout_session),
     db: Session = Depends(get_db),
 ) -> OrderResponseSchema:
-    effective_idemp = (idempotency_key or payload.idempotency_key or "").strip() or None
+    if payload.idempotency_key and payload.idempotency_key != idempotency_key:
+        raise HTTPException(status.HTTP_409_CONFLICT, 'Checkout attempt keys do not match.')
+    effective_idemp = idempotency_key
 
     dto = CreateOrderDTO(
         customer_name=payload.customer_name,
@@ -164,6 +179,7 @@ def create_customer_order(
         utm_campaign=payload.utm_campaign,
         customer_notes=payload.customer_notes,
         idempotency_key=effective_idemp,
+        checkout_session_hash=checkout_session_hash,
         items=[
             OrderItemDTO(variant_id=item.variant_id, quantity=item.quantity)
             for item in payload.items
@@ -174,6 +190,9 @@ def create_customer_order(
         order = place_order(db, dto)
         db.commit()
         db.refresh(order)
+    except CheckoutAttemptConflict as err:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(err)) from err
     except InsufficientStockError as err:
         db.rollback()
         raise HTTPException(

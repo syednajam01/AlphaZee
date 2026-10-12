@@ -18,7 +18,7 @@ from app.services.orders import CreateOrderDTO, OrderItemDTO, place_order
 
 
 @pytest.fixture
-def client(db_session: Session):
+def client(db_session: Session, admin_headers):
     def _override_get_db():
         try:
             yield db_session
@@ -26,7 +26,7 @@ def client(db_session: Session):
             pass
 
     app.dependency_overrides[get_db] = _override_get_db
-    with TestClient(app, headers={"X-Admin-Key": settings.admin_api_key}) as test_client:
+    with TestClient(app, headers=admin_headers) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 

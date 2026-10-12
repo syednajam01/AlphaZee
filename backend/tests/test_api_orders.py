@@ -18,6 +18,93 @@ from app.config import settings
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
 from app.models.inventory import InventoryBalance, SupplierVariant
 from app.models.suppliers import Supplier
+from app.models.orders import Order, OrderLine
+from app.models.inventory import StockReservation
+from app.queries.inventory import adjust_inventory
+from app.queries.reservations import get_inventory_summary
+from sqlalchemy import select
+
+
+def _post_order(client, payload):
+    assert client.get('/api/v1/orders/checkout-session').status_code == 200
+    return client.post('/api/v1/orders', json=payload, headers={
+        'Origin': 'http://localhost:3000', 'Idempotency-Key': f'chk_{uuid.uuid4().hex}',
+    })
+
+
+def test_checkout_attempt_requires_key_and_browser_session(client):
+    payload = {
+        'customer_name': 'SAMPLE Buyer', 'customer_phone': '03001234567',
+        'shipping_address_line1': 'SAMPLE Street 1', 'shipping_city': 'Lahore',
+        'shipping_province': 'Punjab', 'payment_method': 'cod',
+        'items': [{'variant_id': 1, 'quantity': 1}],
+    }
+    origin = {'Origin': 'http://localhost:3000'}
+    headers = {**origin, 'Idempotency-Key': f'chk_{uuid.uuid4().hex}'}
+    assert client.post('/api/v1/orders', json=payload, headers=headers).status_code == 428
+    assert client.get('/api/v1/orders/checkout-session').status_code == 200
+    assert client.post('/api/v1/orders', json=payload, headers=origin).status_code == 422
+    assert client.post('/api/v1/orders', json=payload, headers={
+        **headers, 'Origin': 'https://untrusted.example',
+    }).status_code == 403
+
+
+def test_checkout_replay_checks_payload_and_session(client, db_session):
+    item = _create_catalog_item(db_session, on_hand=2)
+    payload = {
+        'customer_name': 'SAMPLE Buyer', 'customer_phone': '03001234567',
+        'shipping_address_line1': 'SAMPLE Street 1', 'shipping_city': 'Lahore',
+        'shipping_province': 'Punjab', 'payment_method': 'cod',
+        'items': [{'variant_id': item['variant'].id, 'quantity': 1}],
+    }
+    client.get('/api/v1/orders/checkout-session')
+    headers = {'Origin': 'http://localhost:3000', 'Idempotency-Key': f'chk_{uuid.uuid4().hex}'}
+    first = client.post('/api/v1/orders', json=payload, headers=headers)
+    assert first.status_code == 201
+    assert client.post('/api/v1/orders', json={**payload, 'customer_name': 'Changed Buyer'},
+                       headers=headers).status_code == 409
+    client.cookies.clear()
+    client.get('/api/v1/orders/checkout-session')
+    foreign = client.post('/api/v1/orders', json=payload, headers=headers)
+    assert foreign.status_code == 409
+    assert first.json()['order_number'] not in foreign.text
+    assert len(db_session.scalars(select(Order).where(Order.customer_name == 'SAMPLE Buyer')).all()) == 1
+    assert get_inventory_summary(db_session, item['sv'].id).held == 1
+
+
+def test_second_line_failure_rolls_back_order_and_holds(client, db_session):
+    available = _create_catalog_item(db_session, on_hand=1)
+    unavailable = _create_catalog_item(db_session, on_hand=0)
+    payload = {
+        'customer_name': 'SAMPLE Atomic Buyer', 'customer_phone': '03001234567',
+        'shipping_address_line1': 'SAMPLE Street 1', 'shipping_city': 'Lahore',
+        'shipping_province': 'Punjab', 'payment_method': 'cod',
+        'items': [{'variant_id': available['variant'].id, 'quantity': 1},
+                  {'variant_id': unavailable['variant'].id, 'quantity': 1}],
+    }
+    result = _post_order(client, payload)
+    assert result.status_code == 409
+    assert not db_session.scalars(select(Order).where(Order.customer_name == 'SAMPLE Atomic Buyer')).all()
+    assert get_inventory_summary(db_session, available['sv'].id).held == 0
+    assert not db_session.scalars(select(StockReservation).join(OrderLine,
+        StockReservation.order_line_id == OrderLine.id).join(Order, OrderLine.order_id == Order.id)
+        .where(Order.customer_name == 'SAMPLE Atomic Buyer')).all()
+
+
+def test_inventory_adjustment_cannot_take_stock_reserved_by_checkout(client, db_session):
+    item = _create_catalog_item(db_session, on_hand=1)
+    payload = {
+        'customer_name': 'SAMPLE Held Buyer', 'customer_phone': '03001234567',
+        'shipping_address_line1': 'SAMPLE Street 1', 'shipping_city': 'Lahore',
+        'shipping_province': 'Punjab', 'payment_method': 'cod',
+        'items': [{'variant_id': item['variant'].id, 'quantity': 1}],
+    }
+    assert _post_order(client, payload).status_code == 201
+    with pytest.raises(ValueError, match='active holds'):
+        adjust_inventory(db_session, supplier_variant_id=item['sv'].id, actor_user_id=None,
+                         new_on_hand=0, reason='adjustment_correction',
+                         expected_version=item['balance'].version)
+    assert get_inventory_summary(db_session, item['sv'].id).available == 0
 
 
 def _create_catalog_item(db: Session, on_hand: int = 10, price_minor: int = 350000):
@@ -101,7 +188,7 @@ def test_post_order_cod_success(client, db_session):
         ],
     }
 
-    res = client.post("/api/v1/orders", json=payload)
+    res = _post_order(client, payload)
     assert res.status_code == 201
     data = res.json()
 
@@ -138,7 +225,7 @@ def test_post_order_bank_transfer_includes_instructions(client, db_session):
         ],
     }
 
-    res = client.post("/api/v1/orders", json=payload)
+    res = _post_order(client, payload)
     assert res.status_code == 201
     data = res.json()
 
@@ -165,7 +252,7 @@ def test_post_order_insufficient_stock_returns_409(client, db_session):
         ],
     }
 
-    res = client.post("/api/v1/orders", json=payload)
+    res = _post_order(client, payload)
     assert res.status_code == 409
     assert "Insufficient stock" in res.json()["detail"]
 
@@ -185,7 +272,7 @@ def test_post_order_invalid_phone_returns_422(client, db_session):
         ],
     }
 
-    res = client.post("/api/v1/orders", json=payload)
+    res = _post_order(client, payload)
     assert res.status_code == 422
 
 
@@ -202,7 +289,7 @@ def test_receipt_upload_and_tracking(client, db_session):
         "payment_method": "bank_transfer",
         "items": [{"variant_id": item["variant"].id, "quantity": 1}],
     }
-    order_res = client.post("/api/v1/orders", json=order_payload)
+    order_res = _post_order(client, order_payload)
     assert order_res.status_code == 201
     order_num = order_res.json()["order_number"]
 

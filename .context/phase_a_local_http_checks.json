@@ -1,0 +1,35 @@
+{
+  "browser_used": false,
+  "checks": [
+    {
+      "url": "http://127.0.0.1:8000/api/v1/auth/session",
+      "status": 401,
+      "cache_control": "no-store"
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/admin/overview",
+      "status": 401,
+      "cache_control": "no-store"
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/auth/session",
+      "status": 401,
+      "cache_control": "no-store"
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/admin/overview",
+      "status": 401,
+      "cache_control": "no-store"
+    },
+    {
+      "url": "http://127.0.0.1:3000/src/components/AdminConsole.js",
+      "status": 200,
+      "current_auth_source": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/src/utils/api.js",
+      "status": 200,
+      "current_auth_source": true
+    }
+  ]
+}

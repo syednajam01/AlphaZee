@@ -1,0 +1,13 @@
+{
+  "checked_at": "2026-10-12T22:49:11.457713+00:00",
+  "test_database": "alphazee_auth_f6e1f637fe_test",
+  "development_database_modified": false,
+  "migration_upgrade_downgrade_reupgrade": "passed",
+  "existing_user_sentinel_preserved": true,
+  "real_http_login": "passed",
+  "real_http_csrf_rejection": "passed",
+  "session_survives_api_restart": true,
+  "real_http_logout_revocation": "passed",
+  "browser_used": false,
+  "test_database_retained": true
+}

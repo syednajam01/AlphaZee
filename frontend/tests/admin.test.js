@@ -20,9 +20,10 @@ import {
   createAdminSupplier,
   assignSupplierVariant,
   fetchAdminProfitLoss,
-  getAdminKey,
-  setAdminKey,
-  clearAdminKey,
+  loginOwner,
+  logoutOwner,
+  fetchOwnerSession,
+  removeLegacyAdminCredentials,
 } from '../src/utils/api.js';
 
 describe('Admin API Client Methods', () => {
@@ -235,33 +236,28 @@ describe('Admin API Client Methods', () => {
     assert.equal(pnl.rto_rate_percent, 10.0);
   });
 
-  it('manages admin authentication key and injects X-Admin-Key header', async () => {
-    let capturedHeaders = {};
+  it('uses cookies and in-memory CSRF, and removes the legacy shared key', async () => {
+    const removed = [];
+    const originalWindow = globalThis.window;
+    globalThis.window = { sessionStorage: { removeItem: key => removed.push(key) } };
+    removeLegacyAdminCredentials();
+    globalThis.window = originalWindow;
+    assert.ok(removed.includes('alphazee_admin_key'));
+    let captured;
     global.fetch = async (url, options) => {
-      capturedHeaders = options.headers || {};
-      return {
-        ok: true,
-        json: async () => ({}),
-      };
+      captured = { url, options };
+      return { ok: true, json: async () => ({ username: 'sample', csrf_token: 'sample-csrf' }) };
     };
-
-    // 1. Without key set
-    clearAdminKey();
-    assert.equal(getAdminKey(), '');
+    await loginOwner('sample', 'SAMPLE-password');
+    assert.equal(captured.options.credentials, 'same-origin');
+    assert.equal(captured.options.headers['X-Admin-Key'], undefined);
+    await adjustAdminInventory({ quantity_delta: 1 });
+    assert.equal(captured.options.headers['X-CSRF-Token'], 'sample-csrf');
+    await logoutOwner();
+    assert.ok(captured.url.endsWith('/auth/logout'));
+    assert.equal(captured.options.headers['X-CSRF-Token'], 'sample-csrf');
     await fetchAdminOverview();
-    assert.equal(capturedHeaders['X-Admin-Key'], undefined);
-
-    // 2. With key set
-    setAdminKey('my-secret-admin-key');
-    assert.equal(getAdminKey(), 'my-secret-admin-key');
-    await fetchAdminOverview();
-    assert.equal(capturedHeaders['X-Admin-Key'], 'my-secret-admin-key');
-
-    // 3. Clear key
-    clearAdminKey();
-    assert.equal(getAdminKey(), '');
-    await fetchAdminOverview();
-    assert.equal(capturedHeaders['X-Admin-Key'], undefined);
+    assert.equal(captured.options.headers['X-Admin-Key'], undefined);
   });
 
   it('confirms supplier acceptance and purges expired bank orders', async () => {

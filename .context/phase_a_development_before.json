@@ -1,0 +1,23 @@
+{
+  "revision": [
+    "e5c83f14a091"
+  ],
+  "table_counts": {
+    "collections": 0,
+    "products": 0,
+    "variants": 0,
+    "suppliers": 0,
+    "supplier_memberships": 0,
+    "user_accounts": 0,
+    "supplier_variants": 0,
+    "inventory_balances": 0,
+    "stock_events": 0,
+    "stock_reservations": 0,
+    "orders": 0,
+    "payment_receipts": 0,
+    "order_lines": 0,
+    "shipments": 0,
+    "coupons": 0,
+    "order_returns": 0
+  }
+}

@@ -46,7 +46,7 @@ class OrderCreateRequest(BaseModel):
     utm_medium: Optional[str] = Field(default=None, max_length=100, description="Marketing medium")
     utm_campaign: Optional[str] = Field(default=None, max_length=100, description="Marketing campaign")
     customer_notes: Optional[str] = Field(default=None, max_length=500, description="Special delivery instructions")
-    idempotency_key: Optional[str] = Field(default=None, max_length=128, description="Optional idempotency key preventing duplicate orders")
+    idempotency_key: Optional[str] = Field(default=None, max_length=64, description="Must match Idempotency-Key header if supplied")
     items: list[OrderItemRequest] = Field(min_length=1, description="Cart items to purchase")
 
     @field_validator("customer_phone")

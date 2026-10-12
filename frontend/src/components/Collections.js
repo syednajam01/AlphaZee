@@ -92,8 +92,8 @@ export function createCollectionsSection(onSelectCollection) {
       grid.innerHTML = `
         <div class="catalog-status-box is-error" style="grid-column: 1 / -1;">
           <div class="catalog-status-title">Collections Unavailable</div>
-          <div class="catalog-status-desc">Unable to load collections from server. Please check your backend connection.</div>
-          <button class="btn btn-secondary btn-retry" style="margin-top: 8px;">Retry Connection</button>
+          <div class="catalog-status-desc">We could not load the collections. Please try again.</div>
+          <button class="btn btn-secondary btn-retry" style="margin-top: 8px;">Try again</button>
         </div>
       `;
       grid.querySelector('.btn-retry')?.addEventListener('click', () => {

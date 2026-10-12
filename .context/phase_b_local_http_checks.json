@@ -1,0 +1,21 @@
+{
+  "browser_used": false,
+  "checks": [
+    {
+      "url": "http://127.0.0.1:8000/api/v1/orders/checkout-session",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/storefront/capabilities",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/orders/checkout-session",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/storefront/capabilities",
+      "status": 200
+    }
+  ]
+}

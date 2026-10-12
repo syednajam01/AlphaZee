@@ -14,6 +14,7 @@ engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
     echo=settings.debug,       # logs SQL in development; silent in production
+    hide_parameters=True,      # credentials/session hashes must never enter SQL logs
 )
 
 # ── Session factory ───────────────────────────────────────────────────────────

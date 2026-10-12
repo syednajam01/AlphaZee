@@ -1,4 +1,5 @@
 import { cart } from '../utils/cart.js';
+import { capabilities } from '../utils/capabilities.js';
 import { createBrandLogo } from './BrandLogo.js';
 
 export function createHeader() {
@@ -28,10 +29,12 @@ export function createHeader() {
 
         <!-- Right Actions -->
         <div class="header-actions">
-          <button class="header-action-btn" id="btn-search" aria-label="Search catalog">
+          <button class="header-action-btn" id="btn-browse-catalog" aria-label="Browse catalog" title="Browse catalog">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1"></rect>
             </svg>
           </button>
 
@@ -89,5 +92,10 @@ export function createHeader() {
     }
   });
 
+  capabilities.subscribe(({ checkoutEnabled }) => {
+    header.querySelector('.announcement-bar').querySelector('span').textContent = checkoutEnabled
+      ? 'AlphaZee SAMPLE / TEST store - no real orders'
+      : 'AlphaZee preview - browse and save your cart. Checkout is temporarily unavailable.';
+  });
   return header;
 }

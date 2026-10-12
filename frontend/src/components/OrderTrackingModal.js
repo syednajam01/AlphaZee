@@ -1,3 +1,4 @@
+import { createOverlay } from '../utils/overlay.js';
 import { createBrandLogo } from './BrandLogo.js';
 import { fetchOrderStatus, uploadReceipt, requestOrderReturn, ApiError } from '../utils/api.js';
 import { escapeHtml } from '../utils/dom.js';
@@ -11,7 +12,7 @@ export function createOrderTrackingModal(onClose) {
   modal.setAttribute('aria-label', 'AlphaZee Order Tracking');
 
   modal.innerHTML = `
-    <div class="drawer-backdrop is-open" style="z-index: 1;"></div>
+    <div class="drawer-backdrop" style="z-index: 1;"></div>
     <div class="modal-content" style="z-index: 2; max-width: 620px; padding: 0; overflow: hidden;">
       <!-- Header -->
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--color-border); background: var(--color-surface);">
@@ -347,8 +348,7 @@ export function createOrderTrackingModal(onClose) {
   }
 
   function open(prefillOrderNumber = '', prefillPhone = '') {
-    modal.classList.add('is-open');
-    document.body.style.overflow = 'hidden';
+    overlay.open();
     if (prefillOrderNumber) {
       modal.querySelector('#tracking-order-num').value = prefillOrderNumber;
     }
@@ -361,10 +361,10 @@ export function createOrderTrackingModal(onClose) {
   }
 
   function close() {
-    modal.classList.remove('is-open');
-    document.body.style.overflow = '';
-    if (onClose) onClose();
+    overlay.close();
   }
+
+  const overlay = createOverlay({ element: modal, onClose: () => onClose?.() });
 
   modal.querySelector('.drawer-backdrop').addEventListener('click', close);
   modal.querySelector('#tracking-close-btn').addEventListener('click', close);

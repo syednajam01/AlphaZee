@@ -26,7 +26,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
 from app.models.inventory import InventoryBalance, StockReservation, SupplierVariant
-from app.models.orders import Order
+from app.models.orders import Order, OrderLine
+from app.models.promotions import Coupon
+from app.services.promotions import create_coupon
 from app.models.suppliers import Supplier
 from app.queries.reservations import (
     InsufficientStockError,
@@ -273,12 +275,14 @@ def test_order_checkout_idempotency_header(client, db_session):
     }
 
     # 1. First submission
-    res1 = client.post("/api/v1/orders", json=payload, headers={"Idempotency-Key": idemp_key})
+    assert client.get('/api/v1/orders/checkout-session').status_code == 200
+    headers = {'Idempotency-Key': idemp_key, 'Origin': 'http://localhost:3000'}
+    res1 = client.post("/api/v1/orders", json=payload, headers=headers)
     assert res1.status_code == 201
     order1 = res1.json()
 
     # 2. Duplicate submission with identical header
-    res2 = client.post("/api/v1/orders", json=payload, headers={"Idempotency-Key": idemp_key})
+    res2 = client.post("/api/v1/orders", json=payload, headers=headers)
     assert res2.status_code in (200, 201)
     order2 = res2.json()
 
@@ -294,3 +298,83 @@ def test_order_checkout_idempotency_header(client, db_session):
     summary = get_inventory_summary(db_session, sv.id)
     assert summary.held == 1
     assert summary.available == 4
+
+
+def _race_orders(test_engine, variant_ids, keys, stock_expected, coupon_code=None):
+    """Run two real PostgreSQL transactions at the same time."""
+    barrier = threading.Barrier(2)
+    SessionLocal = sessionmaker(bind=test_engine, expire_on_commit=False)
+
+    def worker(index):
+        with SessionLocal() as db:
+            dto = CreateOrderDTO(
+                customer_name='SAMPLE Concurrent Buyer', customer_phone='03001234567',
+                shipping_address_line1='SAMPLE Street 1', shipping_city='Lahore',
+                shipping_province='Punjab', payment_method='cod',
+                items=[OrderItemDTO(variant_id=v, quantity=1) for v in variant_ids[index]],
+                idempotency_key=keys[index], checkout_session_hash='a' * 64,
+                coupon_code=coupon_code,
+            )
+            barrier.wait(timeout=10)
+            try:
+                order = place_order(db, dto)
+                db.commit()
+                return ('created', order.id)
+            except InsufficientStockError:
+                db.rollback()
+                return ('out_of_stock', None)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(worker, index) for index in range(2)]
+        outcomes = [future.result(timeout=20) for future in futures]
+    with SessionLocal() as verify:
+        placed = verify.scalars(select(Order).where(Order.idempotency_key.in_(keys))).all()
+        holds = verify.scalars(select(StockReservation).join(OrderLine,
+            StockReservation.order_line_id == OrderLine.id).join(Order, OrderLine.order_id == Order.id)
+            .where(Order.idempotency_key.in_(keys), StockReservation.stage == 'held')).all()
+        assert len(holds) == stock_expected
+    return outcomes, placed
+
+
+def test_simultaneous_same_key_creates_one_order(test_engine):
+    item = _setup_conc_item(test_engine, on_hand=1)
+    key = f'chk_{uuid.uuid4().hex}'
+    outcomes, orders = _race_orders(test_engine, [[item['variant_id']], [item['variant_id']]],
+                                    [key, key], 1)
+    assert [kind for kind, _ in outcomes] == ['created', 'created']
+    assert outcomes[0][1] == outcomes[1][1]
+    assert len(orders) == 1
+
+
+def test_simultaneous_duplicate_uses_coupon_once(test_engine):
+    item = _setup_conc_item(test_engine, on_hand=2)
+    key = f'chk_{uuid.uuid4().hex}'
+    code = f'SAMPLE-{uuid.uuid4().hex[:8]}'.upper()
+    with Session(test_engine) as db:
+        create_coupon(db, code=code, discount_type='fixed_amount',
+                      discount_value=100, usage_limit=1)
+        db.commit()
+    outcomes, orders = _race_orders(test_engine, [[item['variant_id']], [item['variant_id']]],
+                                    [key, key], 1, coupon_code=code)
+    assert outcomes[0][1] == outcomes[1][1]
+    assert len(orders) == 1
+    with Session(test_engine) as db:
+        assert db.scalar(select(Coupon).where(Coupon.code == code)).times_used == 1
+
+
+def test_simultaneous_last_unit_buyers_cannot_oversell(test_engine):
+    item = _setup_conc_item(test_engine, on_hand=1)
+    outcomes, orders = _race_orders(test_engine, [[item['variant_id']], [item['variant_id']]],
+                                    [f'chk_{uuid.uuid4().hex}' for _ in range(2)], 1)
+    assert sorted(kind for kind, _ in outcomes) == ['created', 'out_of_stock']
+    assert len(orders) == 1
+
+
+def test_reverse_item_order_uses_stable_balance_lock_order(test_engine):
+    first = _setup_conc_item(test_engine, on_hand=1)
+    second = _setup_conc_item(test_engine, on_hand=1)
+    outcomes, orders = _race_orders(test_engine,
+        [[first['variant_id'], second['variant_id']], [second['variant_id'], first['variant_id']]],
+        [f'chk_{uuid.uuid4().hex}' for _ in range(2)], 2)
+    assert sorted(kind for kind, _ in outcomes) == ['created', 'out_of_stock']
+    assert len(orders) == 1

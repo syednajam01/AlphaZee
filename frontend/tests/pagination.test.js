@@ -444,8 +444,8 @@ describe('Storefront Prototype Presentation & Invariants Verification', () => {
     const header = createHeader();
     const banner = header.querySelector('.announcement-bar');
     assert.ok(banner, 'Announcement banner should exist in header');
-    assert.match(banner.textContent, /MVP Concept Preview/i);
-    assert.match(banner.textContent, /disabled/i);
+    assert.match(banner.textContent, /preview/i);
+    assert.match(banner.textContent, /checkout is temporarily unavailable/i);
   });
 
   it('removes unconfirmed payment gateway, encryption, and placeholder WhatsApp claims from storeConfig', () => {

@@ -1,3 +1,4 @@
+import { createOverlay } from '../utils/overlay.js';
 import { createBrandLogo } from './BrandLogo.js';
 
 export function createMobileNavDrawer() {
@@ -42,6 +43,7 @@ export function createMobileNavDrawer() {
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </a>
+        <a href="#track" class="mobile-nav-link">Track Order</a>
         <a href="#faq" class="mobile-nav-link">
           <span>FAQ & Support</span>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -53,11 +55,11 @@ export function createMobileNavDrawer() {
       <div style="margin-top: 32px; padding: 20px; background-color: var(--color-bg); border-radius: var(--radius-card); border: 1px solid var(--color-border);">
         <p style="font-size: 0.875rem; font-weight: 600; margin-bottom: 8px;">Direct Assistance</p>
         <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 16px;">
-          Need immediate support or custom sizing help?
+          Our support contact is not available yet. Please check the FAQ for sizing and delivery information.
         </p>
-        <a href="https://wa.me/yourwhatsapp" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width: 100%; min-height: 44px; font-size: 0.875rem; background-color: #25D366; border-color: #25D366;">
-          Chat on WhatsApp
-        </a>
+        <button type="button" disabled class="btn btn-secondary" style="width: 100%; min-height: 44px; font-size: 0.875rem;">
+          Support unavailable
+        </button>
       </div>
     </div>
   `;
@@ -75,22 +77,22 @@ export function createMobileNavDrawer() {
   }
 
   function open() {
-    backdrop.classList.add('is-open');
-    drawer.classList.add('is-open');
-    document.body.style.overflow = 'hidden';
+    overlay.open();
+    document.getElementById?.('btn-mobile-menu')?.setAttribute('aria-expanded', 'true');
   }
 
   function close() {
-    backdrop.classList.remove('is-open');
-    drawer.classList.remove('is-open');
-    document.body.style.overflow = '';
+    overlay.close();
   }
+
+  const overlay = createOverlay({ element: drawer, backdrop, onClose: () => document.getElementById?.('btn-mobile-menu')?.setAttribute('aria-expanded', 'false') });
 
   backdrop.addEventListener('click', close);
   drawer.querySelector('#mobile-nav-close-btn').addEventListener('click', close);
   drawer.querySelectorAll('.mobile-nav-link').forEach(link => {
     link.addEventListener('click', close);
   });
+  drawer.querySelector('.brand-logo-link')?.addEventListener('click', close);
 
   return {
     backdrop,

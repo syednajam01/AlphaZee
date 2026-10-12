@@ -1,3 +1,4 @@
+import { createOverlay } from '../utils/overlay.js';
 import { cart } from '../utils/cart.js';
 import { fetchProductBySlug } from '../utils/api.js';
 import { extractPriceMinor, formatDisplayPrice } from '../utils/money.js';
@@ -9,6 +10,7 @@ export function createProductModal(onAddedToCart) {
   modalContainer.id = 'product-modal';
   modalContainer.setAttribute('role', 'dialog');
   modalContainer.setAttribute('aria-modal', 'true');
+  modalContainer.setAttribute('aria-label', 'Product details');
 
   let currentProduct = null;
   let selectedSize = null;
@@ -18,7 +20,7 @@ export function createProductModal(onAddedToCart) {
   let activeModalRequestId = 0;
 
   modalContainer.innerHTML = `
-    <div class="drawer-backdrop is-open" style="z-index: 1;"></div>
+    <div class="drawer-backdrop" style="z-index: 1;"></div>
     <div class="modal-content" style="z-index: 2;">
       <button class="modal-close-btn" id="modal-close-btn" aria-label="Close product details">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -235,8 +237,7 @@ export function createProductModal(onAddedToCart) {
     selectedColor = null;
     errorMessage = null;
 
-    modalContainer.classList.add('is-open');
-    document.body.style.overflow = 'hidden';
+    overlay.open();
 
     // If it's a slug or product object missing variants, fetch from API
     const needsFetch = typeof productOrSlug === 'string' || !Array.isArray(productOrSlug?.variants);
@@ -267,10 +268,10 @@ export function createProductModal(onAddedToCart) {
   }
 
   function close() {
-    activeModalRequestId++; // Cancel any in-flight requests
-    modalContainer.classList.remove('is-open');
-    document.body.style.overflow = '';
+    overlay.close();
   }
+
+  const overlay = createOverlay({ element: modalContainer, onClose: () => { activeModalRequestId++; } });
 
   modalContainer.querySelector('.drawer-backdrop').addEventListener('click', close);
   modalContainer.querySelector('#modal-close-btn').addEventListener('click', close);

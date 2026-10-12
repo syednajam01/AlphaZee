@@ -1,0 +1,27 @@
+{
+  "revision": [
+    "b79e3a2f0d61"
+  ],
+  "table_counts": {
+    "collections": 0,
+    "products": 0,
+    "variants": 0,
+    "suppliers": 0,
+    "supplier_memberships": 0,
+    "user_accounts": 0,
+    "supplier_variants": 0,
+    "inventory_balances": 0,
+    "stock_events": 0,
+    "stock_reservations": 0,
+    "payment_receipts": 0,
+    "order_lines": 0,
+    "orders": 0,
+    "shipments": 0,
+    "owner_sessions": 0,
+    "owner_login_buckets": 0,
+    "coupons": 0,
+    "order_returns": 0,
+    "owner_credentials": 0
+  },
+  "existing_table_counts_preserved": true
+}

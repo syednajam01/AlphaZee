@@ -12,11 +12,12 @@ Coordinates:
 from __future__ import annotations
 
 import uuid
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.catalog import AvailabilityStatus, Product, Variant
@@ -28,6 +29,9 @@ from app.models.orders import (
     PaymentReceipt,
     normalize_pakistan_phone,
 )
+from app.models.inventory import InventoryBalance
+from app.models.promotions import Coupon
+from app.services.checkout_attempts import fingerprint_order
 from app.queries.inventory import get_active_supplier_variant
 from app.queries.reservations import (
     InsufficientStockError,
@@ -68,6 +72,11 @@ class CreateOrderDTO:
     utm_campaign: str | None = None
     customer_notes: str | None = None
     idempotency_key: str | None = None
+    checkout_session_hash: str | None = None
+
+
+class CheckoutAttemptConflict(ValueError):
+    """A key belongs to another checkout session or another request body."""
 
 
 def generate_order_number() -> str:
@@ -94,11 +103,20 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         else None
     )
 
+    fingerprint = fingerprint_order(order_data) if clean_idemp else None
     if clean_idemp:
+        # Transaction-scoped across every API worker. The second request waits
+        # until the first commits, then reads the authoritative order row.
+        lock_id = int.from_bytes(hashlib.sha256(clean_idemp.encode()).digest()[:8], 'big', signed=True)
+        db.execute(text('SELECT pg_advisory_xact_lock(:key)'), {'key': lock_id})
         existing_order = db.scalars(
             select(Order).where(Order.idempotency_key == clean_idemp)
         ).first()
         if existing_order is not None:
+            if (not order_data.checkout_session_hash or
+                    existing_order.checkout_session_hash != order_data.checkout_session_hash or
+                    existing_order.request_fingerprint != fingerprint):
+                raise CheckoutAttemptConflict('Checkout attempt conflicts with an existing submission.')
             return existing_order
     if not order_data.items:
         raise ValueError("Order must contain at least one item.")
@@ -114,13 +132,17 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
     line_preparations = []
     subtotal_minor = 0
 
+    quantities = {}
     for item in order_data.items:
-        if item.quantity <= 0:
-            raise ValueError(f"Item quantity must be strictly positive, got {item.quantity}")
+        quantities[item.variant_id] = quantities.get(item.variant_id, 0) + item.quantity
 
-        variant = db.get(Variant, item.variant_id)
+    for variant_id, quantity in sorted(quantities.items()):
+        if quantity <= 0:
+            raise ValueError(f"Item quantity must be strictly positive, got {quantity}")
+
+        variant = db.get(Variant, variant_id)
         if variant is None:
-            raise ValueError(f"Variant id {item.variant_id} not found in catalog.")
+            raise ValueError(f"Variant id {variant_id} not found in catalog.")
 
         if not variant.is_active or variant.availability != AvailabilityStatus.AVAILABLE:
             raise ValueError(
@@ -136,7 +158,7 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         product = variant.product
         unit_price_minor = variant.price_minor
         unit_cost_minor = active_sv.supplier_cost_minor
-        line_total_minor = unit_price_minor * item.quantity
+        line_total_minor = unit_price_minor * quantity
         subtotal_minor += line_total_minor
 
         line_preparations.append(
@@ -144,7 +166,7 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
                 "variant": variant,
                 "product": product,
                 "active_sv": active_sv,
-                "quantity": item.quantity,
+                "quantity": quantity,
                 "unit_price_minor": unit_price_minor,
                 "unit_cost_minor": unit_cost_minor,
                 "line_total_minor": line_total_minor,
@@ -156,6 +178,7 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
     applied_coupon_code = None
 
     if order_data.coupon_code:
+        db.scalars(select(Coupon).where(Coupon.code == order_data.coupon_code.strip().upper()).with_for_update()).first()
         coupon_res = validate_coupon(
             db,
             code=order_data.coupon_code,
@@ -165,6 +188,14 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         discount_amount_minor = coupon_res.discount_amount_minor
         applied_coupon_code = coupon_res.code
         record_coupon_usage(db, coupon_res.code)
+
+    # Lock every shared balance in a stable order before creating any line or
+    # reservation. Adjustments take the same balance lock and recheck holds.
+    for supplier_variant_id in sorted({p['active_sv'].id for p in line_preparations}):
+        balance = db.scalar(select(InventoryBalance).where(
+            InventoryBalance.supplier_variant_id == supplier_variant_id).with_for_update())
+        if balance is None:
+            raise InsufficientStockError(f'No physical stock for supplier variant {supplier_variant_id}.')
 
     total_minor = max(0, subtotal_minor - discount_amount_minor + order_data.shipping_fee_minor)
 
@@ -197,6 +228,8 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         customer_notes=order_data.customer_notes.strip() if order_data.customer_notes else None,
         payment_deadline_at=payment_deadline_at,
         idempotency_key=clean_idemp,
+        checkout_session_hash=order_data.checkout_session_hash,
+        request_fingerprint=fingerprint,
     )
     db.add(order)
     db.flush()

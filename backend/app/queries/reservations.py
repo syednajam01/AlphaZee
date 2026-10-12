@@ -141,6 +141,7 @@ def create_stock_reservation(
         select(InventoryBalance)
         .where(InventoryBalance.supplier_variant_id == supplier_variant_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     balance = db.scalars(stmt).one_or_none()
     physical = balance.on_hand if balance is not None else 0
@@ -236,6 +237,7 @@ def transition_reservation_stage(
             reason="reservation_fulfilled",
             expected_version=balance.version,
             notes=notes or f"Fulfillment for order line {reservation.order_line_id}",
+            releasing_reservation_id=reservation.id,
         )
         reservation.closed_at = now
     elif new_stage in ("cancelled", "returned"):

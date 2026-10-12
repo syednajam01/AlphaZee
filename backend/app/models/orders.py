@@ -119,6 +119,9 @@ class Order(Base):
     )
     """Client submission key preventing duplicate order creations."""
 
+    checkout_session_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     order_number: Mapped[str] = mapped_column(
         String(50),
         unique=True,

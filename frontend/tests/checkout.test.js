@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { cart } from '../src/utils/cart.js';
-import { submitOrder, uploadReceipt, fetchOrderStatus, ApiError } from '../src/utils/api.js';
+import { submitOrder, recoverPendingOrder, getPendingCheckoutAttempt, uploadReceipt, fetchOrderStatus, ApiError } from '../src/utils/api.js';
 
 describe('Storefront Order API Client & Checkout Cart State', () => {
   let originalFetch;
@@ -13,6 +13,56 @@ describe('Storefront Order API Client & Checkout Cart State', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+  });
+
+  it('retries a lost checkout response with the same key and payload', async () => {
+    const payload = { customer_name: 'SAMPLE Buyer', items: [{ variant_id: 101, quantity: 1 }] };
+    const submissions = [];
+    let loseResponse = true;
+    global.fetch = async (url, options) => {
+      if (String(url).endsWith('/checkout-session')) return { ok: true, json: async () => ({ ready: true }) };
+      submissions.push({ key: options.headers['Idempotency-Key'], body: options.body });
+      if (loseResponse) { loseResponse = false; throw new Error('Connection lost'); }
+      return { ok: true, json: async () => ({ id: 'SAMPLE-order-1' }) };
+    };
+    await assert.rejects(submitOrder(payload), /Connection lost/);
+    assert.equal(getPendingCheckoutAttempt()?.payload.customer_name, 'SAMPLE Buyer');
+    await assert.rejects(submitOrder({ ...payload, customer_name: 'Changed Buyer' }), /previous checkout/i);
+    const recovered = await recoverPendingOrder();
+    assert.equal(recovered.id, 'SAMPLE-order-1');
+    assert.equal(submissions.length, 2);
+    assert.equal(submissions[0].key, submissions[1].key);
+    assert.equal(submissions[0].body, submissions[1].body);
+    assert.equal(getPendingCheckoutAttempt(), null);
+  });
+
+  it('recovers a pending attempt from session storage after module reload', async () => {
+    const oldWindow = globalThis.window;
+    const storage = new Map();
+    globalThis.window = { sessionStorage: {
+      getItem: key => storage.get(key) || null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: key => storage.delete(key),
+    } };
+    let calls = 0;
+    const keys = [];
+    global.fetch = async (url, options) => {
+      if (String(url).endsWith('/checkout-session')) return { ok: true, json: async () => ({ ready: true }) };
+      keys.push(options.headers['Idempotency-Key']);
+      calls += 1;
+      if (calls === 1) throw new Error('Response lost');
+      return { ok: true, json: async () => ({ id: 'SAMPLE-recovered' }) };
+    };
+    try {
+      await assert.rejects(submitOrder({ customer_name: 'SAMPLE Reload Buyer', items: [] }), /Response lost/);
+      const reloaded = await import(`../src/utils/api.js?checkout-reload=${Date.now()}`);
+      assert.equal((await reloaded.recoverPendingOrder()).id, 'SAMPLE-recovered');
+      assert.equal(keys[0], keys[1]);
+      assert.equal(storage.size, 0);
+    } finally {
+      if (getPendingCheckoutAttempt()) await recoverPendingOrder();
+      globalThis.window = oldWindow;
+    }
   });
 
   it('submits order payload and returns created order response', async () => {

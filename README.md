@@ -1,5 +1,11 @@
 # AlphaZee — Pakistan Direct-to-Consumer Streetwear & Essentials
 
+Current checkout containment and isolated test setup are documented in
+[the Phase 0 runbook](.context/phase0_baseline_and_runbook.md).
+Public checkout is disabled server-side; only an explicitly configured local
+test database can accept sample orders. Historical milestone notes below do not
+establish current migration or launch readiness.
+
 AlphaZee is a Pakistan ecommerce brand with its own identity, storefront, customer relationships, order operations, and reporting.
 
 ---
@@ -72,3 +78,7 @@ Serves storefront at `http://localhost:3000/`, proxying `/api` requests to backe
 - [`docs/decisions.md`](docs/decisions.md) — Confirmed business decisions and proposed models.
 - [`docs/progress.md`](docs/progress.md) — Completed work, test execution results, and deferred checks.
 - [`docs/database-design-pending.md`](docs/database-design-pending.md) — Open database and commerce decisions for owner alignment.
+
+## Owner Console access
+
+Owner access uses username/password login and revocable HttpOnly sessions. After applying migrations, run `python scripts/provision_owner.py YOUR_USERNAME` interactively from `backend` to choose credentials. No default password or shared admin key grants access. See the [owner access runbook](.context/phase_a_owner_auth_runbook.md) for setup, password resets and production configuration.

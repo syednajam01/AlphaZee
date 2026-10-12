@@ -83,12 +83,12 @@ from app.services.shipments import (
     record_cod_remittance,
     update_shipment_status,
 )
-from app.dependencies.auth import require_admin_key
+from app.dependencies.auth import OwnerPrincipal, require_owner_session
 
 router = APIRouter(
     prefix="/admin",
     tags=["Owner Administration"],
-    dependencies=[Depends(require_admin_key)],
+    dependencies=[Depends(require_owner_session)],
 )
 
 
@@ -145,6 +145,7 @@ def get_inventory_summary_endpoint(db: Session = Depends(get_db)) -> InventorySu
 def adjust_inventory_endpoint(
     payload: InventoryAdjustRequest,
     db: Session = Depends(get_db),
+    principal: OwnerPrincipal = Depends(require_owner_session),
 ) -> InventoryMetricResponse:
     current_balance = db.get(InventoryBalance, payload.supplier_variant_id)
     if current_balance is None:
@@ -164,7 +165,7 @@ def adjust_inventory_endpoint(
         _event = adjust_inventory(
             db,
             supplier_variant_id=payload.supplier_variant_id,
-            actor_user_id=None,
+            actor_user_id=principal.owner.user_id,
             new_on_hand=new_on_hand,
             reason=payload.reason,
             expected_version=payload.expected_version,

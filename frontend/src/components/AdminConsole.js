@@ -1,3 +1,4 @@
+import { createOverlay } from '../utils/overlay.js';
 import { createBrandLogo } from './BrandLogo.js';
 import {
   fetchAdminOverview,
@@ -28,9 +29,11 @@ import {
   rejectAdminReturn,
   fetchAdminMarketingAnalytics,
   ApiError,
-  setAdminKey,
-  clearAdminKey,
-  getAdminKey,
+  loginOwner,
+  logoutOwner,
+  fetchOwnerSession,
+  onOwnerSessionExpired,
+  removeLegacyAdminCredentials,
 } from '../utils/api.js';
 import { escapeHtml } from '../utils/dom.js';
 import { formatPkr, pkrToMinor } from '../utils/money.js';
@@ -43,10 +46,13 @@ export function createAdminConsoleModal() {
   modal.setAttribute('aria-label', 'AlphaZee Store Management Console');
 
   let activeTab = 'overview';
+  let authenticated = false;
+  let authGeneration = 0;
+  removeLegacyAdminCredentials();
   let isCollapsed = false;
 
   modal.innerHTML = `
-    <div class="drawer-backdrop is-open" style="z-index: 1;"></div>
+    <div class="drawer-backdrop" style="z-index: 1;"></div>
     <div class="modal-content" style="z-index: 2; max-width: 1100px; height: 720px; padding: 0; display: flex; overflow: hidden; background: #141715; color: #FFFFFF; border-radius: var(--radius-card); border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
       
       <!-- Admin Sidebar -->
@@ -129,7 +135,7 @@ export function createAdminConsoleModal() {
 
         <div style="padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: rgba(255, 255, 255, 0.4);">
           <span class="admin-nav-label">Owner Ops v1.2</span>
-          <button id="btn-admin-logout" title="Lock Console" style="background: none; border: none; color: rgba(255, 255, 255, 0.5); cursor: pointer; padding: 2px 4px; font-size: 0.75rem;">🔒 Lock</button>
+          <button id="btn-admin-logout" title="Sign out" style="background: none; border: none; color: rgba(255, 255, 255, 0.5); cursor: pointer; padding: 2px 4px; font-size: 0.75rem;">Sign out</button>
         </div>
       </aside>
 
@@ -154,7 +160,8 @@ export function createAdminConsoleModal() {
         </header>
 
         <!-- Body View Container -->
-        <div id="admin-tab-content" style="flex: 1; padding: 24px; overflow-y: auto;">
+        <p id="admin-session-message" role="status" style="color:#FCA5A5;"></p>
+          <div id="admin-tab-content" style="flex: 1; padding: 24px; overflow-y: auto;">
           <div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 40px 0;">Loading administrative metrics...</div>
         </div>
       </main>
@@ -193,7 +200,7 @@ export function createAdminConsoleModal() {
           <div id="dispatch-error" style="display: none; color: #F87171; font-size: 0.75rem; font-weight: 600;"></div>
           <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
             <button type="button" id="btn-cancel-dispatch" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8125rem;">Cancel</button>
-            <button type="submit" id="btn-submit-dispatch" class="btn btn-primary" style="padding: 6px 14px; font-size: 0.8125rem;">Confirm Dispatch</button>
+            <button type="submit" id="btn-submit-dispatch" disabled class="btn btn-primary" style="padding: 6px 14px; font-size: 0.8125rem;">Dispatch unavailable</button>
           </div>
         </form>
       </div>
@@ -216,7 +223,7 @@ export function createAdminConsoleModal() {
           <div id="remit-error" style="display: none; color: #F87171; font-size: 0.75rem; font-weight: 600;"></div>
           <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
             <button type="button" id="btn-cancel-remit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8125rem;">Cancel</button>
-            <button type="submit" id="btn-submit-remit" class="btn btn-primary" style="padding: 6px 14px; font-size: 0.8125rem;">Save Remittance</button>
+            <button type="submit" id="btn-submit-remit" disabled class="btn btn-primary" style="padding: 6px 14px; font-size: 0.8125rem;">Remittance entry unavailable</button>
           </div>
         </form>
       </div>
@@ -287,13 +294,76 @@ export function createAdminConsoleModal() {
     loadActiveTabData();
   });
 
-  modal.querySelector('#btn-admin-logout')?.addEventListener('click', () => {
-    clearAdminKey();
-    loadActiveTabData();
+  modal.querySelector('#btn-admin-logout')?.addEventListener('click', async () => {
+    const button = modal.querySelector('#btn-admin-logout');
+    button.disabled = true;
+    try {
+      await logoutOwner();
+      authenticated = false;
+      renderLogin('You have signed out.');
+    } catch (error) {
+      if (error.status !== 401) {
+        // Keep the session visible if the server could not confirm revocation.
+        showSessionMessage('Could not sign out. Please try again.');
+      }
+    } finally { button.disabled = false; }
+  });
+
+  function showSessionMessage(message) {
+    const status = modal.querySelector('#admin-session-message');
+    status.textContent = message;
+  }
+
+  function renderLogin(message = '') {
+    authGeneration++;
+    showSessionMessage(message);
+    modal.querySelector('#btn-admin-logout').hidden = true;
+    contentArea.innerHTML = `
+      <div style="max-width: 440px; margin: 40px auto; padding: 24px;">
+        <h3>Owner sign in</h3>
+        <p>Sign in to manage your store.</p>
+        <form id="admin-auth-form" style="display:flex; flex-direction:column; gap:12px;">
+          <label for="admin-username">Username</label>
+          <input id="admin-username" name="username" autocomplete="username" required maxlength="100" />
+          <label for="admin-password">Password</label>
+          <input id="admin-password" name="password" type="password" autocomplete="current-password" required maxlength="128" />
+          <p id="admin-login-error" role="alert"></p>
+          <button type="submit" class="btn btn-primary" id="admin-login-submit">Sign in</button>
+        </form>
+      </div>`;
+    const form = contentArea.querySelector('#admin-auth-form');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = form.querySelector('#admin-login-submit');
+      if (button.disabled) return;
+      const passwordInput = form.querySelector('#admin-password');
+      const generation = authGeneration;
+      button.disabled = true;
+      form.querySelector('#admin-login-error').textContent = '';
+      try {
+        await loginOwner(form.querySelector('#admin-username').value.trim(), passwordInput.value);
+        passwordInput.value = '';
+        if (generation !== authGeneration) return;
+        authenticated = true;
+        showSessionMessage('');
+        modal.querySelector('#btn-admin-logout').hidden = false;
+        await loadActiveTabData();
+      } catch (error) {
+        passwordInput.value = '';
+        if (generation === authGeneration) form.querySelector('#admin-login-error').textContent = error.message || 'Unable to sign in.';
+      } finally { button.disabled = false; }
+    });
+  }
+
+  onOwnerSessionExpired(() => {
+    authenticated = false;
+    renderLogin('Your session has ended. Sign in again to continue.');
   });
 
   async function loadActiveTabData() {
     if (!contentArea) return;
+    if (!authenticated) { renderLogin(); return; }
+    const generation = authGeneration;
     contentArea.innerHTML = '<div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 40px 0;">Loading data...</div>';
 
     try {
@@ -312,39 +382,14 @@ export function createAdminConsoleModal() {
       } else if (activeTab === 'analytics') {
         await renderAnalyticsTab(contentArea);
       }
+      if (generation !== authGeneration && !authenticated) renderLogin('Sign in again to continue.');
     } catch (err) {
       if (err.status === 401) {
-        contentArea.innerHTML = `
-          <div style="max-width: 440px; margin: 40px auto; padding: 28px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; text-align: center;">
-            <div style="width: 44px; height: 44px; margin: 0 auto 16px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); display: flex; align-items: center; justify-content: center; color: #F87171;">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-            </div>
-            <h3 style="font-size: 1.125rem; font-weight: 700; margin: 0 0 8px 0; color: #FFFFFF;">Owner Authorization Required</h3>
-            <p style="font-size: 0.8125rem; color: rgba(255, 255, 255, 0.6); margin: 0 0 20px 0;">All store administrative operations require authentication. Enter your owner secret key to access console controls.</p>
-            <form id="admin-auth-form" style="display: flex; flex-direction: column; gap: 12px; text-align: left;">
-              <div>
-                <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Admin Access Key</label>
-                <input type="password" id="admin-auth-key-input" required placeholder="Enter ADMIN_API_KEY..." style="width: 100%; padding: 10px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.875rem;" />
-              </div>
-              <button type="submit" class="btn btn-primary" style="padding: 10px; font-size: 0.875rem; font-weight: 600; width: 100%; margin-top: 4px;">Unlock Admin Console</button>
-            </form>
-          </div>
-        `;
-        const authForm = contentArea.querySelector('#admin-auth-form');
-        const authInput = contentArea.querySelector('#admin-auth-key-input');
-        authForm?.addEventListener('submit', (e) => {
-          e.preventDefault();
-          const key = authInput?.value?.trim();
-          if (key) {
-            setAdminKey(key);
-            loadActiveTabData();
-          }
-        });
+        authenticated = false;
+        renderLogin('Your session has ended. Sign in again to continue.');
         return;
       }
+      if (generation !== authGeneration) return;
 
       contentArea.innerHTML = `
         <div style="padding: 16px; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 6px; color: #FCA5A5; font-size: 0.875rem;">
@@ -505,8 +550,13 @@ export function createAdminConsoleModal() {
       b.addEventListener('click', async () => {
         const orderId = b.getAttribute('data-order-id');
         b.disabled = true;
-        await verifyOrderPayment(orderId);
-        await loadActiveTabData();
+        try {
+          await verifyOrderPayment(orderId);
+          await loadActiveTabData();
+        } catch (error) {
+          if (error.status !== 401) showSessionMessage(error.message || 'Payment verification failed.');
+          b.disabled = false;
+        }
       });
     });
 
@@ -1046,16 +1096,43 @@ export function createAdminConsoleModal() {
     `;
   }
 
-  function open() {
-    modal.classList.add('is-open');
-    document.body.style.overflow = 'hidden';
-    loadActiveTabData();
+  async function open() {
+    overlay.open();
+    const generation = ++authGeneration;
+    contentArea.innerHTML = '<p role="status">Checking owner session...</p>';
+    try {
+      await fetchOwnerSession();
+      if (generation !== authGeneration) return;
+      authenticated = true;
+      modal.querySelector('#btn-admin-logout').hidden = false;
+      showSessionMessage('');
+      await loadActiveTabData();
+    } catch (error) {
+      authenticated = false;
+      renderLogin(error.status === 401 ? '' : 'Unable to reach the store. You can try signing in again.');
+    }
   }
 
   function close() {
-    modal.classList.remove('is-open');
-    document.body.style.overflow = '';
+    overlay.close();
   }
+
+  // These forms are completed with the fulfillment/settlement repairs. Until
+  // then, keep them dismissible and prevent an unhandled native form reload.
+  for (const [formId, cancelId, dialogId] of [
+    ['admin-dispatch-form', 'btn-cancel-dispatch', 'admin-dispatch-modal'],
+    ['admin-remittance-form', 'btn-cancel-remit', 'admin-remittance-modal'],
+  ]) {
+    modal.querySelector(`#${formId}`).addEventListener('submit', event => event.preventDefault());
+    modal.querySelector(`#${cancelId}`).addEventListener('click', () => {
+      modal.querySelector(`#${dialogId}`).style.display = 'none';
+    });
+  }
+
+  const overlay = createOverlay({ element: modal, onClose: () => {
+    modal.querySelector('#admin-dispatch-modal').style.display = 'none';
+    modal.querySelector('#admin-remittance-modal').style.display = 'none';
+  } });
 
   modal.querySelector('.drawer-backdrop').addEventListener('click', close);
   modal.querySelector('#admin-close-btn').addEventListener('click', close);

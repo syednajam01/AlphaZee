@@ -91,14 +91,14 @@ export function createReassuranceAndFooter() {
           <div>
             <h4 class="footer-heading">Need Assistance?</h4>
             <p class="footer-link" style="margin-bottom: 12px; line-height: 1.4;">
-              Questions about sizing or dispatch times? Reach our team directly.
+              Our support contact is not available yet. Please check the FAQ for sizing and delivery information.
             </p>
-            <a href="https://wa.me/yourwhatsapp" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="background-color: #25D366; border-color: #25D366; color: #FFFFFF; font-size: 0.875rem; padding: 10px 18px; min-height: 44px;">
+            <button type="button" disabled class="btn btn-secondary" style="font-size: 0.875rem; padding: 10px 18px; min-height: 44px;">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
               </svg>
-              Chat on WhatsApp
-            </a>
+              Support unavailable
+            </button>
           </div>
         </div>
 
@@ -106,7 +106,7 @@ export function createReassuranceAndFooter() {
           <div>© ${new Date().getFullYear()} AlphaZee. All verified rights reserved.</div>
           <div style="display: flex; gap: 24px;">
             ${storeConfig.footerLinks.legal.map(l => `
-              <a href="${l.href}" class="footer-link">${l.label}</a>
+              ${l.href ? `<a href="${l.href}" class="footer-link">${l.label}</a>` : `<span class="footer-link" aria-disabled="true">${l.label} (not yet available)</span>`}
             `).join('')}
           </div>
         </div>

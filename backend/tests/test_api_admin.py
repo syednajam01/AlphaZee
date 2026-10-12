@@ -21,6 +21,16 @@ from app.models.inventory import InventoryBalance, SupplierVariant
 from app.models.suppliers import Supplier, UserAccount
 
 
+def _post_checkout(admin_client, payload):
+    from app.services.checkout_attempts import checkout_cookie_name
+    assert admin_client.get('/api/v1/orders/checkout-session').status_code == 200
+    checkout_cookie = admin_client.cookies.get(checkout_cookie_name())
+    assert checkout_cookie
+    return admin_client.post('/api/v1/orders', json=payload,
+                             headers={'Idempotency-Key': f'chk_{uuid.uuid4().hex}',
+                                      'Cookie': f"{admin_client.headers['Cookie']}; {checkout_cookie_name()}={checkout_cookie}"})
+
+
 def _create_admin_setup(db: Session, on_hand: int = 10):
     unique_suffix = uuid.uuid4().hex[:6]
 
@@ -159,7 +169,7 @@ def test_admin_order_lifecycle_payment_and_delivery(admin_client, db_session):
         "payment_method": "bank_transfer",
         "items": [{"variant_id": var.id, "quantity": 2}],
     }
-    order_res = admin_client.post("/api/v1/orders", json=order_payload)
+    order_res = _post_checkout(admin_client, order_payload)
     assert order_res.status_code == 201
     order_id = order_res.json()["id"]
 
@@ -213,7 +223,7 @@ def test_admin_order_cancellation_releases_held_stock(admin_client, db_session):
         "payment_method": "cod",
         "items": [{"variant_id": var.id, "quantity": 3}],
     }
-    order_res = admin_client.post("/api/v1/orders", json=order_payload)
+    order_res = _post_checkout(admin_client, order_payload)
     assert order_res.status_code == 201
     order_id = order_res.json()["id"]
 
@@ -258,7 +268,7 @@ def test_admin_overview_metrics(admin_client, db_session):
         "payment_method": "bank_transfer",
         "items": [{"variant_id": var.id, "quantity": 1}],
     }
-    ord_res = admin_client.post("/api/v1/orders", json=order_payload)
+    ord_res = _post_checkout(admin_client, order_payload)
     assert ord_res.status_code == 201
     ord_id = ord_res.json()["id"]
 

@@ -55,7 +55,7 @@ export const storeConfig = {
   ],
   footerLinks: {
     shop: [
-      { label: 'All Products', href: '#shop' },
+      { label: 'All Products', href: '#featured' },
       { label: 'Collections', href: '#collections' },
       { label: 'New Arrivals', href: '#featured' },
     ],
@@ -66,8 +66,8 @@ export const storeConfig = {
       { label: 'Customer FAQ', href: '#faq' },
     ],
     legal: [
-      { label: 'Privacy Policy', href: '#privacy' },
-      { label: 'Terms of Service', href: '#terms' },
+      { label: 'Privacy Policy', href: null },
+      { label: 'Terms of Service', href: null },
       { label: 'Admin Console (Preview)', href: '#admin' },
     ]
   }

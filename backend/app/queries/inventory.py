@@ -13,12 +13,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.orm import Session
 
 from app.models.inventory import (
     ALLOWED_STOCK_EVENT_REASONS,
     InventoryBalance,
+    StockReservation,
+    OPEN_RESERVATION_STAGES,
     StockEvent,
     SupplierVariant,
 )
@@ -86,6 +88,7 @@ def adjust_inventory(
     expected_version: int,
     notes: str | None = None,
     last_counted_at: datetime | None = None,
+    releasing_reservation_id: uuid.UUID | None = None,
 ) -> StockEvent:
     """
     Atomically update inventory_balances and record an audit stock_event.
@@ -103,11 +106,26 @@ def adjust_inventory(
         )
 
     # 1. Read current on_hand for delta computation
-    current_balance = db.get(InventoryBalance, supplier_variant_id)
+    current_balance = db.scalar(select(InventoryBalance).where(
+        InventoryBalance.supplier_variant_id == supplier_variant_id,
+    ).with_for_update().execution_options(populate_existing=True))
     if current_balance is None:
         raise ValueError(f"InventoryBalance not found for supplier_variant_id {supplier_variant_id}")
 
     previous_on_hand = current_balance.on_hand
+    if current_balance.version != expected_version:
+        raise StaleInventoryError(
+            f"Inventory version conflict for {supplier_variant_id}. Expected version {expected_version}."
+        )
+    held_query = select(func.coalesce(func.sum(StockReservation.quantity), 0)).where(
+        StockReservation.supplier_variant_id == supplier_variant_id,
+        StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
+    )
+    if releasing_reservation_id:
+        held_query = held_query.where(StockReservation.id != releasing_reservation_id)
+    held = db.scalar(held_query)
+    if new_on_hand < held:
+        raise ValueError(f'Adjustment would leave {new_on_hand} units below {held} active holds.')
 
     # 2. Targeted atomic UPDATE guarded by expected_version
     values_to_update: dict = {

@@ -4,7 +4,7 @@ test_api_auth.py — Authentication gate tests for Admin API endpoints.
 Reproduces Blocker 1:
 - Admin API endpoints must reject anonymous requests with 401 Unauthorized.
 - Admin API endpoints must reject invalid credentials with 401 Unauthorized.
-- Admin API endpoints must accept valid admin keys via X-Admin-Key or Authorization header.
+- Legacy X-Admin-Key and Authorization credentials must not bypass owner sessions.
 - Public storefront catalog & health endpoints must remain accessible without auth.
 """
 
@@ -66,19 +66,19 @@ def test_invalid_admin_key_rejected(client):
     assert "Invalid or missing" in res.json().get("detail", "")
 
 
-def test_valid_admin_key_accepted(client):
+def test_legacy_admin_key_rejected(client):
     """
-    Valid key passed via X-Admin-Key or Authorization Bearer header must be allowed.
+    Valid key passed via X-Admin-Key or Authorization Bearer header must be rejected.
     """
     expected_key = getattr(settings, "admin_api_key", "alphazee-dev-admin-key-change-in-prod")
 
     # Valid via X-Admin-Key
     res = client.get("/api/v1/admin/overview", headers={"X-Admin-Key": expected_key})
-    assert res.status_code == 200
+    assert res.status_code == 401
 
     # Valid via Authorization: Bearer
     res = client.get("/api/v1/admin/overview", headers={"Authorization": f"Bearer {expected_key}"})
-    assert res.status_code == 200
+    assert res.status_code == 401
 
 
 def test_public_storefront_endpoints_remain_accessible(client):

@@ -72,7 +72,7 @@ def test_environment_helpers():
     assert dev_settings.is_production is False
 
     prod_settings = Settings(
-        app_env="production",
+        app_env="production", allowed_origins=["https://store.example"],
         admin_api_key="secure-prod-key-with-over-32-chars-long!",
         _env_file=None,
     )
@@ -80,26 +80,13 @@ def test_environment_helpers():
     assert prod_settings.is_production is True
 
 
-def test_admin_key_production_validation():
-    """Verify production requires a secure non-default ADMIN_API_KEY with at least 32 characters."""
-    import pytest
+def test_production_sessions_require_explicit_https_origins():
     from pydantic import ValidationError
-
-    # Default dev key in production must fail
     with pytest.raises(ValidationError):
         Settings(app_env="production", _env_file=None)
-
-    # Short key in production must fail
     with pytest.raises(ValidationError):
-        Settings(app_env="production", admin_api_key="too-short", _env_file=None)
-
-    # Valid >= 32 char key succeeds
-    valid = Settings(
-        app_env="production",
-        admin_api_key="a" * 32,
-        _env_file=None,
-    )
-    assert valid.admin_api_key == "a" * 32
+        Settings(allowed_origins=["*"], _env_file=None)
+    assert Settings(app_env="production", allowed_origins=["https://store.example"], _env_file=None).is_production
 
 
 def test_validate_test_database_url_allowed():
@@ -110,6 +97,18 @@ def test_validate_test_database_url_allowed():
     test_url = "postgresql://alphazee:secret@localhost:5433/alphazee_test"
     # Should not raise
     validate_test_database_url(test_url, app_url_str=app_url)
+
+
+@pytest.mark.parametrize("url", [
+    "postgresql://u:p@remote.example/alphazee_test",
+    "postgresql://u:p@localhost/alphazee_test?host=remote.example",
+    "postgresql://u:p@localhost/alphazee_test?dbname=alphazee_dev",
+    "sqlite:///alphazee_test",
+])
+def test_disposable_database_rejects_remote_or_redirected_connections(url):
+    from tests.conftest import validate_test_database_url
+    with pytest.raises(RuntimeError, match="Unsafe test database configuration"):
+        validate_test_database_url(url)
 
 
 def test_validate_test_database_url_rejects_non_test_database():

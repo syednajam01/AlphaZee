@@ -1,9 +1,11 @@
+import { createOverlay } from '../utils/overlay.js';
 import { createBrandLogo } from './BrandLogo.js';
 import { cart } from '../utils/cart.js';
+import { capabilities, CHECKOUT_UNAVAILABLE } from '../utils/capabilities.js';
 import { storeConfig } from '../data/store-config.js';
 import { formatPkr } from '../utils/money.js';
 import { escapeHtml } from '../utils/dom.js';
-import { submitOrder, uploadReceipt, validateCoupon, ApiError } from '../utils/api.js';
+import { submitOrder, uploadReceipt, validateCoupon, recoverPendingOrder, getPendingCheckoutAttempt, ApiError } from '../utils/api.js';
 import { getStoredUtmParams } from '../utils/utm.js';
 
 export function createCheckoutView(onClose) {
@@ -15,7 +17,7 @@ export function createCheckoutView(onClose) {
   modal.setAttribute('aria-label', 'AlphaZee Store Checkout');
 
   modal.innerHTML = `
-    <div class="drawer-backdrop is-open" style="z-index: 1;"></div>
+    <div class="drawer-backdrop" style="z-index: 1;"></div>
     <div class="modal-content" style="z-index: 2; max-width: 680px; padding: 0; overflow: hidden;">
       <!-- Checkout Header -->
       <div class="checkout-header" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--color-border); background: var(--color-surface);">
@@ -57,6 +59,7 @@ export function createCheckoutView(onClose) {
         </div>
 
         <h2 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 14px;">Shipping & Contact Information</h2>
+        <p id="checkout-capability-message" role="status"></p>
         <form id="checkout-form" style="display: flex; flex-direction: column; gap: 14px;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div>
@@ -205,6 +208,10 @@ export function createCheckoutView(onClose) {
   }
 
   function renderCartState(state) {
+    const availability = capabilities.getState();
+    const capabilityMessage = modal.querySelector('#checkout-capability-message');
+    if (capabilityMessage) capabilityMessage.textContent = availability.checkoutEnabled
+      ? 'SAMPLE / TEST checkout. No real orders.' : CHECKOUT_UNAVAILABLE;
     const itemsList = modal.querySelector('#checkout-items-list');
     const subtotalEl = modal.querySelector('#checkout-subtotal');
     const totalEl = modal.querySelector('#checkout-total');
@@ -241,7 +248,7 @@ export function createCheckoutView(onClose) {
       }
     } else {
       if (placeBtn) {
-        placeBtn.disabled = false;
+        placeBtn.disabled = !availability.checkoutEnabled;
         placeBtn.style.opacity = '1';
       }
       itemsList.innerHTML = state.items.map(item => {
@@ -305,9 +312,16 @@ export function createCheckoutView(onClose) {
   // Form submit handler
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (recovering) return;
     const errorBanner = modal.querySelector('#checkout-error-banner');
     const placeBtn = modal.querySelector('#btn-place-order');
     errorBanner.style.display = 'none';
+
+    if (!capabilities.getState().checkoutEnabled) {
+      errorBanner.textContent = CHECKOUT_UNAVAILABLE;
+      errorBanner.style.display = 'block';
+      return;
+    }
 
     const cartState = cart.getState();
     if (cartState.items.length === 0) {
@@ -361,15 +375,17 @@ export function createCheckoutView(onClose) {
       appliedCoupon = null;
       renderOrderConfirmation(order);
     } catch (err) {
-      placeBtn.disabled = false;
+      placeBtn.disabled = !capabilities.getState().checkoutEnabled;
       placeBtn.textContent = 'Place Order';
       errorBanner.textContent = err.message || 'Failed to place order. Please check your details and try again.';
       errorBanner.style.display = 'block';
     }
   });
 
+  let savedCheckoutContent = null;
   function renderOrderConfirmation(order) {
     const bodyContent = modal.querySelector('#checkout-body-content');
+    savedCheckoutContent = Array.from(bodyContent.childNodes);
     const badge = modal.querySelector('#checkout-badge');
     if (badge) {
       badge.textContent = 'Order Confirmed';
@@ -514,20 +530,54 @@ export function createCheckoutView(onClose) {
     }
   }
 
+  let recovering = false;
   function open() {
-    modal.classList.add('is-open');
-    document.body.style.overflow = 'hidden';
+    if (savedCheckoutContent) {
+      modal.querySelector('#checkout-body-content').replaceChildren(...savedCheckoutContent);
+      savedCheckoutContent = null;
+      form.reset();
+      modal.querySelector('#btn-place-order').textContent = 'Place Order';
+      modal.querySelector('#checkout-error-banner').style.display = 'none';
+      modal.querySelector('#checkout-badge').textContent = 'Secure Checkout';
+      updateRadioStyle();
+    }
+    overlay.open();
     renderCartState(cart.getState());
+    capabilities.refresh().then(async () => {
+      if (modal.hidden || !capabilities.getState().checkoutEnabled || !getPendingCheckoutAttempt() || recovering) return;
+      recovering = true;
+      modal.querySelector('#btn-place-order').disabled = true;
+      const errorBanner = modal.querySelector('#checkout-error-banner');
+      errorBanner.textContent = 'Checking your previous order submission...';
+      errorBanner.style.display = 'block';
+      try {
+        const pending = getPendingCheckoutAttempt();
+        const order = await recoverPendingOrder();
+        if (modal.hidden || !order) return;
+        const currentItems = cart.getState().items.map(i => [i.variant_id, i.quantity]).sort();
+        const submittedItems = pending.payload.items.map(i => [i.variant_id, i.quantity]).sort();
+        if (JSON.stringify(currentItems) === JSON.stringify(submittedItems)) cart.clear();
+        appliedCoupon = null;
+        renderOrderConfirmation(order);
+      } catch (error) {
+        errorBanner.textContent = `Previous submission could not be confirmed: ${error.message}`;
+        errorBanner.style.display = 'block';
+        renderCartState(cart.getState());
+      } finally {
+        recovering = false;
+      }
+    });
   }
 
   function close() {
-    modal.classList.remove('is-open');
-    document.body.style.overflow = '';
-    if (onClose) onClose();
+    overlay.close();
   }
+
+  const overlay = createOverlay({ element: modal, onClose: () => onClose?.() });
 
   modal.querySelector('.drawer-backdrop').addEventListener('click', close);
   modal.querySelector('#checkout-close-btn').addEventListener('click', close);
+  capabilities.subscribe(() => renderCartState(cart.getState()));
 
   return {
     element: modal,

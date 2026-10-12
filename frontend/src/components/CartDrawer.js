@@ -1,4 +1,6 @@
+import { createOverlay } from '../utils/overlay.js';
 import { cart } from '../utils/cart.js';
+import { capabilities, CHECKOUT_UNAVAILABLE } from '../utils/capabilities.js';
 import { storeConfig } from '../data/store-config.js';
 import { formatPkr } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
@@ -43,7 +45,8 @@ export function createCartDrawer(onCheckout) {
       <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 16px;">
         Shipping calculated at checkout (${escapeHtml(storeConfig.shippingInfo.standardTime)}).
       </p>
-      <button class="btn btn-primary" id="btn-checkout" style="width: 100%; min-height: 48px;">
+      <p id="checkout-availability" role="status"></p>
+      <button class="btn btn-primary" id="btn-checkout" disabled style="width: 100%; min-height: 48px;">
         Proceed to Checkout
       </button>
     </div>
@@ -158,26 +161,38 @@ export function createCartDrawer(onCheckout) {
     }
   }
 
-  cart.subscribe(render);
+  function renderWithCapabilities(state) {
+    render(state);
+    const availability = capabilities.getState();
+    drawer.querySelector('#checkout-availability').textContent = availability.checkoutEnabled
+      ? 'SAMPLE / TEST checkout. No real orders.' : CHECKOUT_UNAVAILABLE;
+    if (!availability.checkoutEnabled) {
+      const button = drawer.querySelector('#btn-checkout');
+      button.disabled = true;
+      button.textContent = 'Checkout unavailable';
+    }
+  }
+  cart.subscribe(renderWithCapabilities);
+  capabilities.subscribe(() => renderWithCapabilities(cart.getState()));
 
   function open() {
-    backdrop.classList.add('is-open');
-    drawer.classList.add('is-open');
-    document.body.style.overflow = 'hidden';
+    capabilities.refresh();
+    overlay.open();
     // Reconcile with API in background when drawer is opened
     cart.reconcileWithApi();
   }
 
   function close() {
-    backdrop.classList.remove('is-open');
-    drawer.classList.remove('is-open');
-    document.body.style.overflow = '';
+    overlay.close();
   }
+
+  const overlay = createOverlay({ element: drawer, backdrop });
 
   backdrop.addEventListener('click', close);
   drawer.querySelector('#cart-close-btn').addEventListener('click', close);
 
   drawer.querySelector('#btn-checkout').addEventListener('click', () => {
+    if (!capabilities.getState().checkoutEnabled) return;
     close();
     if (onCheckout) {
       onCheckout();

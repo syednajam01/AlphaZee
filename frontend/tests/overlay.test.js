@@ -1,0 +1,53 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createMockElement } from './helpers/dom.js';
+import { createOverlay } from '../src/utils/overlay.js';
+
+test('overlay traps keyboard focus, restores scroll/focus, and cleans up keyboard listeners', () => {
+  const doc = createMockElement('document');
+  doc.body = createMockElement('body');
+  doc.body.style.overflow = 'auto';
+  globalThis.document = doc;
+  const trigger = createMockElement('button');
+  trigger.focus();
+  const root = createMockElement('div');
+  const first = createMockElement('button');
+  const last = createMockElement('button');
+  root.appendChild(first); root.appendChild(last);
+  let closed = 0;
+  const dialog = createOverlay({ element: root, onClose() { closed++; } });
+  assert.equal(root.hidden, true);
+  dialog.open();
+  assert.equal(doc.activeElement, first);
+  last.focus();
+  let prevented = false;
+  doc.dispatchEvent({ type: 'keydown', key: 'Tab', preventDefault() { prevented = true; } });
+  assert.ok(prevented);
+  assert.equal(doc.activeElement, first);
+  doc.dispatchEvent({ type: 'keydown', key: 'Tab', shiftKey: true, preventDefault() {} });
+  assert.equal(doc.activeElement, last);
+  doc.dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() {} });
+  assert.equal(root.hidden, true);
+  assert.equal(root.inert, true);
+  assert.equal(doc.activeElement, trigger);
+  assert.equal(doc.body.style.overflow, 'auto');
+  assert.equal(doc._listeners.keydown.length, 0);
+  assert.equal(closed, 1);
+});
+
+test('opening a second overlay closes the first without losing the scroll lock', () => {
+  const doc = createMockElement('document');
+  doc.body = createMockElement('body');
+  doc.body.style.overflow = '';
+  globalThis.document = doc;
+  const a = createMockElement('div');
+  const b = createMockElement('div');
+  const first = createOverlay({ element: a });
+  const second = createOverlay({ element: b });
+  first.open(); second.open();
+  assert.equal(a.hidden, true);
+  assert.equal(b.hidden, false);
+  assert.equal(doc.body.style.overflow, 'hidden');
+  second.close();
+  assert.equal(doc.body.style.overflow, '');
+});

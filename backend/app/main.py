@@ -2,7 +2,7 @@
 AlphaZee FastAPI application factory.
 
 Architecture rules enforced here:
-- CORS allows only configured origins; only GET methods for this milestone.
+- CORS allows configured origins and explicit methods/headers for the storefront.
 - The /docs and /redoc UIs are available only in development (debug=True).
 - No database tables are created on startup — Alembic owns schema creation.
 - The app is import-safe: all side effects (DB connection, etc.) happen at
@@ -11,10 +11,14 @@ Architecture rules enforced here:
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import admin as admin_router
+from app.api.v1 import auth as auth_router
 from app.api.v1 import catalog as catalog_router
 from app.api.v1 import coupons as coupons_router
 from app.api.v1 import health as health_router
@@ -43,9 +47,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Accept", "Content-Type", "Authorization", "X-Admin-Key", "Idempotency-Key"],
+    allow_headers=["Accept", "Content-Type", "X-CSRF-Token", "Idempotency-Key"],
 )
 
 # ── Routers ───────────────────────────────────────────────────────────────────
@@ -56,6 +60,31 @@ app.include_router(orders_router.router, prefix="/api/v1")
 app.include_router(coupons_router.router, prefix="/api/v1")
 app.include_router(returns_router.router, prefix="/api/v1")
 app.include_router(admin_router.router, prefix="/api/v1")
+app.include_router(auth_router.router, prefix="/api/v1")
+
+
+@app.middleware('http')
+async def private_owner_responses(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(('/api/v1/auth/', '/api/v1/admin/')):
+        response.headers['Cache-Control'] = 'no-store'
+        response.headers['Pragma'] = 'no-cache'
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, error: RequestValidationError):
+    if request.url.path.startswith('/api/v1/auth/'):
+        # Do not reflect passwords from invalid request bodies in errors.
+        return JSONResponse({'detail': 'Invalid login request'}, status_code=422)
+    return await request_validation_exception_handler(request, error)
+
+
+@app.get("/api/v1/storefront/capabilities")
+def storefront_capabilities(response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return {"checkout_enabled": settings.checkout_enabled,
+            "test_mode": settings.checkout_enabled}
 
 
 

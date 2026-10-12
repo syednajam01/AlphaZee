@@ -113,6 +113,15 @@
 }
 
 /* Drawer Backdrop */
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.modal-container[hidden], .drawer[hidden], .drawer-backdrop[hidden] {
+  display: none !important;
+}
+
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -192,6 +201,11 @@
 .modal-container.is-open {
   opacity: 1;
   visibility: visible;
+}
+
+.modal-container.is-open > .drawer-backdrop {
+  visibility: visible;
+  opacity: 1;
 }
 
 .modal-content {

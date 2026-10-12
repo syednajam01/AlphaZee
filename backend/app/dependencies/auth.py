@@ -1,51 +1,58 @@
-"""
-Authentication dependencies for AlphaZee API.
-
-Guards privileged owner administrative endpoints (/api/v1/admin/*).
-"""
-
-from __future__ import annotations
-
+"""Cookie-only owner authorization. Shared API keys never grant access."""
+from dataclasses import dataclass
+import re
 import secrets
-from typing import Optional
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.database import get_db
+from app.models.auth import OwnerCredential, OwnerSession
+from app.models.suppliers import UserAccount
+from app.services.session_store import csrf_token, token_hash, utcnow
 
 
-def require_admin_key(
-    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
-    authorization: Optional[str] = Header(None, alias="Authorization"),
-) -> str:
-    """
-    Enforce admin authentication for privileged endpoints.
+def cookie_name() -> str:
+    return '__Host-alphazee_owner' if settings.is_production else 'alphazee_owner_session'
 
-    Accepts credentials via:
-    1. Custom header: `X-Admin-Key: <token>`
-    2. Standard authorization header: `Authorization: Bearer <token>`
 
-    Uses constant-time comparison (secrets.compare_digest) to prevent timing attacks.
-    Raises 401 Unauthorized if missing, empty, or mismatched.
-    """
-    provided_token: Optional[str] = None
+def require_trusted_origin(request: Request):
+    if request.headers.get('origin') not in settings.allowed_origins:
+        raise HTTPException(403, 'Untrusted or missing request origin')
+    if request.headers.get('sec-fetch-site') == 'cross-site':
+        raise HTTPException(403, 'Cross-site owner requests are not permitted')
 
-    if x_admin_key and x_admin_key.strip():
-        provided_token = x_admin_key.strip()
-    elif authorization and authorization.strip():
-        parts = authorization.strip().split()
-        if len(parts) == 2 and parts[0].lower() == "bearer":
-            provided_token = parts[1]
-        elif len(parts) == 1:
-            provided_token = parts[0]
 
-    expected_token = settings.admin_api_key
+def require_session_token(request: Request) -> str:
+    token = request.cookies.get(cookie_name(), '')
+    if not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
+        raise HTTPException(401, 'Invalid or missing owner session')
+    return token
 
-    if not provided_token or not secrets.compare_digest(provided_token, expected_token):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing admin authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
-    return provided_token
+@dataclass
+class OwnerPrincipal:
+    session: OwnerSession
+    owner: OwnerCredential
+    token: str
+
+
+def require_owner_session(request: Request, token: str = Depends(require_session_token),
+                          db: Session = Depends(get_db)) -> OwnerPrincipal:
+    statement = (select(OwnerSession, OwnerCredential)
+        .join(OwnerCredential, OwnerCredential.user_id == OwnerSession.user_id)
+        .join(UserAccount, UserAccount.id == OwnerCredential.user_id)
+        .where(OwnerSession.token_hash == token_hash(token), OwnerSession.revoked_at.is_(None),
+               OwnerSession.expires_at > utcnow(), OwnerCredential.enabled.is_(True), UserAccount.is_active.is_(True)))
+    if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+        require_trusted_origin(request)
+        supplied = request.headers.get('x-csrf-token', '')
+        if not secrets.compare_digest(supplied, csrf_token(token)):
+            raise HTTPException(403, 'Invalid or missing CSRF token')
+        statement = statement.with_for_update(of=OwnerSession)
+    row = db.execute(statement).first()
+    if row is None:
+        raise HTTPException(401, 'Invalid or missing owner session')
+    return OwnerPrincipal(session=row[0], owner=row[1], token=token)
