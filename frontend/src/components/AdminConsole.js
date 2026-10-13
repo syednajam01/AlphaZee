@@ -7,12 +7,17 @@ import {
   fetchAdminOrders,
   verifyOrderPayment,
   confirmSupplierAcceptance,
-  cancelExpiredOrders,
+  reviewExpiredOrders,
+  fetchPaymentInstructionsPreview,
+  markPaymentInstructionsSent,
+  resolvePaymentReview,
   deliverOrder,
   cancelOrder,
   initiateOrderRto,
   receiveOrderRto,
   inspectAndRestockRtoOrder,
+  previewLegacyShipmentStock,
+  reconcileLegacyShipmentStock,
   dispatchAdminOrder,
   updateAdminShipmentStatus,
   recordAdminCodRemittance,
@@ -25,6 +30,8 @@ import {
   deleteAdminCoupon,
   fetchAdminReturns,
   approveAdminReturn,
+  receiveAdminReturn,
+  inspectAdminReturn,
   completeAdminReturn,
   rejectAdminReturn,
   fetchAdminMarketingAnalytics,
@@ -430,6 +437,7 @@ export function createAdminConsoleModal() {
 
   // 2. Orders Tab
   async function renderOrdersTab(container) {
+    await reviewExpiredOrders();
     const res = await fetchAdminOrders();
     const orders = res.orders || [];
 
@@ -466,9 +474,12 @@ export function createAdminConsoleModal() {
             <span style="font-size: 0.7rem; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: ${isPaid ? 'rgba(74, 222, 128, 0.2)' : 'rgba(251, 191, 36, 0.2)'}; color: ${isPaid ? '#4ADE80' : '#FBBF24'};">
               ${escapeHtml(o.payment_method)} (${escapeHtml(o.payment_status)})
             </span>
+            ${isBank && o.payment_review_status === 'required' ? '<div style="color: #FBBF24; font-size: 0.7rem;">Payment review required; stock reserved</div>' : ''}
+            ${isBank && o.payment_instructions_sent_at ? `<div style="font-size: 0.7rem;">Instructions sent ${escapeHtml(new Date(o.payment_instructions_sent_at).toLocaleString())}${o.payment_instructions_channel ? ` via ${escapeHtml(o.payment_instructions_channel)}` : ''}</div>` : ''}
+            ${isBank && o.payment_deadline_at ? `<div style="font-size: 0.7rem;">Deadline ${escapeHtml(new Date(o.payment_deadline_at).toLocaleString())}</div>` : ''}
           </td>
           <td style="padding: 12px 8px; text-align: right;">
-            ${!isPaid && isBank && !isCancelled ? `
+            ${!isPaid && isBank && !isCancelled && o.payment_review_status !== 'required' ? `
               <button class="btn btn-primary btn-verify-payment" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
                 Verify Bank Transfer
               </button>
@@ -478,7 +489,14 @@ export function createAdminConsoleModal() {
                 Confirm Supplier
               </button>
             ` : ''}
-            ${o.order_status === 'confirmed' && !hasShipment && !isCancelled ? `
+            ${isBank && o.order_status === 'confirmed' && !isPaid && !o.payment_instructions_sent_at && o.payment_review_status !== 'required' ? `
+              <button class="btn btn-secondary btn-prepare-instructions" data-order-id="${o.id}">Prepare Instructions</button>
+            ` : ''}
+            ${isBank && o.payment_review_status === 'required' ? `
+              <button class="btn btn-secondary btn-resolve-payment" data-order-id="${o.id}">Resolve Payment Review</button>
+            ` : ''}
+            ${shipment?.stock_reconciliation_status === 'legacy_review' ? `<button class="btn btn-secondary btn-reconcile-stock" data-shipment-id="${shipment.id}" style="padding: 4px 8px; font-size: .7rem; color: #FBBF24;">Review Legacy Stock</button>` : ''}
+            ${o.order_status === 'confirmed' && !hasShipment && !isCancelled && (!isBank || isPaid) ? `
               <button class="btn btn-secondary btn-dispatch-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
                 Dispatch Courier
               </button>
@@ -488,17 +506,17 @@ export function createAdminConsoleModal() {
                 Initiate RTO
               </button>
             ` : ''}
-            ${o.order_status === 'rto' && (!shipment || shipment.status === 'rto_initiated') ? `
+            ${o.order_status === 'rto' && shipment?.status === 'rto_initiated' && shipment.stock_reconciliation_status !== 'legacy_review' ? `
               <button class="btn btn-primary btn-rto-receive" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; background: #E11D48; border-color: #E11D48;">
                 Confirm RTO Received
               </button>
             ` : ''}
-            ${o.order_status === 'rto' && shipment && shipment.status === 'rto_delivered' && !shipment.rto_restocked_at ? `
+            ${o.order_status === 'rto' && shipment && shipment.status === 'rto_delivered' && shipment.stock_reconciliation_status !== 'legacy_review' && !shipment.rto_restocked_at ? `
               <button class="btn btn-secondary btn-rto-inspect" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; color: #38BDF8; border-color: rgba(56, 189, 248, 0.4);">
                 Inspect & Restock
               </button>
             ` : ''}
-            ${!isCancelled && !isDelivered && o.order_status !== 'dispatched' && o.order_status !== 'rto' ? `
+            ${!isCancelled && !isDelivered && o.order_status !== 'dispatched' && o.order_status !== 'rto' && !(isBank && (isPaid || o.payment_review_status === 'required' || (o.payment_deadline_at && new Date(o.payment_deadline_at) <= new Date()))) ? `
               <button class="btn btn-secondary btn-cancel-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; color: #F87171; border-color: rgba(248, 113, 113, 0.3);">
                 Cancel
               </button>
@@ -510,8 +528,8 @@ export function createAdminConsoleModal() {
 
     container.innerHTML = `
       <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
-        <button id="btn-purge-expired-orders" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
-          🧹 Cancel Expired Bank Orders (>4h)
+        <button id="btn-review-expired-orders" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
+          Check Expired Bank Transfers
         </button>
       </div>
       <div style="overflow-x: auto;">
@@ -529,22 +547,97 @@ export function createAdminConsoleModal() {
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
+      <div id="payment-workflow-panel" role="region" aria-live="polite"></div>
     `;
 
-    const purgeBtn = container.querySelector('#btn-purge-expired-orders');
+    const purgeBtn = container.querySelector('#btn-review-expired-orders');
     if (purgeBtn) {
       purgeBtn.addEventListener('click', async () => {
         purgeBtn.disabled = true;
         try {
-          const res = await cancelExpiredOrders();
-          alert(`Cancelled ${res.cancelled_count || 0} expired unpaid bank orders.`);
+          await reviewExpiredOrders();
           await loadActiveTabData();
         } catch (err) {
-          alert(err.message || 'Failed to cancel expired orders');
+          container.querySelector('#payment-workflow-panel').textContent = err.message || 'Failed to check expired transfers';
           purgeBtn.disabled = false;
         }
       });
     }
+
+    const workflowPanel = container.querySelector('#payment-workflow-panel');
+    container.querySelectorAll('.btn-prepare-instructions').forEach(button => {
+      button.addEventListener('click', async () => {
+        const orderId = button.getAttribute('data-order-id');
+        button.disabled = true;
+        workflowPanel.textContent = 'Loading payment instructions...';
+        try {
+          const preview = await fetchPaymentInstructionsPreview(orderId);
+          workflowPanel.innerHTML = `
+            <form id="instructions-sent-form" style="margin-top: 16px; padding: 16px; border: 1px solid rgba(255,255,255,.2);">
+              <h3>Bank instructions for ${escapeHtml(preview.order_number)}</h3>
+              <p>Amount: ${escapeHtml(formatPkr(preview.total_minor))}</p>
+              <p>Bank: ${escapeHtml(preview.bank_name)}<br>Account title: ${escapeHtml(preview.account_title)}<br>Account number: ${escapeHtml(preview.account_number)}<br>IBAN: ${escapeHtml(preview.iban)}</p>
+              <p>Send these details through your normal customer channel. Record the handoff only after it succeeds.</p>
+              <label>Channel <select name="channel" required><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="email">Email</option><option value="phone">Phone</option><option value="other">Other</option></select></label>
+              <label>Delivery reference <input name="reference" required minlength="3" maxlength="200" placeholder="Message ID or call reference"></label>
+              <label><input type="checkbox" name="confirmed_sent" required> I have sent these instructions successfully</label>
+              <button type="submit" class="btn btn-primary">Record successful handoff</button>
+              <p class="payment-workflow-feedback" role="status"></p>
+            </form>`;
+          workflowPanel.querySelector('form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const submit = form.querySelector('button[type="submit"]');
+            submit.disabled = true;
+            try {
+              await markPaymentInstructionsSent(orderId, {
+                channel: form.elements.channel.value,
+                reference: form.elements.reference.value.trim(),
+              });
+              await loadActiveTabData();
+            } catch (error) {
+              form.querySelector('.payment-workflow-feedback').textContent = error.message || 'Unable to record handoff';
+              submit.disabled = false;
+            }
+          });
+        } catch (error) {
+          workflowPanel.textContent = error.message || 'Unable to load payment instructions';
+          button.disabled = false;
+        }
+      });
+    });
+
+    container.querySelectorAll('.btn-resolve-payment').forEach(button => {
+      button.addEventListener('click', () => {
+        const orderId = button.getAttribute('data-order-id');
+        workflowPanel.innerHTML = `
+          <form id="payment-review-form" style="margin-top: 16px; padding: 16px; border: 1px solid rgba(255,255,255,.2);">
+            <h3>Review expired bank transfer</h3>
+            <p>Check the bank account for received or pending funds before choosing a resolution. Stock stays reserved until this review is complete.</p>
+            <label><input type="checkbox" name="funds_checked" required> I checked received and pending funds</label>
+            <label>Resolution <select name="resolution" required><option value="payment_received">Payment received — verify and retain order</option><option value="release_unpaid">No payment — cancel and release stock</option></select></label>
+            <label>Review note <textarea name="note" required minlength="5" maxlength="500"></textarea></label>
+            <button type="submit" class="btn btn-primary">Save review decision</button>
+            <p class="payment-workflow-feedback" role="status"></p>
+          </form>`;
+        workflowPanel.querySelector('form').addEventListener('submit', async event => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          const submit = form.querySelector('button[type="submit"]');
+          submit.disabled = true;
+          try {
+            await resolvePaymentReview(orderId, {
+              resolution: form.elements.resolution.value,
+              note: form.elements.note.value.trim(),
+            });
+            await loadActiveTabData();
+          } catch (error) {
+            form.querySelector('.payment-workflow-feedback').textContent = error.message || 'Unable to resolve payment review';
+            submit.disabled = false;
+          }
+        });
+      });
+    });
 
     container.querySelectorAll('.btn-verify-payment').forEach(b => {
       b.addEventListener('click', async () => {
@@ -577,6 +670,39 @@ export function createAdminConsoleModal() {
       });
     });
 
+    container.querySelectorAll('.btn-reconcile-stock').forEach(b => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        const shipmentId = b.getAttribute('data-shipment-id');
+        const preview = await previewLegacyShipmentStock(shipmentId);
+        if (preview.shipment_count !== 1 || !preview.lines?.length) {
+          throw new Error('Historical allocations are ambiguous. Review the data before reconciliation.');
+        }
+        const lines = [];
+        for (const line of preview.lines) {
+          const answer = prompt(`Reservation ${line.reservation_id}: ${line.quantity} units at supplier variant ${line.supplier_variant_id}. Was physical stock already deducted? Enter YES or NO:`, '');
+          if (answer === null) return;
+          const decision = answer.trim().toUpperCase();
+          if (!['YES', 'NO'].includes(decision)) throw new Error('Enter YES or NO for each historical reservation.');
+          const received = preview.status === 'rto_delivered'
+            ? prompt(`Actual RTO units received for this reservation (0-${line.quantity}):`, '0') : null;
+          if (preview.status === 'rto_delivered' && received === null) return;
+          const receivedQuantity = received === null ? undefined : Number(received);
+          if (received !== null && (!Number.isInteger(receivedQuantity) || receivedQuantity < 0 || receivedQuantity > line.quantity)) {
+            throw new Error('Received quantity must be a whole number within the dispatched quantity.');
+          }
+          lines.push({ reservation_id: line.reservation_id, physical_deducted: decision === 'YES',
+            ...(receivedQuantity === undefined ? {} : { received_quantity: receivedQuantity }) });
+        }
+        const note = prompt('Record how you verified these historical physical stock decisions (at least 5 characters):', '');
+        if (note === null) return;
+        if (note.trim().length < 5) throw new Error('A verification note of at least 5 characters is required.');
+        await reconcileLegacyShipmentStock(shipmentId, { lines, note: note.trim() });
+        await loadActiveTabData();
+      } catch (error) { alert(error.message || 'Stock reconciliation failed'); }
+      finally { b.disabled = false; }
+    }));
+
     container.querySelectorAll('.btn-rto-order').forEach(b => {
       b.addEventListener('click', async () => {
         const orderId = b.getAttribute('data-order-id');
@@ -599,10 +725,23 @@ export function createAdminConsoleModal() {
     container.querySelectorAll('.btn-rto-receive').forEach(b => {
       b.addEventListener('click', async () => {
         const orderId = b.getAttribute('data-order-id');
-        if (confirm('Confirm parcel has arrived back at store?')) {
+        const order = orders.find(item => item.id === orderId);
+        const lines = [];
+        for (const allocation of order.shipments?.[0]?.allocations || []) {
+          const line = order.lines.find(item => item.id === allocation.order_line_id);
+          const value = prompt(`Received quantity for ${line?.product_title || 'item'} (dispatched ${allocation.quantity}; 0 if missing):`, String(allocation.quantity));
+          if (value === null) return;
+          const quantity = Number(value);
+          if (!Number.isInteger(quantity) || quantity < 0 || quantity > allocation.quantity) {
+            alert('Enter a whole number within the dispatched quantity.');
+            return;
+          }
+          lines.push({ order_line_id: allocation.order_line_id, received_quantity: quantity });
+        }
+        if (lines.length && confirm('Record these received units in quarantine for inspection?')) {
           b.disabled = true;
           try {
-            await receiveOrderRto(orderId);
+            await receiveOrderRto(orderId, lines);
             await loadActiveTabData();
           } catch (err) {
             alert(err.message || 'Failed to confirm RTO receipt');
@@ -615,12 +754,27 @@ export function createAdminConsoleModal() {
     container.querySelectorAll('.btn-rto-inspect').forEach(b => {
       b.addEventListener('click', async () => {
         const orderId = b.getAttribute('data-order-id');
-        const pass = confirm('Did the returned parcel pass physical condition inspection? Click OK if in resalable condition (restocks inventory), or Cancel if damaged/soiled.');
-        const notes = prompt('Enter inspection notes (optional):', pass ? 'Physical condition verified pristine' : 'Item damaged during courier transit');
+        const order = orders.find(item => item.id === orderId);
+        const lines = [];
+        for (const allocation of order.shipments?.[0]?.allocations || []) {
+          const line = order.lines.find(item => item.id === allocation.order_line_id);
+          const sellableInput = prompt(`Cumulative sellable quantity for ${line?.product_title || 'item'} (received ${allocation.received_quantity}):`, String(allocation.sellable_quantity));
+          if (sellableInput === null) return;
+          const damagedInput = prompt(`Cumulative damaged quantity for ${line?.product_title || 'item'}:`, String(allocation.damaged_quantity));
+          if (damagedInput === null) return;
+          const sellable = Number(sellableInput);
+          const damaged = Number(damagedInput);
+          if (![sellable, damaged].every(Number.isInteger) || sellable < allocation.sellable_quantity || damaged < allocation.damaged_quantity || sellable + damaged > allocation.received_quantity) {
+            alert('Enter nondecreasing whole quantities within the received quantity.');
+            return;
+          }
+          lines.push({ order_line_id: allocation.order_line_id, sellable_quantity: sellable, damaged_quantity: damaged });
+        }
+        const notes = prompt('Inspection notes (required for damaged units):', '');
         if (notes !== null) {
           b.disabled = true;
           try {
-            await inspectAndRestockRtoOrder(orderId, { condition_ok: pass, notes });
+            await inspectAndRestockRtoOrder(orderId, { lines, notes });
             await loadActiveTabData();
           } catch (err) {
             alert(err.message || 'Failed to complete RTO inspection');
@@ -842,14 +996,18 @@ export function createAdminConsoleModal() {
           <span class="badge ${r.status === 'completed' ? 'badge-accent' : r.status === 'approved' ? 'badge-primary' : 'badge-neutral'}" style="font-size: 0.65rem; text-transform: capitalize;">
             ${escapeHtml(r.status)}
           </span>
+          <div style="font-size: 0.7rem; color: rgba(255,255,255,.65);">Requested ${r.quantity ?? '?'} · received ${r.received_quantity} · sellable ${r.sellable_quantity} · damaged ${r.damaged_quantity}</div>
+          ${r.inspection_state === 'legacy_review' ? '<div style="color: #FBBF24; font-size: .7rem;">Historical return needs reconciliation</div>' : ''}
         </td>
         <td style="padding: 12px 8px; text-align: right;">
           ${r.status === 'requested' ? `
             <button class="btn btn-primary btn-approve-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">Approve</button>
             <button class="btn btn-secondary btn-reject-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: 0.7rem; color: #F87171;">Reject</button>
           ` : ''}
-          ${r.status === 'approved' ? `
-            <button class="btn btn-primary btn-complete-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: 0.7rem;">Complete & Restock</button>
+          ${['approved', 'item_received', 'inspected_passed'].includes(r.status) ? `
+            ${r.status === 'approved' && r.inspection_state !== 'legacy_review' && r.received_quantity === 0 ? `<button class="btn btn-secondary btn-receive-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Record Receipt</button>` : ''}
+            ${r.inspection_state !== 'legacy_review' && r.received_quantity > r.sellable_quantity + r.damaged_quantity ? `<button class="btn btn-secondary btn-inspect-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Inspect Units</button>` : ''}
+            ${r.received_quantity > 0 && r.sellable_quantity + r.damaged_quantity === r.received_quantity ? `<button class="btn btn-primary btn-complete-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: 0.7rem;">Complete Return</button>` : ''}
           ` : ''}
         </td>
       </tr>
@@ -881,8 +1039,8 @@ export function createAdminConsoleModal() {
       b.addEventListener('click', async () => {
         const id = b.getAttribute('data-ret-id');
         b.disabled = true;
-        await approveAdminReturn(id);
-        await loadActiveTabData();
+        try { await approveAdminReturn(id); await loadActiveTabData(); }
+        catch (error) { alert(error.message || 'Failed to approve return'); b.disabled = false; }
       });
     });
 
@@ -890,8 +1048,8 @@ export function createAdminConsoleModal() {
       b.addEventListener('click', async () => {
         const id = b.getAttribute('data-ret-id');
         b.disabled = true;
-        await rejectAdminReturn(id);
-        await loadActiveTabData();
+        try { await rejectAdminReturn(id); await loadActiveTabData(); }
+        catch (error) { alert(error.message || 'Failed to reject return'); b.disabled = false; }
       });
     });
 
@@ -901,11 +1059,48 @@ export function createAdminConsoleModal() {
         const ref = prompt('Enter Bank Refund Reference / Transaction ID (or leave blank for physical exchange):', 'MEZN-REF-');
         if (ref !== null) {
           b.disabled = true;
-          await completeAdminReturn(id, { refund_reference: ref.trim(), should_restock: true });
-          await loadActiveTabData();
+          try {
+            await completeAdminReturn(id, { refund_reference: ref.trim(), should_restock: true });
+            await loadActiveTabData();
+          } catch (error) { alert(error.message || 'Failed to complete return'); b.disabled = false; }
         }
       });
     });
+
+    container.querySelectorAll('.btn-receive-ret').forEach(b => b.addEventListener('click', async () => {
+      const ret = returns.find(item => item.id === b.getAttribute('data-ret-id'));
+      const value = prompt(`Cumulative received quantity (requested ${ret.quantity}):`, String(ret.quantity));
+      if (value === null) return;
+      const quantity = Number(value);
+      if (!Number.isInteger(quantity) || quantity < ret.received_quantity || quantity > ret.quantity) {
+        alert('Enter a whole quantity between the previous receipt and requested quantity.');
+        return;
+      }
+      b.disabled = true;
+      try { await receiveAdminReturn(ret.id, quantity); await loadActiveTabData(); }
+      catch (error) { alert(error.message || 'Failed to record receipt'); b.disabled = false; }
+    }));
+
+    container.querySelectorAll('.btn-inspect-ret').forEach(b => b.addEventListener('click', async () => {
+      const ret = returns.find(item => item.id === b.getAttribute('data-ret-id'));
+      const sellableInput = prompt(`Cumulative sellable quantity (received ${ret.received_quantity}):`, String(ret.sellable_quantity));
+      if (sellableInput === null) return;
+      const damagedInput = prompt('Cumulative damaged quantity:', String(ret.damaged_quantity));
+      if (damagedInput === null) return;
+      const sellable = Number(sellableInput);
+      const damaged = Number(damagedInput);
+      if (![sellable, damaged].every(Number.isInteger) || sellable < ret.sellable_quantity || damaged < ret.damaged_quantity || sellable + damaged > ret.received_quantity) {
+        alert('Enter nondecreasing whole quantities within the received quantity.');
+        return;
+      }
+      const notes = prompt('Inspection findings:', '');
+      if (notes === null) return;
+      b.disabled = true;
+      try {
+        await inspectAdminReturn(ret.id, { sellable_quantity: sellable, damaged_quantity: damaged, notes });
+        await loadActiveTabData();
+      } catch (error) { alert(error.message || 'Failed to record inspection'); b.disabled = false; }
+    }));
   }
 
   // 6. Suppliers Tab

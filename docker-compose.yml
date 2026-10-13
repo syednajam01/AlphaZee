@@ -1,7 +1,4 @@
-# docker-compose.yml — Local development services for AlphaZee.
-# Purpose: provide a disposable PostgreSQL instance for development and testing.
-# Production databases are managed separately on Azure — do not use this file
-# in any production or staging context.
+# Local development stack. Production uses compose.prod.yml and a separate project/volume.
 
 services:
   db:
@@ -23,6 +20,63 @@ services:
       retries: 10
       start_period: 10s
 
+  migrate:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://alphazee:changeme@db:5432/alphazee_dev
+      APP_ENV: development
+      DEBUG: "false"
+      TEST_CHECKOUT_ENABLED: "false"
+      ALLOWED_ORIGINS: http://localhost:${WEB_PORT:-3000},http://127.0.0.1:${WEB_PORT:-3000}
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://alphazee:changeme@db:5432/alphazee_dev
+      APP_ENV: development
+      DEBUG: "true"
+      TEST_CHECKOUT_ENABLED: "false"
+      ALLOWED_ORIGINS: http://localhost:${WEB_PORT:-3000},http://127.0.0.1:${WEB_PORT:-3000}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-proxy-headers"]
+    volumes:
+      - ./backend:/app
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      target: development
+    environment:
+      VITE_HOST: 0.0.0.0
+      VITE_API_PROXY_TARGET: http://api:8000
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0"]
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
 volumes:
   pgdata:
     driver: local
+  frontend_node_modules:

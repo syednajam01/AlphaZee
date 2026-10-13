@@ -3,7 +3,7 @@ import { fetchStorefrontCapabilities } from './api.js';
 export const CHECKOUT_UNAVAILABLE = 'Checkout is temporarily unavailable. You can still browse and save your cart.';
 
 export function createCapabilitiesStore(fetchCapabilities = fetchStorefrontCapabilities) {
-  let state = { checkoutEnabled: false, testMode: false };
+  let state = { checkoutEnabled: false, testMode: false, paymentMethods: ['cod'] };
   let pending = null;
   const listeners = new Set();
   function publish(next) {
@@ -19,12 +19,14 @@ export function createCapabilitiesStore(fetchCapabilities = fetchStorefrontCapab
     },
     refresh() {
       if (pending) return pending;
-      publish({ checkoutEnabled: false, testMode: false });
+      publish({ checkoutEnabled: false, testMode: false, paymentMethods: ['cod'] });
       pending = Promise.resolve().then(fetchCapabilities).then(data => {
         const enabled = data?.checkout_enabled === true && data?.test_mode === true;
-        publish({ checkoutEnabled: enabled, testMode: enabled });
+        const paymentMethods = Array.isArray(data?.payment_methods)
+          ? data.payment_methods.filter(method => method === 'cod' || method === 'bank_transfer') : ['cod'];
+        publish({ checkoutEnabled: enabled, testMode: enabled, paymentMethods });
       }).catch(() => {
-        publish({ checkoutEnabled: false, testMode: false });
+        publish({ checkoutEnabled: false, testMode: false, paymentMethods: ['cod'] });
       }).finally(() => { pending = null; });
       return pending;
     },

@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import uuid
 import pytest
+
+pytestmark = pytest.mark.usefixtures("configured_bank")
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
 from app.models.inventory import InventoryBalance, SupplierVariant
 from app.models.suppliers import Supplier
+from app.models.suppliers import UserAccount
+from app.services.orders import confirm_supplier_acceptance, record_payment_instructions_sent
 from app.models.orders import Order, OrderLine
 from app.models.inventory import StockReservation
 from app.queries.inventory import adjust_inventory
@@ -210,7 +214,7 @@ def test_post_order_cod_success(client, db_session):
     assert data["bank_instructions"] is None
 
 
-def test_post_order_bank_transfer_includes_instructions(client, db_session):
+def test_post_order_bank_transfer_waits_for_instructions(client, db_session):
     item = _create_catalog_item(db_session, on_hand=3, price_minor=350000)
 
     payload = {
@@ -231,10 +235,8 @@ def test_post_order_bank_transfer_includes_instructions(client, db_session):
 
     assert data["customer_phone"] == "03001234567"  # Normalized
     assert data["payment_method"] == "bank_transfer"
-    assert data["payment_deadline_at"] is not None
-    assert data["bank_instructions"] is not None
-    assert "Meezan Bank" in data["bank_instructions"]["bank_name"]
-    assert settings.bank_iban in data["bank_instructions"]["iban"]
+    assert data["payment_deadline_at"] is None
+    assert data["bank_instructions"] is None
 
 
 def test_post_order_insufficient_stock_returns_409(client, db_session):
@@ -292,6 +294,12 @@ def test_receipt_upload_and_tracking(client, db_session):
     order_res = _post_order(client, order_payload)
     assert order_res.status_code == 201
     order_num = order_res.json()["order_number"]
+    owner = UserAccount(auth_subject=f'SAMPLE-order-{uuid.uuid4().hex}', display_name='SAMPLE Owner')
+    db_session.add(owner)
+    db_session.flush()
+    confirm_supplier_acceptance(db_session, order_id=uuid.UUID(order_res.json()['id']))
+    record_payment_instructions_sent(db_session, order_id=uuid.UUID(order_res.json()['id']),
+                                     actor_user_id=owner.id, channel='sms', reference='SAMPLE-message-123')
 
     # 2. Upload receipt proof
     receipt_payload = {

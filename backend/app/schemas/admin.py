@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -132,12 +132,22 @@ class ShipmentCreateRequest(BaseModel):
     tracking_url: Optional[str] = Field(default=None, max_length=512, description="Direct web tracking link")
 
 
+class RtoReceivedLine(BaseModel):
+    order_line_id: uuid.UUID
+    received_quantity: int = Field(ge=0)
+
+
+class RtoReceivedRequest(BaseModel):
+    lines: list[RtoReceivedLine] = Field(min_length=1)
+
+
 class ShipmentStatusUpdateRequest(BaseModel):
     """Payload to update delivery status or record RTO."""
 
     status: str = Field(description="New status: in_transit, out_for_delivery, delivered, rto_initiated, rto_delivered")
     rto_reason: Optional[str] = Field(default=None, max_length=200, description="Customer refusal or address issue reason")
     rto_courier_cost_minor: int = Field(default=0, ge=0, description="Courier return penalty charge in paisas")
+    received_lines: Optional[list[RtoReceivedLine]] = None
 
 
 class OrderRtoInitiateRequest(BaseModel):
@@ -147,11 +157,28 @@ class OrderRtoInitiateRequest(BaseModel):
     rto_courier_cost_minor: int = Field(default=0, ge=0, description="Estimated or charged RTO courier shipping fee in paisas")
 
 
-class RtoInspectionRequest(BaseModel):
-    """Payload to record physical condition inspection and restock an RTO parcel."""
+class RtoInspectionLine(BaseModel):
+    order_line_id: uuid.UUID
+    sellable_quantity: int = Field(ge=0)
+    damaged_quantity: int = Field(ge=0)
 
-    condition_ok: bool = Field(description="True if item passed physical inspection and can be returned to inventory")
+
+class RtoInspectionRequest(BaseModel):
+    """Cumulative line dispositions; any remainder stays quarantined."""
+
+    lines: list[RtoInspectionLine] = Field(min_length=1)
     notes: Optional[str] = Field(default=None, max_length=500, description="Inspection findings or defect/damage notes")
+
+
+class LegacyStockDecision(BaseModel):
+    reservation_id: uuid.UUID
+    physical_deducted: bool
+    received_quantity: Optional[int] = Field(default=None, ge=0)
+
+
+class LegacyShipmentReconcileRequest(BaseModel):
+    lines: list[LegacyStockDecision] = Field(min_length=1)
+    note: str = Field(min_length=5, max_length=500)
 
 
 class CodRemittanceRequest(BaseModel):
@@ -176,6 +203,7 @@ class ShipmentAdminResponseSchema(BaseModel):
     tracking_url: Optional[str] = None
     shipping_cost_minor: int
     status: str
+    stock_reconciliation_status: str = 'ready'
     cod_amount_minor: int
     cod_remitted_amount_minor: int
     remittance_amount_minor: int = 0
@@ -243,6 +271,19 @@ class SupplierAcceptanceRequest(BaseModel):
     """Payload to record operational supplier acceptance for order fulfillment."""
 
     notes: Optional[str] = Field(default=None, max_length=500, description="Supplier / warehouse acceptance notes")
+
+
+class PaymentInstructionsSentRequest(BaseModel):
+    confirmed_sent: Literal[True] = Field(description='Owner confirms the instructions reached the customer')
+    channel: Literal['whatsapp', 'sms', 'email', 'phone', 'other']
+    reference: str = Field(min_length=3, max_length=200,
+                           description='Message ID, recipient or other handoff reference')
+
+
+class PaymentReviewResolutionRequest(BaseModel):
+    funds_checked: Literal[True] = Field(description='Owner checked received and pending bank funds')
+    resolution: Literal['payment_received', 'release_unpaid']
+    note: str = Field(min_length=5, max_length=500)
 
 
 

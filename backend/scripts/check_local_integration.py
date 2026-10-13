@@ -29,7 +29,7 @@ for origin in ['http://127.0.0.1:8000', 'http://127.0.0.1:3000']:
         if path.endswith('/ready'):
             assert data == {'status': 'ready', 'database': 'connected'}
         if path.endswith('/capabilities'):
-            assert data == {'checkout_enabled': False, 'test_mode': False}
+            assert data == {'checkout_enabled': False, 'test_mode': False, 'payment_methods': ['cod']}
         results.append({'url': origin + path, 'status': status, 'response': data})
     # Empty payload cannot create an order, even if the gate regresses.
     status, body = fetch(origin + '/api/v1/orders', method='POST', payload=b'{}')

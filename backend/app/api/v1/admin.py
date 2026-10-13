@@ -36,6 +36,8 @@ from app.schemas.admin import (
     OrderRtoInitiateRequest,
     ProfitLossResponseSchema,
     RtoInspectionRequest,
+    RtoReceivedRequest,
+    LegacyShipmentReconcileRequest,
     ShipmentAdminResponseSchema,
     ShipmentCreateRequest,
     ShipmentStatusUpdateRequest,
@@ -45,6 +47,8 @@ from app.schemas.admin import (
     SupplierVariantAssignRequest,
     SupplierVariantResponseSchema,
     SupplierAcceptanceRequest,
+    PaymentInstructionsSentRequest,
+    PaymentReviewResolutionRequest,
 )
 from app.schemas.catalog import CurrencyAmount
 from app.schemas.orders import OrderResponseSchema
@@ -52,21 +56,28 @@ from app.schemas.promotions import CouponCreateRequest, CouponResponseSchema
 from app.schemas.returns import (
     OrderReturnApproveRequest,
     OrderReturnCompleteRequest,
+    OrderReturnReceiveRequest,
+    OrderReturnInspectRequest,
     OrderReturnResponseSchema,
 )
 from app.services.analytics import get_marketing_attribution_summary, get_profit_loss_summary
 from app.services.orders import (
     OrderNotCancellableError,
-    cancel_expired_bank_orders,
+    mark_expired_bank_orders_for_review,
     cancel_order,
     confirm_supplier_acceptance,
     deliver_order,
+    preview_bank_instructions,
+    record_payment_instructions_sent,
+    resolve_payment_review,
     verify_bank_payment,
 )
 from app.services.promotions import create_coupon, delete_coupon, list_coupons
 from app.services.returns import (
     approve_return_request,
     complete_return_and_restock,
+    receive_return_items,
+    inspect_return_items,
     list_order_returns,
     reject_return_request,
 )
@@ -82,6 +93,8 @@ from app.services.shipments import (
     receive_rto_parcel,
     record_cod_remittance,
     update_shipment_status,
+    preview_legacy_stock,
+    reconcile_legacy_stock,
 )
 from app.dependencies.auth import OwnerPrincipal, require_owner_session
 
@@ -247,16 +260,13 @@ def verify_payment_endpoint(
     order_id: uuid.UUID,
     receipt_id: Optional[uuid.UUID] = Query(None),
     db: Session = Depends(get_db),
+    principal: OwnerPrincipal = Depends(require_owner_session),
 ) -> OrderResponseSchema:
-    # Resolve or create an owner user ID for audit
-    admin_user = db.scalars(select(UserAccount)).first()
-    admin_user_id = admin_user.id if admin_user else uuid.uuid4()
-
     try:
         order = verify_bank_payment(
             db,
             order_id=order_id,
-            verified_by_user_id=admin_user_id,
+            verified_by_user_id=principal.owner.user_id,
             receipt_id=receipt_id,
         )
         db.commit()
@@ -300,19 +310,55 @@ def confirm_supplier_endpoint(
     return _order_to_response(order)
 
 
-@router.post(
-    "/orders/cancel-expired",
-    summary="Cancel placed bank transfer orders that exceeded the 4-hour payment window",
-)
-def cancel_expired_orders_endpoint(
+@router.get('/orders/{order_id}/payment-instructions-preview')
+def payment_instructions_preview_endpoint(order_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+    try:
+        return preview_bank_instructions(db, order_id)
+    except ValueError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+
+
+@router.post('/orders/{order_id}/instructions-sent', response_model=OrderResponseSchema)
+def instructions_sent_endpoint(order_id: uuid.UUID, payload: PaymentInstructionsSentRequest,
+                               db: Session = Depends(get_db),
+                               principal: OwnerPrincipal = Depends(require_owner_session)) -> OrderResponseSchema:
+    try:
+        order = record_payment_instructions_sent(db, order_id=order_id,
+            actor_user_id=principal.owner.user_id, channel=payload.channel, reference=payload.reference)
+        db.commit()
+        db.refresh(order)
+        return _order_to_response(order)
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+
+
+@router.post('/orders/review-expired', summary='Flag expired unpaid bank transfers for owner review')
+def review_expired_orders_endpoint(
     db: Session = Depends(get_db),
 ) -> dict:
-    cancelled_orders = cancel_expired_bank_orders(db)
+    review_orders = mark_expired_bank_orders_for_review(db)
     db.commit()
     return {
-        "cancelled_count": len(cancelled_orders),
-        "cancelled_order_ids": [str(o.id) for o in cancelled_orders],
+        'review_count': len(review_orders),
+        'review_order_ids': [str(order.id) for order in review_orders],
     }
+
+
+@router.post('/orders/{order_id}/payment-review', response_model=OrderResponseSchema)
+def resolve_payment_review_endpoint(order_id: uuid.UUID, payload: PaymentReviewResolutionRequest,
+                                    db: Session = Depends(get_db),
+                                    principal: OwnerPrincipal = Depends(require_owner_session)) -> OrderResponseSchema:
+    try:
+        order = resolve_payment_review(db, order_id=order_id,
+            actor_user_id=principal.owner.user_id, resolution=payload.resolution,
+            funds_checked=payload.funds_checked, note=payload.note)
+        db.commit()
+        db.refresh(order)
+        return _order_to_response(order)
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
 
 @router.post(
@@ -406,14 +452,18 @@ def initiate_rto_endpoint(
 @router.post(
     "/orders/{order_id}/rto-received",
     response_model=OrderResponseSchema,
-    summary="Confirm physical receipt of RTO parcel, releasing stock hold back to available",
+    summary="Record received RTO quantities in quarantine",
 )
 def receive_rto_endpoint(
     order_id: uuid.UUID,
+    payload: RtoReceivedRequest,
     db: Session = Depends(get_db),
 ) -> OrderResponseSchema:
     try:
-        shipment = receive_rto_parcel(db, order_id=order_id)
+        received = {line.order_line_id: line.received_quantity for line in payload.lines}
+        if len(received) != len(payload.lines):
+            raise ShipmentError('Each order line must appear once in the receipt.')
+        shipment = receive_rto_parcel(db, order_id=order_id, received_quantities=received)
         db.commit()
         db.refresh(shipment.order)
         return _order_to_response(shipment.order)
@@ -434,13 +484,19 @@ def inspect_rto_endpoint(
     order_id: uuid.UUID,
     payload: RtoInspectionRequest,
     db: Session = Depends(get_db),
+    principal: OwnerPrincipal = Depends(require_owner_session),
 ) -> OrderResponseSchema:
     try:
+        lines = {line.order_line_id: (line.sellable_quantity, line.damaged_quantity)
+                 for line in payload.lines}
+        if len(lines) != len(payload.lines):
+            raise ShipmentError('Each order line must appear once in the inspection.')
         shipment = inspect_and_restock_order(
             db,
             order_id=order_id,
-            condition_ok=payload.condition_ok,
+            lines=lines,
             notes=payload.notes,
+            actor_user_id=principal.owner.user_id,
         )
         db.commit()
         db.refresh(shipment.order)
@@ -654,6 +710,7 @@ def dispatch_order_endpoint(
     order_id: uuid.UUID,
     payload: ShipmentCreateRequest,
     db: Session = Depends(get_db),
+    principal: OwnerPrincipal = Depends(require_owner_session),
 ) -> ShipmentAdminResponseSchema:
     try:
         shipment = create_shipment(
@@ -663,6 +720,7 @@ def dispatch_order_endpoint(
             tracking_number=payload.tracking_number,
             shipping_cost_minor=payload.shipping_cost_minor,
             tracking_url=payload.tracking_url,
+            actor_user_id=principal.owner.user_id,
         )
         db.commit()
         db.refresh(shipment)
@@ -693,12 +751,17 @@ def update_shipment_status_endpoint(
     db: Session = Depends(get_db),
 ) -> ShipmentAdminResponseSchema:
     try:
+        if payload.received_lines is not None and len({line.order_line_id for line in payload.received_lines}) != len(payload.received_lines):
+            raise ShipmentError('Each order line must appear once in the receipt.')
         shipment = update_shipment_status(
             db,
             shipment_id=shipment_id,
             status=payload.status,
             rto_reason=payload.rto_reason,
             rto_courier_cost_minor=payload.rto_courier_cost_minor,
+            received_quantities=({line.order_line_id: line.received_quantity
+                                  for line in payload.received_lines}
+                                 if payload.received_lines is not None else None),
         )
         db.commit()
         db.refresh(shipment)
@@ -715,6 +778,36 @@ def update_shipment_status_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+
+
+@router.get('/shipments/{shipment_id}/stock-reconciliation')
+def preview_legacy_stock_endpoint(shipment_id: uuid.UUID,
+                                  db: Session = Depends(get_db)) -> dict:
+    try:
+        return preview_legacy_stock(db, shipment_id)
+    except ShipmentError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+
+
+@router.post('/shipments/{shipment_id}/stock-reconciliation',
+             response_model=ShipmentAdminResponseSchema)
+def reconcile_legacy_stock_endpoint(shipment_id: uuid.UUID,
+                                    payload: LegacyShipmentReconcileRequest,
+                                    db: Session = Depends(get_db),
+                                    principal: OwnerPrincipal = Depends(require_owner_session)) -> ShipmentAdminResponseSchema:
+    decisions = {line.reservation_id: (line.physical_deducted, line.received_quantity)
+                 for line in payload.lines}
+    if len(decisions) != len(payload.lines):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Each reservation must appear once.')
+    try:
+        shipment = reconcile_legacy_stock(db, shipment_id=shipment_id,
+            decisions=decisions, note=payload.note, actor_user_id=principal.owner.user_id)
+        db.commit()
+        db.refresh(shipment)
+        return ShipmentAdminResponseSchema.model_validate(shipment)
+    except (ShipmentError, ValueError) as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
 
 @router.post(
@@ -993,21 +1086,7 @@ def list_admin_returns_endpoint(
 ) -> list[OrderReturnResponseSchema]:
     returns = list_order_returns(db, order_id=order_id, status=return_status)
     return [
-        OrderReturnResponseSchema(
-            id=r.id,
-            order_id=r.order_id,
-            order_line_id=r.order_line_id,
-            return_type=r.return_type,
-            reason=r.reason,
-            customer_notes=r.customer_notes,
-            status=r.status,
-            exchange_variant_id=r.exchange_variant_id,
-            refund_amount=CurrencyAmount.from_minor(r.refund_amount_minor),
-            refund_reference=r.refund_reference,
-            restocked_at=r.restocked_at,
-            created_at=r.created_at,
-            updated_at=r.updated_at,
-        )
+        OrderReturnResponseSchema.from_return(r)
         for r in returns
     ]
 
@@ -1027,21 +1106,7 @@ def approve_admin_return_endpoint(
         ret = approve_return_request(db, return_id=return_id, refund_amount_minor=refund_minor)
         db.commit()
         db.refresh(ret)
-        return OrderReturnResponseSchema(
-            id=ret.id,
-            order_id=ret.order_id,
-            order_line_id=ret.order_line_id,
-            return_type=ret.return_type,
-            reason=ret.reason,
-            customer_notes=ret.customer_notes,
-            status=ret.status,
-            exchange_variant_id=ret.exchange_variant_id,
-            refund_amount=CurrencyAmount.from_minor(ret.refund_amount_minor),
-            refund_reference=ret.refund_reference,
-            restocked_at=ret.restocked_at,
-            created_at=ret.created_at,
-            updated_at=ret.updated_at,
-        )
+        return OrderReturnResponseSchema.from_return(ret)
     except InsufficientStockError as err:
         db.rollback()
         raise HTTPException(
@@ -1054,6 +1119,36 @@ def approve_admin_return_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(err),
         ) from err
+
+
+@router.post('/returns/{return_id}/receive', response_model=OrderReturnResponseSchema)
+def receive_admin_return_endpoint(return_id: uuid.UUID, payload: OrderReturnReceiveRequest,
+                                  db: Session = Depends(get_db)) -> OrderReturnResponseSchema:
+    try:
+        ret = receive_return_items(db, return_id=return_id,
+                                   received_quantity=payload.received_quantity)
+        db.commit()
+        db.refresh(ret)
+        return OrderReturnResponseSchema.from_return(ret)
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+
+
+@router.post('/returns/{return_id}/inspect', response_model=OrderReturnResponseSchema)
+def inspect_admin_return_endpoint(return_id: uuid.UUID, payload: OrderReturnInspectRequest,
+                                  db: Session = Depends(get_db),
+                                  principal: OwnerPrincipal = Depends(require_owner_session)) -> OrderReturnResponseSchema:
+    try:
+        ret = inspect_return_items(db, return_id=return_id,
+            sellable_quantity=payload.sellable_quantity, damaged_quantity=payload.damaged_quantity,
+            notes=payload.notes, actor_user_id=principal.owner.user_id)
+        db.commit()
+        db.refresh(ret)
+        return OrderReturnResponseSchema.from_return(ret)
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
 
 @router.post(
@@ -1075,21 +1170,7 @@ def complete_admin_return_endpoint(
         )
         db.commit()
         db.refresh(ret)
-        return OrderReturnResponseSchema(
-            id=ret.id,
-            order_id=ret.order_id,
-            order_line_id=ret.order_line_id,
-            return_type=ret.return_type,
-            reason=ret.reason,
-            customer_notes=ret.customer_notes,
-            status=ret.status,
-            exchange_variant_id=ret.exchange_variant_id,
-            refund_amount=CurrencyAmount.from_minor(ret.refund_amount_minor),
-            refund_reference=ret.refund_reference,
-            restocked_at=ret.restocked_at,
-            created_at=ret.created_at,
-            updated_at=ret.updated_at,
-        )
+        return OrderReturnResponseSchema.from_return(ret)
     except ValueError as err:
         db.rollback()
         raise HTTPException(
@@ -1111,21 +1192,7 @@ def reject_admin_return_endpoint(
         ret = reject_return_request(db, return_id=return_id)
         db.commit()
         db.refresh(ret)
-        return OrderReturnResponseSchema(
-            id=ret.id,
-            order_id=ret.order_id,
-            order_line_id=ret.order_line_id,
-            return_type=ret.return_type,
-            reason=ret.reason,
-            customer_notes=ret.customer_notes,
-            status=ret.status,
-            exchange_variant_id=ret.exchange_variant_id,
-            refund_amount=CurrencyAmount.from_minor(ret.refund_amount_minor),
-            refund_reference=ret.refund_reference,
-            restocked_at=ret.restocked_at,
-            created_at=ret.created_at,
-            updated_at=ret.updated_at,
-        )
+        return OrderReturnResponseSchema.from_return(ret)
     except ValueError as err:
         db.rollback()
         raise HTTPException(

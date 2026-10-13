@@ -64,6 +64,27 @@ class Settings(BaseSettings):
     bank_account_number: str = "PENDING_CONFIGURATION"
     bank_iban: str = "PENDING_IBAN_CONFIGURATION"
 
+    @property
+    def bank_transfer_enabled(self) -> bool:
+        """Only a complete, checksum-valid Pakistani bank account may be offered."""
+        import re
+
+        fields = (self.bank_name, self.bank_account_title, self.bank_account_number, self.bank_iban)
+        if any(not value or any(marker in value.upper() for marker in
+                                ('PENDING', 'PLACEHOLDER', 'SAMPLE', 'TEST_ACCOUNT')) for value in fields):
+            return False
+        account = re.sub(r'[\s-]', '', self.bank_account_number)
+        iban = re.sub(r'\s', '', self.bank_iban).upper()
+        if not re.fullmatch(r'[0-9]{8,24}', account) or not re.fullmatch(r'PK[0-9]{2}[A-Z]{4}[A-Z0-9]{16}', iban):
+            return False
+        rearranged = iban[4:] + iban[:4]
+        digits = ''.join(str(ord(char) - 55) if char.isalpha() else char for char in rearranged)
+        return int(digits) % 97 == 1
+
+    @property
+    def permitted_payment_methods(self) -> list[str]:
+        return ['cod', 'bank_transfer'] if self.bank_transfer_enabled else ['cod']
+
     # ── CORS ──────────────────────────────────────────────────────────────────
     # In development: localhost Vite dev servers.
     # In production: set to the actual domain serving the frontend.

@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import uuid
 import pytest
+
+pytestmark = pytest.mark.usefixtures("configured_bank")
 from sqlalchemy.orm import Session
 
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
@@ -195,7 +197,10 @@ def test_admin_order_lifecycle_payment_and_delivery(admin_client, db_session):
     assert conf_res.json()["order_status"] == "confirmed"
     assert conf_res.json()["supplier_notes"] == "Packed and ready"
 
-    # 4. Owner marks order delivered -> reservations fulfilled, physical balance decremented
+    # 4. Dispatch deducts physical stock; delivery only closes allocations.
+    dispatched = admin_client.post(f"/api/v1/admin/orders/{order_id}/dispatch",
+                                   json={"courier_code": "manual", "tracking_number": "ADMIN-LIFE-001"})
+    assert dispatched.status_code == 201
     del_res = admin_client.post(f"/api/v1/admin/orders/{order_id}/deliver")
     assert del_res.status_code == 200
     assert del_res.json()["order_status"] == "delivered"

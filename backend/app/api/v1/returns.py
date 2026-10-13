@@ -41,24 +41,11 @@ def submit_return_request(
             customer_phone=raw_phone,
             customer_notes=payload.customer_notes,
             exchange_variant_id=payload.exchange_variant_id,
+            quantity=payload.quantity,
         )
         db.commit()
         db.refresh(ret)
-        return OrderReturnResponseSchema(
-            id=ret.id,
-            order_id=ret.order_id,
-            order_line_id=ret.order_line_id,
-            return_type=ret.return_type,
-            reason=ret.reason,
-            customer_notes=ret.customer_notes,
-            status=ret.status,
-            exchange_variant_id=ret.exchange_variant_id,
-            refund_amount=CurrencyAmount.from_minor(ret.refund_amount_minor),
-            refund_reference=ret.refund_reference,
-            restocked_at=ret.restocked_at,
-            created_at=ret.created_at,
-            updated_at=ret.updated_at,
-        )
+        return OrderReturnResponseSchema.from_return(ret)
     except CustomerOwnershipError as err:
         db.rollback()
         raise HTTPException(

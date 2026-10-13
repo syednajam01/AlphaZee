@@ -7,12 +7,19 @@ import {
   fetchAdminOrders,
   verifyOrderPayment,
   confirmSupplierAcceptance,
-  cancelExpiredOrders,
+  reviewExpiredOrders,
+  fetchPaymentInstructionsPreview,
+  markPaymentInstructionsSent,
+  resolvePaymentReview,
   deliverOrder,
   cancelOrder,
   initiateOrderRto,
   receiveOrderRto,
   inspectAndRestockRtoOrder,
+  receiveAdminReturn,
+  inspectAdminReturn,
+  previewLegacyShipmentStock,
+  reconcileLegacyShipmentStock,
   dispatchAdminOrder,
   updateAdminShipmentStatus,
   recordAdminCodRemittance,
@@ -260,9 +267,9 @@ describe('Admin API Client Methods', () => {
     assert.equal(captured.options.headers['X-Admin-Key'], undefined);
   });
 
-  it('confirms supplier acceptance and purges expired bank orders', async () => {
+  it('confirms supplier acceptance and flags expired bank orders for review', async () => {
     let confirmBody = null;
-    let cancelCalled = false;
+    let reviewCalled = false;
 
     global.fetch = async (url, options) => {
       if (url.includes('/confirm-supplier')) {
@@ -276,13 +283,13 @@ describe('Admin API Client Methods', () => {
           }),
         };
       }
-      if (url.endsWith('/orders/cancel-expired')) {
-        cancelCalled = true;
+      if (url.endsWith('/orders/review-expired')) {
+        reviewCalled = true;
         return {
           ok: true,
           json: async () => ({
-            cancelled_count: 2,
-            cancelled_order_ids: ['ord-1', 'ord-2'],
+            review_count: 2,
+            review_order_ids: ['ord-1', 'ord-2'],
           }),
         };
       }
@@ -293,9 +300,27 @@ describe('Admin API Client Methods', () => {
     assert.equal(confirmed.order_status, 'confirmed');
     assert.equal(confirmBody.notes, 'All pieces packed');
 
-    const cancelled = await cancelExpiredOrders();
-    assert.equal(cancelCalled, true);
-    assert.equal(cancelled.cancelled_count, 2);
+    const reviewed = await reviewExpiredOrders();
+    assert.equal(reviewCalled, true);
+    assert.equal(reviewed.review_count, 2);
+  });
+
+  it('previews instructions and sends explicit handoff and review decisions', async () => {
+    const requests = [];
+    global.fetch = async (url, options = {}) => {
+      requests.push({ url, options });
+      return { ok: true, json: async () => ({ order_number: 'SAMPLE-1' }) };
+    };
+    await fetchPaymentInstructionsPreview('order-1');
+    await markPaymentInstructionsSent('order-1', { channel: 'sms', reference: 'message-123' });
+    await resolvePaymentReview('order-1', { resolution: 'release_unpaid', note: 'Funds checked' });
+    assert.ok(requests[0].url.endsWith('/orders/order-1/payment-instructions-preview'));
+    assert.deepEqual(JSON.parse(requests[1].options.body), {
+      confirmed_sent: true, channel: 'sms', reference: 'message-123',
+    });
+    assert.deepEqual(JSON.parse(requests[2].options.body), {
+      funds_checked: true, resolution: 'release_unpaid', note: 'Funds checked',
+    });
   });
 
   it('handles two-step RTO return initiation and warehouse receipt confirmation', async () => {
@@ -334,7 +359,7 @@ describe('Admin API Client Methods', () => {
     assert.equal(capturedRtoBody.reason, 'Customer doorstep refusal');
     assert.equal(capturedRtoBody.rto_courier_cost_minor, 15000);
 
-    const receivedRes = await receiveOrderRto('ord-99');
+    const receivedRes = await receiveOrderRto('ord-99', [{ order_line_id: 'line-1', received_quantity: 2 }]);
     assert.equal(rtoReceivedCalled, true);
     assert.equal(receivedRes.order_status, 'rto');
   });
@@ -357,12 +382,28 @@ describe('Admin API Client Methods', () => {
     };
 
     const res = await inspectAndRestockRtoOrder('ord-99', {
-      condition_ok: true,
+      lines: [{ order_line_id: 'line-1', sellable_quantity: 1, damaged_quantity: 1 }],
       notes: 'Physical condition verified pristine',
     });
     assert.equal(res.order_status, 'rto');
-    assert.equal(capturedInspectBody.condition_ok, true);
+    assert.deepEqual(capturedInspectBody.lines, [{ order_line_id: 'line-1', sellable_quantity: 1, damaged_quantity: 1 }]);
     assert.equal(capturedInspectBody.notes, 'Physical condition verified pristine');
+  });
+
+  it('sends exact customer-return quantities and explicit legacy decisions', async () => {
+    const calls = [];
+    global.fetch = async (url, options = {}) => {
+      calls.push({ url, options });
+      return { ok: true, json: async () => ({ lines: [] }) };
+    };
+    await receiveAdminReturn('ret-1', 2);
+    await inspectAdminReturn('ret-1', { sellable_quantity: 1, damaged_quantity: 1, notes: 'Torn' });
+    await previewLegacyShipmentStock('ship-1');
+    await reconcileLegacyShipmentStock('ship-1', { lines: [{ reservation_id: 'res-1', physical_deducted: true }], note: 'Ledger checked' });
+    assert.deepEqual(JSON.parse(calls[0].options.body), { received_quantity: 2 });
+    assert.deepEqual(JSON.parse(calls[1].options.body), { sellable_quantity: 1, damaged_quantity: 1, notes: 'Torn' });
+    assert.ok(calls[2].url.endsWith('/shipments/ship-1/stock-reconciliation'));
+    assert.equal(JSON.parse(calls[3].options.body).lines[0].physical_deducted, true);
   });
 });
 

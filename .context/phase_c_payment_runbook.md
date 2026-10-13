@@ -1,0 +1,11 @@
+# Phase C payment runbook
+
+Checkout remains disabled outside an explicitly configured isolated test database. Bank transfer remains unavailable until `BANK_NAME`, `BANK_ACCOUNT_TITLE`, `BANK_ACCOUNT_NUMBER`, and `BANK_IBAN` form a complete account with a valid Pakistani IBAN checksum. The current development placeholders intentionally expose COD only.
+
+For a bank order in an enabled environment, the owner first confirms supplier acceptance and actual allocated quantities. In the Orders tab, **Prepare Instructions** loads a read-only preview. The owner sends the shown account details through the selected customer channel, then records the successful handoff with its channel and reference. This one-time record saves account snapshots and starts the four-hour UTC deadline. Repeating the record does not extend the deadline. The customer can see the instructions and local deadline when tracking the order and can then submit payment proof.
+
+Opening the Orders tab and **Check Expired Bank Transfers** mark unpaid expired orders for review; neither action cancels them or releases reservations. The owner checks both cleared and pending funds, then records either **Payment received** or **No payment — cancel and release stock** with a note. Direct verification and cancellation reject expired orders pending this decision. An unverified bank order cannot be dispatched or delivered. Payment verification remains separate from supplier acceptance.
+
+Migration `c4d8a71e29f0` adds handoff, verification, and review audit fields. It clears old pending bank deadlines, because the old timestamps started at checkout and cannot prove instructions were delivered. It preserves orders and reservations. Downgrading drops the new audit fields and does not restore those invalid old deadlines. A disposable migration run confirmed upgrade, downgrade, re-upgrade, and historical order preservation in `.context/phase_c_migration_verification.json`. The local `alphazee_dev` database was empty before and after applying this migration.
+
+Verification: backend full suite 197 passed; frontend 80 passed; Vite build passed; 22 terminal HTTP checks passed through ports 8000 and 3000. No browser was used. Phase D still owns physical stock deductions, shipment allocation, and RTO lifecycle corrections.

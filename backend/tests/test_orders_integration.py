@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import uuid
 import pytest
+
+pytestmark = pytest.mark.usefixtures("configured_bank")
 from sqlalchemy import select
 
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
@@ -21,6 +23,7 @@ from app.services.orders import (
     confirm_supplier_acceptance,
     deliver_order,
     place_order,
+    record_payment_instructions_sent,
     upload_payment_receipt,
     verify_bank_payment,
 )
@@ -181,6 +184,10 @@ class TestOrderLifecycleAndPayments:
         )
         order = place_order(db_session, dto)
 
+        confirm_supplier_acceptance(db_session, order_id=order.id)
+        record_payment_instructions_sent(db_session, order_id=order.id, actor_user_id=owner.id,
+                                         channel='sms', reference='SAMPLE-message-123')
+
         # Upload receipt
         receipt = upload_payment_receipt(
             db_session,
@@ -202,12 +209,6 @@ class TestOrderLifecycleAndPayments:
         db_session.expire_all()
         reloaded_order = db_session.get(Order, order.id)
         assert reloaded_order.payment_status == "verified"
-        assert reloaded_order.order_status == "placed"
-
-        # Supplier acceptance confirms order
-        confirm_supplier_acceptance(db_session, order_id=order.id)
-        db_session.expire_all()
-        reloaded_order = db_session.get(Order, order.id)
         assert reloaded_order.order_status == "confirmed"
 
         reloaded_receipt = db_session.get(PaymentReceipt, receipt.id)
@@ -270,7 +271,12 @@ class TestOrderLifecycleAndPayments:
         )
         order = place_order(db_session, dto)
 
-        # Deliver order
+        # Supplier acceptance and an allocated dispatch precede delivery.
+        from app.services.orders import confirm_supplier_acceptance
+        from app.services.shipments import create_shipment
+        confirm_supplier_acceptance(db_session, order_id=order.id)
+        create_shipment(db_session, order_id=order.id, courier_code='manual',
+                        tracking_number=f'DEL-{uuid.uuid4().hex[:8]}', actor_user_id=admin.id)
         deliver_order(db_session, order_id=order.id, actor_user_id=admin.id)
 
         db_session.expire_all()
@@ -287,7 +293,7 @@ class TestOrderLifecycleAndPayments:
         # Verify StockEvent audit log
         events = get_stock_events(db_session, sv.id)
         assert len(events) == 1
-        assert events[0].reason == "reservation_fulfilled"
+        assert events[0].reason == "dispatch"
         assert events[0].delta == -2
         assert events[0].previous_on_hand == 10
         assert events[0].new_on_hand == 8

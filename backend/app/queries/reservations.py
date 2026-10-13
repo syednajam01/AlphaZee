@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 
 from app.models.inventory import (
@@ -63,7 +63,7 @@ def get_inventory_summary(
     """
     Compute real-time inventory triple:
     - Physical = inventory_balances.on_hand
-    - Held = sum(quantity) across open reservations (held, confirmed, dispatched)
+    - Held = sum(quantity) across held/confirmed reservations and unreconciled legacy dispatches
     - Available = max(0, Physical - Held)
     """
     balance = db.get(InventoryBalance, supplier_variant_id)
@@ -73,7 +73,8 @@ def get_inventory_summary(
         select(StockReservation)
         .where(
             StockReservation.supplier_variant_id == supplier_variant_id,
-            StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
+            or_(StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
+                StockReservation.legacy_stock_hold.is_(True)),
         )
         .order_by(StockReservation.created_at.asc())
     )
@@ -151,7 +152,8 @@ def create_stock_reservation(
         select(StockReservation.quantity)
         .where(
             StockReservation.supplier_variant_id == supplier_variant_id,
-            StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
+            or_(StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
+                StockReservation.legacy_stock_hold.is_(True)),
         )
     )
     held = sum(db.scalars(held_stmt).all())
@@ -188,15 +190,17 @@ def transition_reservation_stage(
     """
     Advance a reservation through its lifecycle stages.
 
-    When transitioning to 'fulfilled':
+    When transitioning to 'dispatched':
     - Physical on_hand is decremented atomically via adjust_inventory.
     - A StockEvent is appended in the same transaction.
-    - Reservation is marked closed.
+    - The sellable hold is consumed in that transaction.
+    Delivery marks the reservation fulfilled without another physical movement.
     """
     if new_stage not in ALLOWED_RESERVATION_STAGES:
         raise ValueError(f"Invalid stage {new_stage!r}")
 
-    reservation = db.get(StockReservation, reservation_id)
+    reservation = db.scalar(select(StockReservation).where(StockReservation.id == reservation_id)
+                            .with_for_update().execution_options(populate_existing=True))
     if reservation is None:
         raise ValueError(f"StockReservation not found for id {reservation_id}")
 
@@ -208,37 +212,36 @@ def transition_reservation_stage(
             )
         return reservation
 
+    if new_stage == reservation.stage:
+        return reservation
+    permitted = {
+        'held': {'confirmed', 'cancelled'},
+        'confirmed': {'dispatched', 'cancelled'},
+        'dispatched': {'fulfilled', 'returned'},
+    }
+    if new_stage not in permitted.get(reservation.stage, set()):
+        raise InvalidReservationTransitionError(
+            f"Cannot transition reservation {reservation_id} from {reservation.stage!r} to {new_stage!r}.")
+    if reservation.legacy_stock_hold and new_stage in {'fulfilled', 'returned'}:
+        raise InvalidReservationTransitionError('Legacy dispatched stock requires reconciliation first.')
+
     now = _utcnow()
 
     if new_stage == "confirmed":
         reservation.supplier_accepted_at = now
     elif new_stage == "dispatched":
-        reservation.instructions_sent_at = now
-    elif new_stage == "fulfilled":
-        # Decrement physical stock on hand
         balance = db.get(InventoryBalance, reservation.supplier_variant_id)
-        if balance is None:
-            raise ValueError(
-                f"InventoryBalance not found for supplier_variant_id {reservation.supplier_variant_id}"
-            )
-
-        new_on_hand = balance.on_hand - reservation.quantity
-        if new_on_hand < 0:
-            raise InsufficientStockError(
-                f"Cannot fulfill reservation {reservation_id}: physical on_hand {balance.on_hand} "
-                f"is less than reservation quantity {reservation.quantity}."
-            )
-
+        if balance is None or balance.on_hand < reservation.quantity:
+            raise InsufficientStockError('Physical stock is insufficient for dispatch.')
         adjust_inventory(
-            db,
-            supplier_variant_id=reservation.supplier_variant_id,
-            actor_user_id=actor_user_id,
-            new_on_hand=new_on_hand,
-            reason="reservation_fulfilled",
-            expected_version=balance.version,
-            notes=notes or f"Fulfillment for order line {reservation.order_line_id}",
+            db, supplier_variant_id=reservation.supplier_variant_id,
+            actor_user_id=actor_user_id, new_on_hand=balance.on_hand - reservation.quantity,
+            reason='dispatch', expected_version=balance.version,
+            notes=notes or f'Dispatch of reservation {reservation.id}',
             releasing_reservation_id=reservation.id,
+            source_ref=f'dispatch:{reservation.id}',
         )
+    elif new_stage == "fulfilled":
         reservation.closed_at = now
     elif new_stage in ("cancelled", "returned"):
         reservation.closed_at = now

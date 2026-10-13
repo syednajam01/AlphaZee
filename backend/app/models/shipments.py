@@ -90,6 +90,8 @@ class Shipment(Base):
         Index("idx_shipments_tracking", "courier_code", "tracking_number"),
         Index("idx_shipments_status", "status"),
         Index("idx_shipments_remittance_status", "cod_remittance_status"),
+        CheckConstraint("stock_reconciliation_status IN ('ready', 'legacy_review', 'resolved')",
+                        name="ck_shipments_stock_reconciliation_status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -135,6 +137,12 @@ class Shipment(Base):
         default="booked",
         server_default=text("'booked'"),
     )
+
+    stock_reconciliation_status: Mapped[str] = mapped_column(
+        String(24), nullable=False, default='ready', server_default=text("'ready'"))
+
+    allocations: Mapped[list[ShipmentAllocation]] = relationship(
+        'ShipmentAllocation', back_populates='shipment', cascade='all, delete-orphan')
 
     # Cash On Delivery & Remittance Tracking
     cod_amount_minor: Mapped[int] = mapped_column(
@@ -253,3 +261,35 @@ class Shipment(Base):
                 f"Invalid remittance status {value!r}. Must be one of {sorted(ALLOWED_REMITTANCE_STATUSES)}."
             )
         return value
+
+
+class ShipmentAllocation(Base):
+    """Exact dispatched reservation and its quarantined return disposition."""
+
+    __tablename__ = 'shipment_allocations'
+    __table_args__ = (
+        CheckConstraint('quantity > 0', name='ck_shipment_allocations_quantity_positive'),
+        CheckConstraint('received_quantity >= 0 AND received_quantity <= quantity',
+                        name='ck_shipment_allocations_received_bounds'),
+        CheckConstraint('sellable_quantity >= 0 AND damaged_quantity >= 0 AND '
+                        'sellable_quantity + damaged_quantity <= received_quantity',
+                        name='ck_shipment_allocations_inspection_bounds'),
+        Index('uq_shipment_allocations_reservation', 'reservation_id', unique=True),
+        Index('idx_shipment_allocations_shipment', 'shipment_id'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True,
+                                         default=uuid.uuid4, server_default=text('gen_random_uuid()'))
+    shipment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+        ForeignKey('shipments.id', ondelete='CASCADE'), nullable=False)
+    reservation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+        ForeignKey('stock_reservations.id', ondelete='RESTRICT'), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    received_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text('0'))
+    sellable_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text('0'))
+    damaged_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text('0'))
+    inspection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    inspected_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    inspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    shipment: Mapped[Shipment] = relationship('Shipment', back_populates='allocations')
+    reservation: Mapped[StockReservation] = relationship('StockReservation')

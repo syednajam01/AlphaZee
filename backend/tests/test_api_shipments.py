@@ -5,6 +5,8 @@ test_api_shipments.py — Integration and API tests for courier dispatch, tracki
 from __future__ import annotations
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("configured_bank")
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -296,13 +298,16 @@ def test_shipment_rto_return_restocks_inventory(
     )
     shipment_id = disp_res.json()["id"]
 
-    # Customer refused parcel -> RTO Delivered
+    # Customer refused parcel; record in-transit RTO then physical receipt.
+    assert client.post(f"/api/v1/admin/shipments/{shipment_id}/status",
+                       json={"status": "rto_initiated", "rto_reason": "Customer refused delivery (changed mind)"}).status_code == 200
     rto_res = client.post(
         f"/api/v1/admin/shipments/{shipment_id}/status",
         json={
             "status": "rto_delivered",
             "rto_reason": "Customer refused delivery (changed mind)",
             "rto_courier_cost_minor": 15000,  # Return courier charge
+            "received_lines": [{"order_line_id": str(order.lines[0].id), "received_quantity": 1}],
         },
     )
     assert rto_res.status_code == 200

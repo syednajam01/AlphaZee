@@ -1,7 +1,7 @@
 # AlphaZee: frontend integration and corrected launch repair plan
 
 Date: 2026-10-13
-Status: Phase 0, Phase L1, Phase A and Phase B implemented (2026-10-13). Verification used the terminal at the owner's explicit request; no browser execution or visual verification was performed. Phase C and subsequent phases remain pending. See `repair_verification_report.md`, `frontend_control_inventory.md` and `phase_b_checkout_runbook.md`.
+Status: Phase 0, Phase L1, Phase A, Phase B, Phase C and Phase D/E implemented (2026-10-13). Verification used the terminal at the owner's explicit request; no browser execution or visual verification was performed. Phase G and subsequent phases remain pending. See `repair_verification_report.md`, `frontend_control_inventory.md`, `phase_c_payment_runbook.md` and `phase_d_stock_transition_table.md`.
 Source of requirements: `next_target.txt` in this directory.
 
 This plan supersedes the completion and launch-readiness claims in `launch_blocker_plan.md`. Preserve that file as historical context. Existing implementations are a starting point, not evidence that the corrected requirements pass.

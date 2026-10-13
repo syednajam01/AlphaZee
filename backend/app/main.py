@@ -84,7 +84,8 @@ async def validation_error(request: Request, error: RequestValidationError):
 def storefront_capabilities(response: Response) -> dict:
     response.headers["Cache-Control"] = "no-store"
     return {"checkout_enabled": settings.checkout_enabled,
-            "test_mode": settings.checkout_enabled}
+            "test_mode": settings.checkout_enabled,
+            "payment_methods": settings.permitted_payment_methods}
 
 
 

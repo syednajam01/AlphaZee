@@ -61,7 +61,7 @@ def test_admin_mutations_reject_csrf_before_work(client, sample_owner, headers):
     csrf = sign_in(client).json()['csrf_token']
     if headers.get('X-CSRF-Token') == 'valid':
         headers = {**headers, 'X-CSRF-Token': csrf}
-    assert client.post('/api/v1/admin/orders/cancel-expired', headers=headers).status_code == 403
+    assert client.post('/api/v1/admin/orders/review-expired', headers=headers).status_code == 403
     assert client.post('/api/v1/auth/logout', headers=headers).status_code == 403
     assert client.get('/api/v1/auth/session').status_code == 200
 

@@ -1,0 +1,153 @@
+{
+  "verification": "terminal HTTP only; no browser execution",
+  "checks": [
+    {
+      "url": "http://127.0.0.1:8000/api/v1/health",
+      "status": 200,
+      "response": {
+        "status": "ok"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/ready",
+      "status": 200,
+      "response": {
+        "status": "ready",
+        "database": "connected"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/storefront/capabilities",
+      "status": 200,
+      "response": {
+        "checkout_enabled": false,
+        "test_mode": false,
+        "payment_methods": [
+          "cod"
+        ]
+      }
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/collections",
+      "status": 200,
+      "response": {
+        "collections": [],
+        "total": 0
+      }
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/products",
+      "status": 200,
+      "response": {
+        "products": [],
+        "total": 0,
+        "page": 1,
+        "page_size": 20,
+        "collection_id": null
+      }
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/products/hero",
+      "status": 200,
+      "response": []
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/orders",
+      "method": "POST (empty payload)",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:8000/api/v1/admin/overview",
+      "status": 401
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/health",
+      "status": 200,
+      "response": {
+        "status": "ok"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/ready",
+      "status": 200,
+      "response": {
+        "status": "ready",
+        "database": "connected"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/storefront/capabilities",
+      "status": 200,
+      "response": {
+        "checkout_enabled": false,
+        "test_mode": false,
+        "payment_methods": [
+          "cod"
+        ]
+      }
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/collections",
+      "status": 200,
+      "response": {
+        "collections": [],
+        "total": 0
+      }
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/products",
+      "status": 200,
+      "response": {
+        "products": [],
+        "total": 0,
+        "page": 1,
+        "page_size": 20,
+        "collection_id": null
+      }
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/products/hero",
+      "status": 200,
+      "response": []
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/orders",
+      "method": "POST (empty payload)",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3000/api/v1/admin/overview",
+      "status": 401
+    },
+    {
+      "url": "http://127.0.0.1:3000/",
+      "status": 200,
+      "expected_source_found": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/src/main.js",
+      "status": 200,
+      "expected_source_found": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/src/app.js",
+      "status": 200,
+      "expected_source_found": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/src/utils/overlay.js",
+      "status": 200,
+      "expected_source_found": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/src/utils/startup.js",
+      "status": 200,
+      "expected_source_found": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/src/styles/components.css",
+      "status": 200,
+      "expected_source_found": true
+    }
+  ]
+}

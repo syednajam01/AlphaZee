@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.inventory import InventoryBalance, StockEvent, StockReservation, SupplierVariant
+from app.models.inventory import InventoryBalance, StockReservation
 from app.models.orders import Order, OrderLine
-from app.models.shipments import ALLOWED_COURIER_CODES, ALLOWED_SHIPMENT_STATUSES, Shipment
-from app.queries.inventory import adjust_inventory, get_active_supplier_variant
+from app.models.shipments import ALLOWED_COURIER_CODES, ALLOWED_SHIPMENT_STATUSES, Shipment, ShipmentAllocation
+from app.queries.inventory import adjust_inventory
 from app.queries.reservations import transition_reservation_stage
 
 
@@ -45,11 +45,13 @@ def create_shipment(
     tracking_number: str,
     shipping_cost_minor: int = 0,
     tracking_url: str | None = None,
+    actor_user_id: uuid.UUID | None = None,
 ) -> Shipment:
     """
     Create a new courier dispatch for an order and advance the order to 'dispatched'.
     """
-    order = db.get(Order, order_id)
+    order = db.scalar(select(Order).where(Order.id == order_id).with_for_update()
+                      .execution_options(populate_existing=True))
     if not order:
         raise ShipmentError(f"Order {order_id} not found.")
 
@@ -58,10 +60,27 @@ def create_shipment(
             f"Cannot dispatch Bank Transfer order {order.order_number}: payment status is '{order.payment_status}', must be 'verified'."
         )
 
+    if order.payment_method == 'bank_transfer' and order.payment_review_status == 'required':
+        raise OrderNotDispatchableError('Resolve the pending payment review before dispatch.')
+
     if order.order_status != "confirmed":
         raise OrderNotDispatchableError(
             f"Cannot dispatch order {order.order_number} in status '{order.order_status}'. Order must be confirmed by supplier first."
         )
+
+    if not order.supplier_confirmed_at:
+        raise OrderNotDispatchableError('Supplier acceptance must be recorded before dispatch.')
+    if db.scalar(select(Shipment.id).where(Shipment.order_id == order.id)) is not None:
+        raise OrderNotDispatchableError('Order already has a shipment; dispatch it through its existing allocation.')
+
+    line_ids = [line.id for line in order.lines]
+    reservations = db.scalars(select(StockReservation).where(
+        StockReservation.order_line_id.in_(line_ids),
+        StockReservation.stage == 'confirmed').order_by(StockReservation.supplier_variant_id,
+                                                        StockReservation.id).with_for_update()).all()
+    if not order.lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id)
+                              != line.quantity for line in order.lines):
+        raise OrderNotDispatchableError('Dispatch requires complete supplier-confirmed allocations for every line.')
 
     clean_courier = courier_code.strip().lower()
     if clean_courier not in ALLOWED_COURIER_CODES:
@@ -83,26 +102,21 @@ def create_shipment(
         courier_code=clean_courier,
         tracking_number=tracking_number.strip(),
         tracking_url=tracking_url.strip() if tracking_url else None,
-        shipping_cost_minor=max(0, int(shipping_cost_minor)),
+        shipping_cost_minor=int(shipping_cost_minor),
         status="dispatched",
         cod_amount_minor=cod_amount,
         cod_remittance_status=remittance_status,
         dispatched_at=now,
     )
+    if shipment.shipping_cost_minor < 0:
+        raise ValueError('Shipping cost must be non-negative.')
     db.add(shipment)
-
-    # Advance line reservations to 'dispatched'
-    order_line_ids = [line.id for line in order.lines]
-    if order_line_ids:
-        res_stmt = select(StockReservation).where(
-            StockReservation.order_line_id.in_(order_line_ids),
-            StockReservation.stage.in_(["held", "confirmed"]),
-        )
-        reservations = db.scalars(res_stmt).all()
-        for res in reservations:
-            if res.stage == "held":
-                transition_reservation_stage(db=db, reservation_id=res.id, new_stage="confirmed")
-            transition_reservation_stage(db=db, reservation_id=res.id, new_stage="dispatched")
+    db.flush()
+    for res in reservations:
+        transition_reservation_stage(db, reservation_id=res.id, new_stage='dispatched',
+                                     actor_user_id=actor_user_id)
+        db.add(ShipmentAllocation(shipment_id=shipment.id, reservation_id=res.id,
+                                  quantity=res.quantity))
 
     # Advance order status
     order.order_status = "dispatched"
@@ -119,11 +133,14 @@ def update_shipment_status(
     status: str,
     rto_reason: str | None = None,
     rto_courier_cost_minor: int = 0,
+    received_quantities: dict[uuid.UUID, int] | None = None,
+    actor_user_id: uuid.UUID | None = None,
 ) -> Shipment:
     """
     Update a shipment's delivery status and synchronize parent order & stock lifecycle.
     """
-    shipment = db.get(Shipment, shipment_id)
+    shipment = db.scalar(select(Shipment).where(Shipment.id == shipment_id).with_for_update()
+                         .execution_options(populate_existing=True))
     if not shipment:
         raise ShipmentNotFoundError(f"Shipment {shipment_id} not found.")
 
@@ -133,48 +150,131 @@ def update_shipment_status(
             f"Invalid shipment status {status!r}. Must be one of {sorted(ALLOWED_SHIPMENT_STATUSES)}."
         )
 
-    now = _utcnow()
-    shipment.status = clean_status
-    shipment.updated_at = now
-
     order = shipment.order
+    if shipment.stock_reconciliation_status == 'legacy_review':
+        raise ShipmentError('Legacy shipment requires explicit stock reconciliation before status changes.')
+    if clean_status == shipment.status:
+        return shipment
+    allowed = {
+        'booked': {'cancelled'},
+        'dispatched': {'in_transit', 'out_for_delivery', 'delivered', 'rto_initiated'},
+        'in_transit': {'out_for_delivery', 'delivered', 'rto_initiated'},
+        'out_for_delivery': {'delivered', 'rto_initiated'},
+        'delivered': {'rto_initiated'},
+        'rto_initiated': {'rto_delivered'},
+    }
+    if clean_status not in allowed.get(shipment.status, set()):
+        raise ShipmentError(f'Cannot move shipment from {shipment.status} to {clean_status}.')
+    allocations = db.scalars(select(ShipmentAllocation).where(
+        ShipmentAllocation.shipment_id == shipment.id).order_by(ShipmentAllocation.id)
+        .with_for_update()).all()
+    if not allocations:
+        raise ShipmentError('Shipment has no exact stock allocations.')
 
+    now = _utcnow()
     if clean_status == "delivered":
+        if order.payment_method == 'bank_transfer' and order.payment_status != 'verified':
+            raise ShipmentError('Bank funds must be verified before delivery.')
+        if any(a.reservation.stage != 'dispatched' for a in allocations):
+            raise ShipmentError('Delivery requires every allocated reservation to be dispatched.')
+        for allocation in allocations:
+            transition_reservation_stage(db, reservation_id=allocation.reservation_id,
+                                         new_stage='fulfilled', actor_user_id=actor_user_id)
         shipment.delivered_at = now
         order.order_status = "delivered"
         order.updated_at = now
         if order.payment_method == "cod":
             order.payment_status = "verified"
 
-        # Fulfill all open stock reservations sequentially
-        order_line_ids = [line.id for line in order.lines]
-        if order_line_ids:
-            res_stmt = select(StockReservation).where(
-                StockReservation.order_line_id.in_(order_line_ids),
-                StockReservation.stage.in_(["held", "confirmed", "dispatched", "draft", "supplier_accepted", "allocated"]),
-            )
-            reservations = db.scalars(res_stmt).all()
-            for res in reservations:
-                if res.stage == "held":
-                    transition_reservation_stage(db=db, reservation_id=res.id, new_stage="confirmed")
-                if res.stage in ("held", "confirmed"):
-                    transition_reservation_stage(db=db, reservation_id=res.id, new_stage="dispatched")
-                transition_reservation_stage(
-                    db=db,
-                    reservation_id=res.id,
-                    new_stage="fulfilled",
-                )
-
-    elif clean_status in {"rto_initiated", "rto_delivered"}:
+    elif clean_status == 'rto_initiated':
         order.order_status = "rto"
         order.updated_at = now
         if rto_reason:
-            shipment.rto_reason = rto_reason
+            shipment.rto_reason = rto_reason.strip()
         if rto_courier_cost_minor > 0:
             shipment.rto_courier_cost_minor = int(rto_courier_cost_minor)
-        # Note: In Blocker 5, physical restocking does NOT occur automatically upon rto_delivered.
-        # It requires explicit physical condition inspection via inspect_and_restock_order().
+    elif clean_status == 'rto_delivered':
+        by_line = received_quantities or {}
+        allocated_lines = {a.reservation.order_line_id for a in allocations}
+        if set(by_line) != allocated_lines:
+            raise ShipmentError('Record received quantities for every allocated order line.')
+        for allocation in allocations:
+            received = by_line[allocation.reservation.order_line_id]
+            if received < 0 or received > allocation.quantity:
+                raise ShipmentError('Received quantity is outside the dispatched allocation.')
+            allocation.received_quantity = received
+        order.order_status = 'rto'
+        order.updated_at = now
+        if rto_reason:
+            shipment.rto_reason = rto_reason.strip()
+        if rto_courier_cost_minor > 0:
+            shipment.rto_courier_cost_minor = int(rto_courier_cost_minor)
 
+    shipment.status = clean_status
+    shipment.updated_at = now
+
+    db.flush()
+    return shipment
+
+
+def preview_legacy_stock(db: Session, shipment_id: uuid.UUID) -> dict:
+    shipment = db.get(Shipment, shipment_id)
+    if shipment is None or shipment.stock_reconciliation_status != 'legacy_review':
+        raise ShipmentError('Legacy shipment requiring reconciliation was not found.')
+    order = shipment.order
+    reservations = db.scalars(select(StockReservation).where(
+        StockReservation.order_line_id.in_([line.id for line in order.lines]),
+        StockReservation.stage.in_(['dispatched', 'fulfilled'])).order_by(StockReservation.id)).all()
+    return {'shipment_id': str(shipment.id), 'order_id': str(order.id), 'status': shipment.status,
+            'shipment_count': len(order.shipments), 'lines': [
+                {'reservation_id': str(r.id), 'order_line_id': str(r.order_line_id),
+                 'supplier_variant_id': str(r.supplier_variant_id), 'quantity': r.quantity,
+                 'stage': r.stage, 'legacy_stock_hold': r.legacy_stock_hold}
+                for r in reservations]}
+
+
+def reconcile_legacy_stock(db: Session, *, shipment_id: uuid.UUID,
+                           decisions: dict[uuid.UUID, tuple[bool, int | None]],
+                           note: str, actor_user_id: uuid.UUID | None) -> Shipment:
+    """Resolve historical deduction ambiguity only from an explicit per-reservation owner decision."""
+    shipment = db.scalar(select(Shipment).where(Shipment.id == shipment_id).with_for_update()
+                          .execution_options(populate_existing=True))
+    if shipment is None or shipment.stock_reconciliation_status != 'legacy_review':
+        raise ShipmentError('Legacy shipment requiring reconciliation was not found.')
+    order = db.scalar(select(Order).where(Order.id == shipment.order_id).with_for_update())
+    if not note or len(note.strip()) < 5 or len(order.shipments) != 1:
+        raise ShipmentError('A note and an unambiguous single-shipment order are required.')
+    reservations = db.scalars(select(StockReservation).where(
+        StockReservation.order_line_id.in_([line.id for line in order.lines]),
+        StockReservation.stage.in_(['dispatched', 'fulfilled']))
+        .order_by(StockReservation.supplier_variant_id, StockReservation.id).with_for_update()
+        .execution_options(populate_existing=True)).all()
+    if (not reservations or set(decisions) != {r.id for r in reservations}
+            or any(sum(r.quantity for r in reservations if r.order_line_id == line.id)
+                   != line.quantity for line in order.lines)):
+        raise ShipmentError('Provide a physical deduction decision for every exact historical allocation.')
+    for reservation in reservations:
+        deducted, received = decisions[reservation.id]
+        if shipment.status == 'rto_delivered':
+            if received is None or received < 0 or received > reservation.quantity:
+                raise ShipmentError('Record actual historical RTO receipt quantity for every allocation.')
+        elif received is not None:
+            raise ShipmentError('Received quantities apply only to returned parcels.')
+        if not deducted:
+            balance = db.scalar(select(InventoryBalance).where(
+                InventoryBalance.supplier_variant_id == reservation.supplier_variant_id)
+                .with_for_update().execution_options(populate_existing=True))
+            if balance is None or balance.on_hand < reservation.quantity:
+                raise ShipmentError('Physical stock cannot cover the historical dispatch deduction.')
+            adjust_inventory(db, supplier_variant_id=reservation.supplier_variant_id,
+                actor_user_id=actor_user_id, new_on_hand=balance.on_hand - reservation.quantity,
+                expected_version=balance.version, reason='dispatch',
+                releasing_reservation_id=reservation.id,
+                source_ref=f'legacy_dispatch:{reservation.id}', notes=note.strip())
+        reservation.legacy_stock_hold = False
+        db.add(ShipmentAllocation(shipment_id=shipment.id, reservation_id=reservation.id,
+                                  quantity=reservation.quantity, received_quantity=received or 0))
+    shipment.stock_reconciliation_status = 'resolved'
     db.flush()
     return shipment
 
@@ -268,9 +368,10 @@ def initiate_rto_order(
 ) -> Shipment:
     """
     Transition a dispatched order and its shipment to 'rto_initiated'.
-    Stock remains held in reservation while parcel is in-transit with courier.
+    Physical stock remains out of sellable inventory while with the courier.
     """
-    order = db.get(Order, order_id)
+    order = db.scalar(select(Order).where(Order.id == order_id).with_for_update()
+                      .execution_options(populate_existing=True))
     if not order:
         raise ShipmentError(f"Order {order_id} not found.")
 
@@ -286,21 +387,10 @@ def initiate_rto_order(
     ).first()
 
     if not shipment:
-        now = _utcnow()
-        shipment = Shipment(
-            order=order,
-            courier_code="manual",
-            tracking_number=f"RTO-{order.order_number}",
-            status="rto_initiated",
-            rto_reason=rto_reason.strip() if rto_reason else None,
-            rto_courier_cost_minor=max(0, int(rto_courier_cost_minor)),
-            dispatched_at=now,
-        )
-        db.add(shipment)
-        order.order_status = "rto"
-        order.updated_at = now
-        db.flush()
-        return shipment
+        raise ShipmentError('RTO requires an existing dispatched shipment.')
+    if any(ret.received_quantity or ret.sellable_quantity or ret.damaged_quantity
+           for ret in order.returns):
+        raise ShipmentError('Customer return receipt already started; parcel cannot also enter RTO.')
 
     return update_shipment_status(
         db,
@@ -315,10 +405,10 @@ def receive_rto_parcel(
     db: Session,
     *,
     order_id: uuid.UUID,
+    received_quantities: dict[uuid.UUID, int],
 ) -> Shipment:
     """
-    Mark physical arrival of returned parcel at shop ('rto_delivered').
-    Cancels reservations, releasing held inventory back to available stock.
+    Record actual returned quantities in quarantine without increasing sellable stock.
     """
     order = db.get(Order, order_id)
     if not order:
@@ -337,6 +427,7 @@ def receive_rto_parcel(
         db,
         shipment_id=shipment.id,
         status="rto_delivered",
+        received_quantities=received_quantities,
     )
 
 
@@ -344,93 +435,54 @@ def inspect_and_restock_order(
     db: Session,
     *,
     order_id: uuid.UUID,
-    condition_ok: bool,
+    lines: dict[uuid.UUID, tuple[int, int]],
     notes: str | None = None,
     actor_user_id: uuid.UUID | None = None,
 ) -> Shipment:
-    """
-    Perform physical condition inspection on returned RTO parcel:
-    - If condition_ok is True: restores inventory against the fulfilling supplier variant(s)
-      and records StockEvent with positive delta and reason='rto_return'. Marks shipment.rto_restocked_at.
-    - If condition_ok is False: leaves inventory untouched and records rejection note.
-    """
-    order = db.get(Order, order_id)
-    if not order:
-        raise ShipmentError(f"Order {order_id} not found.")
-
-    shipment = db.scalars(
-        select(Shipment).where(Shipment.order_id == order_id).order_by(Shipment.created_at.desc())
-    ).first()
-    if not shipment or shipment.status != "rto_delivered":
-        raise ShipmentError(
-            f"Cannot inspect RTO: order {order.order_number} has no shipment in 'rto_delivered' status."
-        )
-
-    if shipment.rto_restocked_at is not None:
-        raise ShipmentError(
-            f"Order {order.order_number} has already been inspected and restocked."
-        )
-
-    now = _utcnow()
-
-    if condition_ok:
-        shipment.rto_restocked_at = now
-        if notes:
-            shipment.rto_reason = f"{shipment.rto_reason or ''} | Inspection Passed: {notes.strip()}".strip(" |")
-
-        # Restock each line against its fulfilling supplier variant
-        for line in order.lines:
-            # Find the fulfilling reservation for this order line
-            res = db.scalars(
-                select(StockReservation).where(StockReservation.order_line_id == line.id)
-            ).first()
-
-            if res is not None:
-                supplier_variant_id = res.supplier_variant_id
-                if res.stage == "fulfilled":
-                    # Decremented from physical on_hand upon delivery, so increment on_hand via adjust_inventory
-                    balance = db.get(InventoryBalance, supplier_variant_id)
-                    if balance:
-                        adjust_inventory(
-                            db,
-                            supplier_variant_id=supplier_variant_id,
-                            actor_user_id=actor_user_id,
-                            new_on_hand=balance.on_hand + res.quantity,
-                            reason="rto_return",
-                            expected_version=balance.version,
-                            notes=notes or f"RTO restock for order {order.order_number}",
-                        )
-                elif res.stage in ("dispatched", "held", "confirmed"):
-                    # Still open / held, cancel it so held quantity drops and available increases
-                    transition_reservation_stage(
-                        db=db,
-                        reservation_id=res.id,
-                        new_stage="cancelled",
-                        actor_user_id=actor_user_id,
-                        notes="RTO inspection passed; held reservation released.",
-                    )
-            else:
-                # Fallback to active supplier variant if no historical reservation exists
-                active_sv = get_active_supplier_variant(db, line.variant_id)
-                if active_sv:
-                    balance = db.get(InventoryBalance, active_sv.id)
-                    if balance:
-                        adjust_inventory(
-                            db,
-                            supplier_variant_id=active_sv.id,
-                            actor_user_id=actor_user_id,
-                            new_on_hand=balance.on_hand + line.quantity,
-                            reason="rto_return",
-                            expected_version=balance.version,
-                            notes=notes or f"RTO restock for order {order.order_number}",
-                        )
-    else:
-        # Condition failed / damaged
-        rejection_note = f"Inspection Rejected: {notes.strip() if notes else 'Damaged goods'}"
-        shipment.rto_reason = f"{shipment.rto_reason or ''} | {rejection_note}".strip(" |")
-
-    shipment.updated_at = now
+    """Record cumulative sellable/damaged quantities; only new sellable units move stock."""
+    order = db.scalar(select(Order).where(Order.id == order_id).with_for_update()
+                      .execution_options(populate_existing=True))
+    if order is None:
+        raise ShipmentError(f'Order {order_id} not found.')
+    shipment = db.scalar(select(Shipment).where(Shipment.order_id == order_id,
+        Shipment.status == 'rto_delivered').order_by(Shipment.created_at.desc())
+        .with_for_update().execution_options(populate_existing=True))
+    if shipment is None or shipment.stock_reconciliation_status == 'legacy_review':
+        raise ShipmentError('A received and reconciled RTO shipment is required for inspection.')
+    allocations = db.scalars(select(ShipmentAllocation).where(
+        ShipmentAllocation.shipment_id == shipment.id).order_by(ShipmentAllocation.id)
+        .with_for_update().execution_options(populate_existing=True)).all()
+    if not allocations or set(lines) != {a.reservation.order_line_id for a in allocations}:
+        raise ShipmentError('Inspect every allocated order line explicitly.')
+    for allocation in allocations:
+        sellable, damaged = lines[allocation.reservation.order_line_id]
+        if (sellable < allocation.sellable_quantity or damaged < allocation.damaged_quantity
+                or sellable + damaged > allocation.received_quantity):
+            raise ShipmentError('Inspection quantities exceed receipt or reverse a recorded disposition.')
+        if damaged > allocation.damaged_quantity and not (notes and notes.strip()):
+            raise ShipmentError('Record a note for damaged stock.')
+        increase = sellable - allocation.sellable_quantity
+        damaged_increase = damaged - allocation.damaged_quantity
+        if increase:
+            balance = db.scalar(select(InventoryBalance).where(
+                InventoryBalance.supplier_variant_id == allocation.reservation.supplier_variant_id)
+                .with_for_update().execution_options(populate_existing=True))
+            if balance is None:
+                raise ShipmentError('Historical supplier inventory balance is missing.')
+            adjust_inventory(db,
+                supplier_variant_id=allocation.reservation.supplier_variant_id,
+                actor_user_id=actor_user_id,
+                new_on_hand=balance.on_hand + increase,
+                reason='rto_return', expected_version=balance.version,
+                notes=notes or f'RTO inspection for allocation {allocation.id}',
+                source_ref=f'rto:{allocation.id}:{sellable}')
+        allocation.sellable_quantity = sellable
+        allocation.damaged_quantity = damaged
+        if increase or damaged_increase:
+            allocation.inspection_notes = notes
+            allocation.inspected_by_user_id = actor_user_id
+            allocation.inspected_at = _utcnow()
+    if all(a.sellable_quantity + a.damaged_quantity == a.received_quantity for a in allocations):
+        shipment.rto_restocked_at = shipment.rto_restocked_at or _utcnow()
     db.flush()
     return shipment
-
-

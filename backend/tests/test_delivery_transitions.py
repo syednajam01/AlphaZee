@@ -196,8 +196,7 @@ class TestDeliveryAndCancellationTransitions:
 
     def test_rto_in_transit_does_not_release_stock(self, db_session: Session, admin_client: TestClient):
         """
-        Transitioning a dispatched order to RTO (in-transit) must NOT release held stock.
-        Stock must stay held while parcel is travelling back with courier.
+        A parcel in transit remains outside physical sellable stock.
         """
         cat = _setup_catalog(db_session, on_hand=10)
         sv = cat["supplier_variant"]
@@ -212,9 +211,10 @@ class TestDeliveryAndCancellationTransitions:
         )
         db_session.commit()
 
-        # Check stock held before RTO
+        # Dispatch consumed the hold and deducted physical stock.
         summary_before = get_inventory_summary(db_session, sv.id)
-        assert summary_before.held == 3
+        assert summary_before.held == 0
+        assert summary_before.physical == 7
         assert summary_before.available == 7
 
         # Call initiate RTO via API
@@ -231,15 +231,15 @@ class TestDeliveryAndCancellationTransitions:
         assert shipment.rto_reason == "Customer refused delivery at doorstep"
         assert shipment.rto_courier_cost_minor == 15000
 
-        # Stock must STILL be held! Available must NOT be released!
+        # RTO initiation does not restock the in-transit parcel.
         summary_after_rto = get_inventory_summary(db_session, sv.id)
-        assert summary_after_rto.held == 3
+        assert summary_after_rto.held == 0
+        assert summary_after_rto.physical == 7
         assert summary_after_rto.available == 7
 
     def test_rto_received_releases_stock_back_to_available(self, db_session: Session, admin_client: TestClient):
         """
-        Only when parcel physically arrives back at shop (rto-received) does stock get released
-        back to available.
+        Physical receipt quarantines stock; inspection restores only accepted units.
         """
         cat = _setup_catalog(db_session, on_hand=10)
         sv = cat["supplier_variant"]
@@ -263,6 +263,7 @@ class TestDeliveryAndCancellationTransitions:
         # 2. Confirm RTO physical receipt
         resp = admin_client.post(
             f"/api/v1/admin/orders/{order.id}/rto-received",
+            json={"lines": [{"order_line_id": str(order.lines[0].id), "received_quantity": 3}]},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -274,7 +275,9 @@ class TestDeliveryAndCancellationTransitions:
         # 3. Inspect condition & restock
         insp_resp = admin_client.post(
             f"/api/v1/admin/orders/{order.id}/rto-inspect",
-            json={"condition_ok": True, "notes": "Packaging sealed and pristine"},
+            json={"lines": [{"order_line_id": str(order.lines[0].id),
+                              "sellable_quantity": 3, "damaged_quantity": 0}],
+                  "notes": "Packaging sealed and pristine"},
         )
         assert insp_resp.status_code == 200
 

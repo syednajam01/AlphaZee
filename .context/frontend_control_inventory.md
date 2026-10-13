@@ -45,11 +45,11 @@ Evidence labels: **DOM** = actual component construction/events exercised agains
 | Cart `#cart-close-btn`, `#cart-drawer-backdrop` | Dismiss, restore focus/scroll | None | Repaired; DOM | Cart preserved |
 | Cart `#btn-checkout` | Open checkout only if server permits it and cart is valid | GET `/storefront/capabilities` | Intentionally disabled publicly; DOM + live HTTP | Cart preserved |
 | Checkout `#checkout-close-btn`, backdrop | Dismiss checkout | None | Shared repaired overlay; constructed/closed state DOM-tested | Cart preserved |
-| Checkout inputs / payment radios | Validate customer details; select payment | None until submit | Existing handlers; source/unit; public entry disabled | Current page only |
+| Checkout inputs / payment radios | Validate customer details; offer bank transfer only when capability permits | GET `/storefront/capabilities` | Phase C bank option gated by validated API methods; public entry disabled | Current page only |
 | Checkout `#btn-apply-coupon` | Validate coupon and recalculate display | POST `/coupons/validate` | Existing handler; API-client unit; full DOM submission pending | Order snapshot only on later submit |
 | Checkout `#checkout-form`, `#btn-place-order` | Submit or recover an order | GET `/orders/checkout-session`, POST `/orders` | Phase B idempotency and lost-response recovery implemented and tested in isolated PostgreSQL/Node; publicly gated with live HTTP 503 | Pending key/payload in tab storage; order and holds in test database |
 | Confirmation `#btn-finish-checkout` | Close completed checkout; a later visit restores a fresh form | None | Handler and form reset implemented; source/Node tests, browser journey pending | Order remains on server |
-| Confirmation receipt form | Submit payment-proof URL/reference | POST `/orders/{number}/receipt` | Existing handler; unit/source; payment corrections Phase C | Receipt on server; not exercised here |
+| Confirmation receipt form | Submit payment-proof URL/reference only after instructions | POST `/orders/{number}/receipt` | Phase C hides proof form until successful handoff; backend rejects earlier uploads | Receipt on server |
 | All live dialogs: Escape/Tab/close | Hide/inert closed roots, trap focus, restore opener and scroll, allow one active dialog | None | Repaired; dedicated overlay DOM tests | None |
 
 ## Tracking and owner console
@@ -61,7 +61,7 @@ Evidence labels: **DOM** = actual component construction/events exercised agains
 | Tracking courier link | Open supplied tracking URL | External courier | Existing conditional link; source only | None |
 | Tracking `#btn-toggle-return-form` | Show/hide return request panel | None | Existing handler; source | Current page only |
 | Tracking return type/line/reason/notes + submit | Request return | POST `/returns/request` | Existing handler, incomplete secure ownership/exchange selection; unit/source | Phase G; no customer writes exercised |
-| Tracking payment-proof form | Submit receipt URL/reference | POST `/orders/{number}/receipt` | Existing handler; unit/source | Phase C/G; no customer writes exercised |
+| Tracking payment-proof form | Show sent bank snapshot/deadline and submit proof after handoff | POST `/orders/{number}/receipt` | Phase C gated by handoff; review state visible; customer write covered by backend tests | Phase G access credential still pending |
 | Footer `a[href="#admin"]` | Open owner console and restore session | GET `/auth/session`, then active admin tab | Shell/session DOM tests; anonymous HTTP access 401 | PostgreSQL session survives API restart |
 | Owner `#admin-auth-form` | Username/password sign-in | POST `/auth/login` | Implemented Phase A; inline errors and password clearing tested in DOM; real HTTP login passed | HttpOnly cookie; no shared key in storage |
 | Owner `#btn-admin-logout` | Revoke session and return to login | POST `/auth/logout` with CSRF token | Implemented Phase A; successful/failed logout DOM tests; real HTTP revocation passed | Stolen/replayed cookie rejected after logout |
@@ -69,8 +69,10 @@ Evidence labels: **DOM** = actual component construction/events exercised agains
 | Owner `.admin-tab-btn` | Switch overview/orders/inventory/coupons/returns/suppliers/analytics | GET matching `/admin/*` endpoint | Existing handlers; source | Read-only tab load; not exercised with real credentials |
 | Owner `#btn-refresh-admin-tab` | Retry/reload active tab | GET matching endpoint | Existing handler; source | Reads latest server state |
 | Owner `#admin-close-btn`, backdrop | Close console and any nested forms | None | Repaired; DOM | No server mutation |
-| Order `.btn-verify-payment` | Verify funds | POST `/admin/orders/{id}/verify-payment` | Existing handler; error recovery incomplete; source/unit | Phase C/L2 |
-| Order `.btn-confirm-supplier` | Record supplier acceptance | POST `/admin/orders/{id}/confirm-supplier` | Existing handler; source/unit | Phase C/D |
+| Order `.btn-verify-payment` | Verify received funds outside expired review | POST `/admin/orders/{id}/verify-payment` | Phase C lock/deadline guard and owner identity tested | Payment audit on server |
+| Order `.btn-confirm-supplier` | Record supplier acceptance only with complete allocations | POST `/admin/orders/{id}/confirm-supplier` | Phase C allocation guard tested | Supplier audit on server |
+| Order `.btn-prepare-instructions` | Preview bank account, then explicitly record successful customer handoff | GET `/admin/orders/{id}/payment-instructions-preview`; POST `/instructions-sent` | Phase C owner form and backend integration tested; no browser exercise | Handoff snapshot and UTC deadline on server |
+| Order `#btn-review-expired-orders`, `.btn-resolve-payment` | Flag expired orders and decide after checking funds | POST `/admin/orders/review-expired`; POST `/orders/{id}/payment-review` | Phase C preserved holds and explicit release/verify tested | Review audit on server |
 | Order `.btn-dispatch-order` | Open dispatch details form | None until submit | Existing opener; source | Fulfillment integration Phase D/L2 |
 | Dispatch `#admin-dispatch-form`, `#btn-submit-dispatch` | Book/dispatch shipment | API client exists, submit integration unfinished | Now explicitly disabled; native submit prevented | Phase D/L2; no false success |
 | Dispatch `#btn-cancel-dispatch` | Dismiss nested form | None | Repaired; DOM | No mutation |

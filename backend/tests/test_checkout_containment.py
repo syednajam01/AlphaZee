@@ -32,7 +32,7 @@ def test_capabilities_are_safe_and_health_remains_available(monkeypatch):
     with TestClient(app) as client:
         response = client.get('/api/v1/storefront/capabilities')
         assert response.status_code == 200
-        assert response.json() == {'checkout_enabled': False, 'test_mode': False}
+        assert response.json() == {'checkout_enabled': False, 'test_mode': False, 'payment_methods': ['cod']}
         assert response.headers['cache-control'] == 'no-store'
         assert client.get('/api/v1/health').status_code == 200
 
@@ -58,6 +58,14 @@ def test_checkout_defaults_off_and_only_isolated_test_can_enable():
     assert config.checkout_enabled
 
 
+def test_bank_method_requires_complete_checksum_valid_account():
+    account = dict(bank_name='Standard Chartered Bank', bank_account_title='AlphaZee Private Limited',
+                   bank_account_number='0000001123456702', bank_iban='PK36SCBL0000001123456702')
+    assert Settings(_env_file=None, **account).permitted_payment_methods == ['cod', 'bank_transfer']
+    assert Settings(_env_file=None, **{**account, 'bank_iban': 'PK37SCBL0000001123456702'}).permitted_payment_methods == ['cod']
+    assert Settings(_env_file=None, **{**account, 'bank_account_number': 'PENDING_CONFIGURATION'}).permitted_payment_methods == ['cod']
+
+
 def test_isolated_test_mode_exposes_enabled_capability_and_reaches_order_service(monkeypatch):
     from unittest.mock import Mock
     from app.api.v1 import orders
@@ -71,7 +79,7 @@ def test_isolated_test_mode_exposes_enabled_capability_and_reaches_order_service
     try:
         with TestClient(app) as client:
             assert client.get('/api/v1/storefront/capabilities').json() == {
-                'checkout_enabled': True, 'test_mode': True,
+                'checkout_enabled': True, 'test_mode': True, 'payment_methods': ['cod'],
             }
             assert client.get('/api/v1/orders/checkout-session').status_code == 200
             response = client.post('/api/v1/orders', headers={

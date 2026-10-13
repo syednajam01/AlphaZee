@@ -94,6 +94,10 @@ class Order(Base):
             "order_status IN ('placed', 'confirmed', 'dispatched', 'delivered', 'cancelled', 'rto')",
             name="ck_orders_order_status",
         ),
+        CheckConstraint(
+            "payment_review_status IN ('none', 'required', 'resolved_paid', 'released_unpaid')",
+            name='ck_orders_payment_review_status',
+        ),
         Index("idx_orders_customer_phone", "customer_phone"),
         Index("idx_orders_status", "order_status", "payment_status"),
         Index("idx_orders_placed_at", "placed_at"),
@@ -104,6 +108,7 @@ class Order(Base):
             postgresql_where=text("idempotency_key IS NOT NULL"),
         ),
         Index("idx_orders_payment_deadline", "payment_deadline_at"),
+        Index("idx_orders_payment_review_status", "payment_review_status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -243,6 +248,26 @@ class Order(Base):
         nullable=True,
     )
     """Four-hour deadline for bank transfer customers to submit payment proof."""
+
+    payment_instructions_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_instructions_channel: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payment_instructions_reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    payment_instructions_sent_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey('user_accounts.id', ondelete='SET NULL'), nullable=True)
+    payment_bank_name_snapshot: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    payment_account_title_snapshot: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    payment_account_number_snapshot: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payment_iban_snapshot: Mapped[str | None] = mapped_column(String(34), nullable=True)
+    payment_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_verified_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey('user_accounts.id', ondelete='SET NULL'), nullable=True)
+    payment_review_status: Mapped[str] = mapped_column(String(32), nullable=False, default='none',
+                                                       server_default=text("'none'"))
+    payment_review_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey('user_accounts.id', ondelete='SET NULL'), nullable=True)
+    payment_review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     supplier_confirmed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

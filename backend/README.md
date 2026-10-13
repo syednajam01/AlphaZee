@@ -1,6 +1,8 @@
 # AlphaZee Backend — Milestone 1
 
 FastAPI catalog service and local development environment for AlphaZee.
+The full containerized development and production stacks are documented in
+[the Docker deployment runbook](../.context/docker_deployment_runbook.md).
 
 ---
 

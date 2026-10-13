@@ -318,12 +318,30 @@ export async function confirmSupplierAcceptance(orderId, notes = null) {
 }
 
 /**
- * Trigger cancellation of expired bank transfer orders exceeding the 4-hour window.
- * @returns {Promise<{ cancelled_count: number, cancelled_order_ids: string[] }>}
+ * Flag expired unpaid bank transfers for owner review without releasing stock.
+ * @returns {Promise<{ review_count: number, review_order_ids: string[] }>}
  */
-export async function cancelExpiredOrders() {
-  return request('/admin/orders/cancel-expired', {
+export async function reviewExpiredOrders() {
+  return request('/admin/orders/review-expired', {
     method: 'POST',
+  });
+}
+
+export async function fetchPaymentInstructionsPreview(orderId) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/payment-instructions-preview`);
+}
+
+export async function markPaymentInstructionsSent(orderId, { channel, reference }) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/instructions-sent`, {
+    method: 'POST',
+    body: JSON.stringify({ confirmed_sent: true, channel, reference }),
+  });
+}
+
+export async function resolvePaymentReview(orderId, { resolution, note }) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/payment-review`, {
+    method: 'POST',
+    body: JSON.stringify({ funds_checked: true, resolution, note }),
   });
 }
 
@@ -364,27 +382,41 @@ export async function initiateOrderRto(orderId, payload = {}) {
 }
 
 /**
- * Confirm physical receipt of RTO parcel at store, releasing stock back to available.
+ * Record per-line physical receipt of an RTO parcel in quarantine.
  * @param {string} orderId
  * @returns {Promise<Object>} Updated order details
  */
-export async function receiveOrderRto(orderId) {
+export async function receiveOrderRto(orderId, lines) {
   return request(`/admin/orders/${encodeURIComponent(orderId)}/rto-received`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lines }),
   });
 }
 
 /**
  * Record physical condition inspection and restock an RTO parcel.
  * @param {string} orderId
- * @param {Object} payload { condition_ok, notes }
+ * @param {Object} payload { lines: [{order_line_id, sellable_quantity, damaged_quantity}], notes }
  * @returns {Promise<Object>} Updated order details
  */
-export async function inspectAndRestockRtoOrder(orderId, { condition_ok = true, notes = '' } = {}) {
+export async function inspectAndRestockRtoOrder(orderId, { lines, notes = '' }) {
   return request(`/admin/orders/${encodeURIComponent(orderId)}/rto-inspect`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ condition_ok: Boolean(condition_ok), notes: notes || undefined }),
+    body: JSON.stringify({ lines, notes: notes || undefined }),
+  });
+}
+
+export async function previewLegacyShipmentStock(shipmentId) {
+  return request(`/admin/shipments/${encodeURIComponent(shipmentId)}/stock-reconciliation`);
+}
+
+export async function reconcileLegacyShipmentStock(shipmentId, payload) {
+  return request(`/admin/shipments/${encodeURIComponent(shipmentId)}/stock-reconciliation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -562,6 +594,22 @@ export async function fetchAdminReturns(filters = {}) {
  */
 export async function approveAdminReturn(returnId, payload = {}) {
   return request(`/admin/returns/${encodeURIComponent(returnId)}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function receiveAdminReturn(returnId, receivedQuantity) {
+  return request(`/admin/returns/${encodeURIComponent(returnId)}/receive`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ received_quantity: receivedQuantity }),
+  });
+}
+
+export async function inspectAdminReturn(returnId, payload) {
+  return request(`/admin/returns/${encodeURIComponent(returnId)}/inspect`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

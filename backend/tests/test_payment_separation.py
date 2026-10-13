@@ -8,6 +8,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 import pytest
+
+pytestmark = pytest.mark.usefixtures("configured_bank")
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,7 +24,9 @@ from app.services.orders import (
     place_order,
     verify_bank_payment,
     confirm_supplier_acceptance,
-    cancel_expired_bank_orders,
+    mark_expired_bank_orders_for_review,
+    record_payment_instructions_sent,
+    resolve_payment_review,
 )
 from app.services.shipments import OrderNotDispatchableError, create_shipment
 
@@ -233,16 +237,15 @@ def test_confirm_supplier_acceptance_advances_order_and_reservations(db_session:
     assert order.order_status == "dispatched"
 
 
-def test_four_hour_payment_window_and_expired_order_cancellation(db_session: Session):
+def test_four_hour_payment_window_and_expired_order_review(db_session: Session):
     """
-    Bank transfer orders must receive a 4-hour payment deadline.
-    Orders past their deadline without payment can be cancelled, releasing held stock.
+    The deadline begins only after a confirmed handoff. Expiry keeps holds until review.
     """
     var, sv, ib, user = _setup_catalog(db_session, on_hand=2)
 
     now = datetime.now(timezone.utc)
 
-    # 1. Bank transfer order gets payment_deadline_at
+    # 1. Checkout does not start a timer.
     bank_order = place_order(
         db_session,
         CreateOrderDTO(
@@ -257,8 +260,11 @@ def test_four_hour_payment_window_and_expired_order_cancellation(db_session: Ses
     )
     db_session.flush()
 
-    assert bank_order.payment_deadline_at is not None
-    # Should be ~4 hours from now
+    assert bank_order.payment_deadline_at is None
+    confirm_supplier_acceptance(db_session, order_id=bank_order.id)
+    assert bank_order.payment_deadline_at is None
+    record_payment_instructions_sent(db_session, order_id=bank_order.id, actor_user_id=user.id,
+                                     channel='sms', reference='SAMPLE-message-123')
     diff_hours = (bank_order.payment_deadline_at - now).total_seconds() / 3600
     assert 3.9 <= diff_hours <= 4.1
 
@@ -287,12 +293,17 @@ def test_four_hour_payment_window_and_expired_order_cancellation(db_session: Ses
     bank_order.payment_deadline_at = now - timedelta(minutes=10)
     db_session.flush()
 
-    # Run expired order cancellation
-    cancelled = cancel_expired_bank_orders(db_session)
-    assert len(cancelled) == 1
-    assert cancelled[0].id == bank_order.id
-    assert bank_order.order_status == "cancelled"
-
-    # Held stock from bank order is released, available stock increases to 1
+    # Expiry flags review and keeps the held quantity intact.
+    review = mark_expired_bank_orders_for_review(db_session)
+    assert len(review) == 1
+    assert bank_order.payment_review_status == 'required'
+    assert bank_order.order_status == 'confirmed'
     summary_after = get_inventory_summary(db_session, sv.id)
-    assert summary_after.available == 1
+    assert summary_after.available == 0
+
+    resolved = resolve_payment_review(db_session, order_id=bank_order.id, actor_user_id=user.id,
+                                      resolution='release_unpaid', funds_checked=True,
+                                      note='Bank balance and pending transfers checked; no funds found')
+    assert resolved.order_status == 'cancelled'
+    assert resolved.payment_review_status == 'released_unpaid'
+    assert get_inventory_summary(db_session, sv.id).available == 1

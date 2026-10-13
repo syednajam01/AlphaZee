@@ -12,6 +12,13 @@ test('checkout starts closed and requires explicit isolated test capabilities', 
   const store = createCapabilitiesStore(async () => ({ checkout_enabled: true, test_mode: true }));
   await store.refresh();
   assert.equal(store.getState().checkoutEnabled, true);
+  assert.deepEqual(store.getState().paymentMethods, ['cod']);
+});
+
+test('bank transfer is advertised only when the API explicitly enables it', async () => {
+  const store = createCapabilitiesStore(async () => ({ checkout_enabled: true, test_mode: true, payment_methods: ['cod', 'bank_transfer', 'unknown'] }));
+  await store.refresh();
+  assert.deepEqual(store.getState().paymentMethods, ['cod', 'bank_transfer']);
 });
 
 test('failed capability refresh closes checkout and notifies subscribers', async () => {

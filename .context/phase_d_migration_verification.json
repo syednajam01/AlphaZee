@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-10-13T09:34:52.068610+00:00",
+  "test_database": "alphazee_phase_d_3aaa95b23d_test",
+  "browser_used": false,
+  "upgrade_downgrade_reupgrade": "passed",
+  "historical_shipment_preserved": true,
+  "legacy_shipment_flagged": true,
+  "stock_not_guessed_or_deducted": true,
+  "development_database_modified": false,
+  "test_database_retained": true
+}

@@ -147,3 +147,36 @@ Order headers, lines, coupon usage and reservations remain one database transact
 | Local HTTP | 22 storefront/API checks passed; checkout-session remains 503 directly and through Vite while public checkout is disabled |
 
 Evidence: `phase_b_migration_verification.json`, `phase_b_development_before.json`, `phase_b_development_after.json` and `phase_b_local_http_checks.json`. Test databases contain only SAMPLE data and were retained. The development comparison covers table counts and revision, not a database checksum. No browser was opened, so native browser cookie behavior and visual interaction remain unverified. Public checkout remains disabled; payment and fulfillment corrections begin in Phase C.
+
+## Phase C — payment handoff and expiry review implemented
+
+Date: 2026-10-13. Bank transfer is disabled by default until all account fields and the Pakistani IBAN checksum validate; the API advertises only permitted methods and rejects a disallowed selection. Checkout creates no transfer deadline or bank instruction response. Supplier acceptance checks complete held allocations but does not verify funds. An owner-only preview precedes a separately recorded successful instruction handoff, which saves account snapshots, actor, channel, reference, and a single four-hour UTC deadline. Customer tracking shows instructions only after that event.
+
+Expired unpaid orders are flagged for review without stock release. Direct verification or cancellation after the deadline is rejected. The review endpoint requires an explicit received/pending funds check and note before verifying receipt or releasing unpaid stock. Row locks serialize verification, expiry marking and cancellation. Unverified bank orders cannot dispatch or deliver. The owner console exposes the handoff and review forms; its former automatic-cancel action is removed.
+
+| Check | Result |
+| --- | --- |
+| Backend suite | 197 passed; one Starlette/AnyIO deprecation warning |
+| Frontend suite and production build | 80 passed; build passed |
+| Payment lifecycle tests | Handoff timing/idempotency, account snapshot, unconfigured rejection, review holds and release/verify, owner CSRF/identity, concurrent verify/cancel passed |
+| Disposable migration | `c4d8a71e29f0` upgrade/downgrade/re-upgrade passed; historical SAMPLE order preserved and invalid checkout timer cleared |
+| Local development | Upgraded from `b79e3a2f0d61` to `c4d8a71e29f0`; six inspected commerce table counts remained zero before/after; no records seeded |
+| Local HTTP | 22 checks passed directly and through Vite on ports 8000/3000; checkout remained 503 and anonymous owner access 401 |
+
+Evidence: `phase_c_migration_verification.json`, `phase_c_payment_runbook.md` and `phase_c_local_http_checks.json`. Development row counts are a limited preservation check, not a checksum. No browser was opened; visual behavior and native browser workflows remain unverified. Phase D stock and shipment corrections remain pending.
+
+## Phase D/E — stock, shipment and inspected returns implemented
+
+Date: 2026-10-13. Dispatch now requires a supplier-confirmed allocation for every order line and verified bank payment where applicable. In one transaction it creates shipment allocations, consumes reservation holds, deducts physical stock, and records uniquely referenced stock events. Delivery advances only dispatched allocations and makes no physical stock change. RTO and customer-return receipts quarantine explicit quantities. Inspection restores only cumulative sellable increments to the historical supplier variant; damaged and unresolved units remain unavailable. Repeated status/inspection submissions do not create repeat stock movements. Customer return receipt and RTO are mutually exclusive for a parcel.
+
+The additive migration flags historical shipments for owner reconciliation. It never guesses whether old dispatch stock was already deducted. The owner can preview per-reservation historical allocations and explicitly record deduction decisions and notes; ambiguous multi-shipment records remain blocked. Historical returns are flagged for review rather than silently restocked. The owner console sends per-line RTO quantities, customer return receipt/inspection quantities, and legacy stock decisions. The customer return request includes an explicit quantity.
+
+| Check | Result |
+| --- | --- |
+| Backend suite | 204 passed after Phase D/E changes; one Starlette/AnyIO deprecation warning |
+| Frontend suite and production build | 81 passed; build passed |
+| Disposable migration | `d61f4b8c2a90` upgrade/downgrade/re-upgrade passed; historical dispatched SAMPLE shipment preserved and flagged, with no guessed stock deduction |
+| Local development | Upgraded from `c4d8a71e29f0` to `d61f4b8c2a90` after inspecting zero commerce rows; revision checked at head |
+| Browser | None used, per owner request; visual and native browser flows remain unverified |
+
+Evidence: `phase_d_stock_transition_table.md` and `phase_d_migration_verification.json`. Exchange approval remains intentionally blocked until Phase G provides separately allocated replacement fulfillment. Phase F will repair refund execution and settlement accounting; Phase L2 will finish the broader owner form and browser journey integration.

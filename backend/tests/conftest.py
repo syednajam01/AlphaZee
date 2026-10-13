@@ -175,6 +175,16 @@ def sample_password_hash():
 
 
 @pytest.fixture()
+def configured_bank(monkeypatch):
+    """A checksum-valid test account, never applied to development settings."""
+    monkeypatch.setattr(settings, 'bank_name', 'Standard Chartered Bank')
+    monkeypatch.setattr(settings, 'bank_account_title', 'AlphaZee Private Limited')
+    monkeypatch.setattr(settings, 'bank_account_number', '0000001123456702')
+    monkeypatch.setattr(settings, 'bank_iban', 'PK36SCBL0000001123456702')
+    assert settings.bank_transfer_enabled
+
+
+@pytest.fixture()
 def sample_owner(db_session, sample_password_hash):
     from app.models.suppliers import UserAccount
     from app.models.auth import OwnerCredential

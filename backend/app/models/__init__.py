@@ -16,7 +16,7 @@ from app.models.inventory import (  # noqa: F401
     SupplierVariant,
 )
 from app.models.orders import Order, OrderLine, PaymentReceipt  # noqa: F401
-from app.models.shipments import Shipment  # noqa: F401
+from app.models.shipments import Shipment, ShipmentAllocation  # noqa: F401
 from app.models.promotions import Coupon  # noqa: F401
 from app.models.returns import OrderReturn  # noqa: F401
 from app.models.auth import OwnerCredential, OwnerSession, OwnerLoginBucket  # noqa: F401
@@ -38,6 +38,7 @@ __all__ = [
     "OrderLine",
     "PaymentReceipt",
     "Shipment",
+    "ShipmentAllocation",
     "Coupon",
     "OrderReturn",
 ]

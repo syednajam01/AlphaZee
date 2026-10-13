@@ -207,7 +207,7 @@ class TestStockReservationLifecycle:
         # Check stock audit events
         events = get_stock_events(db_session, sv.id)
         assert len(events) == 1
-        assert events[0].reason == "reservation_fulfilled"
+        assert events[0].reason == "dispatch"
         assert events[0].delta == -2
         assert events[0].previous_on_hand == 10
         assert events[0].new_on_hand == 8

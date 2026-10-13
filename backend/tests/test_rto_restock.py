@@ -158,7 +158,8 @@ class TestSafeRtoRestockingAndReturnSupplier:
         db_session.commit()
 
         # Parcel arrives at shop
-        resp = admin_client.post(f"/api/v1/admin/orders/{order.id}/rto-received")
+        resp = admin_client.post(f"/api/v1/admin/orders/{order.id}/rto-received",
+            json={"lines": [{"order_line_id": str(order.lines[0].id), "received_quantity": 2}]})
         assert resp.status_code == 200
 
         db_session.refresh(shipment)
@@ -166,9 +167,9 @@ class TestSafeRtoRestockingAndReturnSupplier:
         # In Blocker 5, physical restocking has NOT occurred yet:
         assert shipment.rto_restocked_at is None
 
-        # Physical on_hand must remain unchanged (10)
+        # Dispatch already deducted stock; receipt adds none.
         bal = db_session.get(InventoryBalance, sv_a.id)
-        assert bal.on_hand == 10
+        assert bal.on_hand == 8
 
         # No rto_return StockEvent should exist yet
         events = db_session.scalars(
@@ -198,7 +199,8 @@ class TestSafeRtoRestockingAndReturnSupplier:
 
         # Parcel returned via RTO
         initiate_rto_order(db_session, order_id=order.id, rto_reason="Doorstep return")
-        receive_rto_parcel(db_session, order_id=order.id)
+        receive_rto_parcel(db_session, order_id=order.id,
+                           received_quantities={order.lines[0].id: 2})
         db_session.commit()
 
         # Physical on_hand is still 8 before inspection
@@ -208,7 +210,9 @@ class TestSafeRtoRestockingAndReturnSupplier:
         # Owner inspects: condition is OK
         resp = admin_client.post(
             f"/api/v1/admin/orders/{order.id}/rto-inspect",
-            json={"condition_ok": True, "notes": "Packaging sealed and pristine"},
+            json={"lines": [{"order_line_id": str(order.lines[0].id),
+                              "sellable_quantity": 2, "damaged_quantity": 0}],
+                  "notes": "Packaging sealed and pristine"},
         )
         assert resp.status_code == 200
 
@@ -248,20 +252,22 @@ class TestSafeRtoRestockingAndReturnSupplier:
         assert bal.on_hand == 8
 
         initiate_rto_order(db_session, order_id=order.id, rto_reason="Doorstep refusal")
-        receive_rto_parcel(db_session, order_id=order.id)
+        receive_rto_parcel(db_session, order_id=order.id,
+                           received_quantities={order.lines[0].id: 2})
         db_session.commit()
 
         # Owner inspects: condition failed
         resp = admin_client.post(
             f"/api/v1/admin/orders/{order.id}/rto-inspect",
-            json={"condition_ok": False, "notes": "Item torn by courier during transit"},
+            json={"lines": [{"order_line_id": str(order.lines[0].id),
+                              "sellable_quantity": 0, "damaged_quantity": 2}],
+                  "notes": "Item torn by courier during transit"},
         )
         assert resp.status_code == 200
 
         db_session.refresh(shipment)
-        # Not restocked into saleable inventory
-        assert shipment.rto_restocked_at is None
-        assert "Item torn by courier" in (shipment.rto_reason or "")
+        # Inspection closed the disposition without restocking damaged units.
+        assert shipment.rto_restocked_at is not None
 
         # Physical on_hand remains 8
         db_session.refresh(bal)
@@ -331,10 +337,15 @@ class TestSafeRtoRestockingAndReturnSupplier:
             return_type="refund_bank_transfer",
             reason="damaged_defective",
             customer_notes="Wrong size received",
+            quantity=3,
         )
         approve_return_request(db_session, return_id=return_obj.id)
 
-        # Complete return and restock
+        # Receipt is quarantined; inspection restores only accepted units.
+        from app.services.returns import receive_return_items, inspect_return_items
+        receive_return_items(db_session, return_id=return_obj.id, received_quantity=3)
+        inspect_return_items(db_session, return_id=return_obj.id,
+                             sellable_quantity=3, damaged_quantity=0)
         complete_return_and_restock(
             db_session,
             return_id=return_obj.id,

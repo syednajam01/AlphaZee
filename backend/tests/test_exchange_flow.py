@@ -23,7 +23,16 @@ from app.models.orders import Order
 from app.models.returns import OrderReturn
 from app.models.shipments import Shipment
 from app.models.suppliers import Supplier
-from app.services.orders import CreateOrderDTO, OrderItemDTO, place_order
+from app.services.orders import CreateOrderDTO, OrderItemDTO, place_order, confirm_supplier_acceptance, deliver_order
+from app.services.shipments import create_shipment
+
+
+def _deliver(db, order):
+    confirm_supplier_acceptance(db, order_id=order.id)
+    create_shipment(db, order_id=order.id, courier_code='manual',
+                    tracking_number=f'EX-ORIG-{uuid.uuid4().hex[:8]}')
+    deliver_order(db, order_id=order.id)
+    db.commit()
 
 
 @pytest.fixture
@@ -138,7 +147,7 @@ def test_return_request_with_wrong_phone_rejected_with_403(
             items=[OrderItemDTO(variant_id=var_m.id, quantity=1)],
         ),
     )
-    db_session.commit()
+    _deliver(db_session, order)
     line_id = order.lines[0].id
 
     # Customer tries to file return using a different phone number
@@ -147,6 +156,7 @@ def test_return_request_with_wrong_phone_rejected_with_403(
         json={
             "order_id": str(order.id),
             "order_line_id": str(line_id),
+            "quantity": 1,
             "customer_phone": "03009998877",  # WRONG PHONE
             "return_type": "refund_bank_transfer",
             "reason": "changed_mind",
@@ -175,7 +185,7 @@ def test_return_request_with_valid_phone_accepted(
             items=[OrderItemDTO(variant_id=var_m.id, quantity=1)],
         ),
     )
-    db_session.commit()
+    _deliver(db_session, order)
     line_id = order.lines[0].id
 
     # Formatted phone number should normalize and match
@@ -184,6 +194,7 @@ def test_return_request_with_valid_phone_accepted(
         json={
             "order_id": str(order.id),
             "order_line_id": str(line_id),
+            "quantity": 1,
             "customer_phone": "+92 300 7654321",  # Un-normalized input
             "return_type": "refund_bank_transfer",
             "reason": "damaged_defective",
@@ -221,7 +232,7 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
             items=[OrderItemDTO(variant_id=var_m.id, quantity=1)],
         ),
     )
-    db_session.commit()
+    _deliver(db_session, order)
     line_id = order.lines[0].id
 
     # 1. Customer submits size exchange request from M to L
@@ -230,6 +241,7 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
         json={
             "order_id": str(order.id),
             "order_line_id": str(line_id),
+            "quantity": 1,
             "customer_phone": "03125554433",
             "return_type": "size_exchange",
             "reason": "size_too_small",
@@ -240,10 +252,10 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
     assert req_res.status_code == 201
     return_id = req_res.json()["id"]
 
-    # 2. Admin approves size exchange
+    # Replacement fulfillment is safely deferred until Phase G.
     app_res = client.post(f"/api/v1/admin/returns/{return_id}/approve")
-    assert app_res.status_code == 200
-    assert app_res.json()["status"] == "approved"
+    assert app_res.status_code == 400
+    assert 'replacement allocation' in app_res.json()['detail'].lower()
 
     # 3. Verify replacement reservation created for variant L
     res_stmt = db_session.query(StockReservation).filter(
@@ -251,19 +263,14 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
         StockReservation.stage == "held",
     )
     res_record = res_stmt.first()
-    assert res_record is not None
-    assert res_record.quantity == 1
+    assert res_record is None
 
     # 4. Verify replacement shipment created for the order
     ship_stmt = db_session.query(Shipment).filter(
         Shipment.order_id == order.id,
         Shipment.status == "booked",
     )
-    exchange_shipment = ship_stmt.first()
-    assert exchange_shipment is not None
-    assert exchange_shipment.cod_amount_minor == 0
-    assert exchange_shipment.cod_remittance_status == "not_applicable"
-    assert "EXCH-" in exchange_shipment.tracking_number
+    assert ship_stmt.first() is None
 
 
 def test_approve_exchange_with_no_stock_raises_422(
@@ -291,7 +298,7 @@ def test_approve_exchange_with_no_stock_raises_422(
             items=[OrderItemDTO(variant_id=var_m.id, quantity=1)],
         ),
     )
-    db_session.commit()
+    _deliver(db_session, order)
     line_id = order.lines[0].id
 
     req_res = client.post(
@@ -299,6 +306,7 @@ def test_approve_exchange_with_no_stock_raises_422(
         json={
             "order_id": str(order.id),
             "order_line_id": str(line_id),
+            "quantity": 1,
             "customer_phone": "03331112244",
             "return_type": "size_exchange",
             "reason": "size_too_small",
@@ -308,10 +316,10 @@ def test_approve_exchange_with_no_stock_raises_422(
     assert req_res.status_code == 201
     return_id = req_res.json()["id"]
 
-    # Admin approval should fail with 422 due to zero stock
+    # Exchange approval remains disabled until dedicated replacement allocations exist.
     app_res = client.post(f"/api/v1/admin/returns/{return_id}/approve")
-    assert app_res.status_code == 422
-    assert "stock" in app_res.json()["detail"].lower()
+    assert app_res.status_code == 400
+    assert "replacement allocation" in app_res.json()["detail"].lower()
 
     # Verify return status remains "requested"
     ret = db_session.get(OrderReturn, uuid.UUID(return_id))
@@ -336,7 +344,7 @@ def test_approve_refund_return_does_not_create_replacement_shipment(
             items=[OrderItemDTO(variant_id=var_m.id, quantity=1)],
         ),
     )
-    db_session.commit()
+    _deliver(db_session, order)
     line_id = order.lines[0].id
 
     req_res = client.post(
@@ -344,6 +352,7 @@ def test_approve_refund_return_does_not_create_replacement_shipment(
         json={
             "order_id": str(order.id),
             "order_line_id": str(line_id),
+            "quantity": 1,
             "customer_phone": "03214443322",
             "return_type": "refund_bank_transfer",
             "reason": "changed_mind",
@@ -356,6 +365,6 @@ def test_approve_refund_return_does_not_create_replacement_shipment(
     assert app_res.status_code == 200
     assert app_res.json()["status"] == "approved"
 
-    # Verify NO shipment was created
+    # No replacement shipment is created beyond the original delivered parcel.
     shipments = db_session.query(Shipment).filter(Shipment.order_id == order.id).all()
-    assert len(shipments) == 0
+    assert len(shipments) == 1

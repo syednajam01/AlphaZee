@@ -7,14 +7,6 @@ export const storeConfig = {
     standardTime: 'Estimated delivery: 3–5 business days nationwide upon confirmation',
     standardRate: 'Calculated at checkout',
   },
-  bankTransfer: {
-    bankName: 'Meezan Bank Ltd.',
-    accountTitle: 'AlphaZee Private Limited',
-    accountNumber: 'PENDING_CONFIGURATION',
-    iban: 'PENDING_IBAN_CONFIGURATION',
-    status: 'pending_configuration',
-    warning: 'Official bank transfer details are pending administrative setup. Manual transfer payments are not yet finalized.',
-  },
   reassurance: [
     {
       id: 'delivery',
@@ -25,7 +17,7 @@ export const storeConfig = {
     {
       id: 'payments',
       title: 'Manual Verification',
-      desc: 'Cash on delivery & direct bank transfer verified before shipment.',
+      desc: 'Cash on delivery and any enabled bank transfer option, verified before shipment.',
       icon: 'shield-check'
     },
     {
@@ -42,7 +34,7 @@ export const storeConfig = {
     },
     {
       q: 'How can I pay for my order?',
-      a: 'We accept Cash on Delivery (COD) and manual bank transfer. For bank transfers, orders are dispatched once received funds are verified by our team.'
+      a: 'Cash on Delivery is available. Bank transfer appears at checkout only when configured; instructions follow supplier confirmation, and received funds must be verified before dispatch.'
     },
     {
       q: 'What is the return & exchange policy?',

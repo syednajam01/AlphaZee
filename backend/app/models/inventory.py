@@ -40,6 +40,8 @@ ALLOWED_STOCK_EVENT_REASONS = {
     "reservation_fulfilled",
     "reservation_cancelled",
     "rto_return",
+    "dispatch",
+    "customer_return",
     "adjustment_correction",
 }
 
@@ -191,11 +193,13 @@ class StockEvent(Base):
     __tablename__ = "stock_events"
     __table_args__ = (
         CheckConstraint(
-            "reason IN ('manual_count', 'supplier_receipt', 'reservation_fulfilled', 'reservation_cancelled', 'rto_return', 'adjustment_correction')",
+            "reason IN ('manual_count', 'supplier_receipt', 'reservation_fulfilled', 'reservation_cancelled', 'rto_return', 'adjustment_correction', 'dispatch', 'customer_return')",
             name="ck_stock_events_reason",
         ),
         Index("idx_se_sv_occurred", "supplier_variant_id", "occurred_at"),
         Index("idx_se_actor", "actor_user_id"),
+        Index("uq_stock_events_source_ref", "source_ref", unique=True,
+              postgresql_where=text("source_ref IS NOT NULL")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -242,6 +246,8 @@ class StockEvent(Base):
         nullable=True,
     )
 
+    source_ref: Mapped[str | None] = mapped_column(String(160), nullable=True)
+
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -280,7 +286,7 @@ ALLOWED_RESERVATION_STAGES = {
     "returned",
 }
 
-OPEN_RESERVATION_STAGES = {"held", "confirmed", "dispatched"}
+OPEN_RESERVATION_STAGES = {"held", "confirmed"}
 TERMINAL_RESERVATION_STAGES = {"fulfilled", "cancelled", "returned"}
 
 
@@ -302,7 +308,7 @@ class StockReservation(Base):
             "idx_sr_open_stage",
             "supplier_variant_id",
             "quantity",
-            postgresql_where=text("stage NOT IN ('fulfilled', 'cancelled', 'returned')"),
+            postgresql_where=text("stage IN ('held', 'confirmed') OR legacy_stock_hold = true"),
         ),
         Index(
             "uq_sr_idempotency_open",
@@ -348,6 +354,9 @@ class StockReservation(Base):
         default="held",
         server_default=text("'held'"),
     )
+
+    legacy_stock_hold: Mapped[bool] = mapped_column(Boolean, nullable=False,
+        default=False, server_default=text('false'))
 
     supplier_accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

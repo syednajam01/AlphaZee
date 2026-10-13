@@ -9,6 +9,8 @@ frontend/dist/
 # Local env / cache
 .env
 .env.local
+.env.production
+.env.docker.local
 .env.browser-test
 .DS_Store
 Thumbs.db

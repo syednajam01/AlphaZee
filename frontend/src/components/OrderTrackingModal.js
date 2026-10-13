@@ -133,11 +133,23 @@ export function createOrderTrackingModal(onClose) {
     ` : '';
 
     const isBankPending = order.payment_method === 'bank_transfer' && order.payment_status === 'pending';
-    const uploadReceiptHtml = isBankPending ? `
+    const uploadReceiptHtml = isBankPending && !order.payment_instructions_sent_at ? `
+      <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: var(--radius-sm); padding: 14px; margin-top: 16px; font-size: 0.8125rem;">
+        Awaiting supplier confirmation and official payment instructions. Do not send funds yet.
+      </div>
+    ` : isBankPending && order.bank_instructions ? `
       <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: var(--radius-sm); padding: 14px; margin-top: 16px;">
         <div style="font-size: 0.8125rem; font-weight: 700; color: #166534; margin-bottom: 4px;">
           Pending Bank Transfer Verification
         </div>
+        <div style="font-size: 0.75rem; color: #166534; margin-bottom: 8px;">
+          <strong>Bank:</strong> ${escapeHtml(order.bank_instructions.bank_name)}<br>
+          <strong>Account title:</strong> ${escapeHtml(order.bank_instructions.account_title)}<br>
+          <strong>Account number:</strong> ${escapeHtml(order.bank_instructions.account_number)}<br>
+          <strong>IBAN:</strong> ${escapeHtml(order.bank_instructions.iban)}
+          ${order.payment_deadline_at ? `<br><strong>Payment deadline:</strong> ${escapeHtml(new Date(order.payment_deadline_at).toLocaleString())}` : ''}
+        </div>
+        ${order.payment_review_status === 'required' ? '<p>Your transfer is under owner review. Reserved stock remains held until the funds check is complete.</p>' : ''}
         <p style="font-size: 0.75rem; color: #15803D; margin: 0 0 10px 0;">
           If you haven't uploaded proof of payment yet, please provide the screenshot URL below:
         </p>
@@ -219,14 +231,14 @@ export function createOrderTrackingModal(onClose) {
         ${uploadReceiptHtml}
         ${returnsListHtml}
 
-        <!-- Return / Size Exchange Trigger Form -->
+        ${order.order_status === 'delivered' ? `<!-- Return / Size Exchange Trigger Form -->
         <div style="margin-top: 16px; border-top: 1px dashed var(--color-border); padding-top: 12px;">
           <button type="button" id="btn-toggle-return-form" class="btn btn-secondary" style="width: 100%; font-size: 0.8125rem; padding: 8px 12px;">
-            Request Return / Size Exchange
+            Request Return
           </button>
           
           <div id="return-request-panel" style="display: none; margin-top: 12px; background: #F8FAFC; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px;">
-            <h4 style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 8px;">Submit Return or Exchange Request</h4>
+            <h4 style="font-size: 0.8125rem; font-weight: 700; margin-bottom: 8px;">Submit Return Request</h4>
             <form id="form-submit-return" style="display: flex; flex-direction: column; gap: 8px;">
               <div>
                 <label style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 2px;">Select Item</label>
@@ -239,7 +251,7 @@ export function createOrderTrackingModal(onClose) {
                   <label style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 2px;">Request Type</label>
                   <select id="return-select-type" style="width: 100%; padding: 6px 10px; font-size: 0.8125rem; border: 1px solid var(--color-border); border-radius: var(--radius-btn);">
                     <option value="refund_bank_transfer">Bank Refund</option>
-                    <option value="size_exchange">Size Exchange</option>
+                    <option value="size_exchange" disabled>Size Exchange (unavailable)</option>
                     <option value="store_credit">Store Credit</option>
                   </select>
                 </div>
@@ -255,6 +267,10 @@ export function createOrderTrackingModal(onClose) {
                 </div>
               </div>
               <div>
+                <label for="return-quantity" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 2px;">Quantity to return</label>
+                <input id="return-quantity" type="number" min="1" max="${order.lines[0]?.quantity || 1}" value="1" required style="width: 100%; padding: 6px 10px; font-size: 0.8125rem; border: 1px solid var(--color-border); border-radius: var(--radius-btn);" />
+              </div>
+              <div>
                 <label style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 2px;">Notes / Desired Replacement Size</label>
                 <textarea id="return-notes" rows="2" placeholder="e.g. Please send Size L instead" style="width: 100%; padding: 6px 10px; font-size: 0.8125rem; border: 1px solid var(--color-border); border-radius: var(--radius-btn);"></textarea>
               </div>
@@ -264,7 +280,7 @@ export function createOrderTrackingModal(onClose) {
               <div id="return-req-msg" style="display: none; font-size: 0.75rem; font-weight: 600;"></div>
             </form>
           </div>
-        </div>
+        </div>` : ''}
       </div>
     `;
 
@@ -277,12 +293,19 @@ export function createOrderTrackingModal(onClose) {
 
     // Handle return request form submission
     const returnForm = resultsArea.querySelector('#form-submit-return');
+    resultsArea.querySelector('#return-select-line')?.addEventListener('change', (event) => {
+      const selected = order.lines.find(line => line.id === event.target.value);
+      const quantityInput = resultsArea.querySelector('#return-quantity');
+      quantityInput.max = String(selected?.quantity || 1);
+      if (Number(quantityInput.value) > Number(quantityInput.max)) quantityInput.value = quantityInput.max;
+    });
     const returnSubmitBtn = resultsArea.querySelector('#btn-submit-return-req');
     const returnMsg = resultsArea.querySelector('#return-req-msg');
 
     returnForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const lineId = resultsArea.querySelector('#return-select-line').value;
+      const quantity = Number(resultsArea.querySelector('#return-quantity').value);
       const retType = resultsArea.querySelector('#return-select-type').value;
       const reason = resultsArea.querySelector('#return-select-reason').value;
       const notes = resultsArea.querySelector('#return-notes').value.trim() || null;
@@ -293,6 +316,7 @@ export function createOrderTrackingModal(onClose) {
 
       try {
         await requestOrderReturn({
+          quantity,
           order_id: order.id,
           order_line_id: lineId,
           return_type: retType,

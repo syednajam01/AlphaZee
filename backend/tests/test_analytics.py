@@ -5,6 +5,8 @@ test_analytics.py — Integration tests for owner profit & loss, COGS, and unit 
 from __future__ import annotations
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("configured_bank")
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -181,13 +183,16 @@ def test_profit_loss_analytics_computes_exact_cogs_and_gross_profit(
         json={"status": "delivered"},
     )
 
-    # Order 2 turns into RTO (Courier return penalty PKR 150 = 15000 paisas)
+    # Order 2 enters RTO transit, then its parcel is physically received.
+    assert client.post(f"/api/v1/admin/shipments/{s2_id}/status",
+                       json={"status": "rto_initiated", "rto_reason": "Address incomplete"}).status_code == 200
     client.post(
         f"/api/v1/admin/shipments/{s2_id}/status",
         json={
             "status": "rto_delivered",
             "rto_reason": "Address incomplete",
             "rto_courier_cost_minor": 15000,
+            "received_lines": [{"order_line_id": str(order2.lines[0].id), "received_quantity": 2}],
         },
     )
 

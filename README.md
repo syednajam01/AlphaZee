@@ -2,6 +2,12 @@
 
 Current checkout containment and isolated test setup are documented in
 [the Phase 0 runbook](.context/phase0_baseline_and_runbook.md).
+Full development and production container deployment is documented in
+[the Docker deployment runbook](.context/docker_deployment_runbook.md).
+For the current full local stack, run `docker compose up --build --wait -d` from the
+repository root. It starts PostgreSQL, runs Alembic migrations, and serves the
+API and storefront at localhost:8000 and localhost:3000. Production uses
+`compose.prod.yml` with a private `.env.production` and a real HTTPS domain.
 Public checkout is disabled server-side; only an explicitly configured local
 test database can accept sample orders. Historical milestone notes below do not
 establish current migration or launch readiness.

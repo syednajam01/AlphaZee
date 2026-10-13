@@ -13,12 +13,15 @@ from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
 from app.models.inventory import InventoryBalance, StockEvent, SupplierVariant
 from app.models.orders import Order, OrderLine
 from app.models.suppliers import Supplier
-from app.services.orders import CreateOrderDTO, OrderItemDTO, place_order
+from app.services.orders import CreateOrderDTO, OrderItemDTO, place_order, confirm_supplier_acceptance, deliver_order
+from app.services.shipments import create_shipment
 from app.services.returns import (
     approve_return_request,
     complete_return_and_restock,
     create_return_request,
     reject_return_request,
+    receive_return_items,
+    inspect_return_items,
 )
 
 
@@ -66,6 +69,11 @@ def setup_order_with_stock(db_session: Session):
     )
     db_session.flush()
 
+    confirm_supplier_acceptance(db_session, order_id=order.id)
+    create_shipment(db_session, order_id=order.id, courier_code='manual',
+                    tracking_number=f'RET-{uuid.uuid4().hex[:8]}')
+    deliver_order(db_session, order_id=order.id)
+
     return {
         "order": order,
         "line": order.lines[0],
@@ -83,20 +91,21 @@ def test_return_lifecycle_and_restock(db_session: Session, setup_order_with_stoc
     sv_m = data["supplier_variant_m"]
     bal_m = data["balance_m"]
 
-    # 1. Customer creates return request for size exchange
+    # 1. Customer creates a return request for delivered goods.
     ret = create_return_request(
         db_session,
         order_id=order.id,
         order_line_id=line.id,
         customer_phone=order.customer_phone,
-        return_type="size_exchange",
+        return_type="refund_bank_transfer",
         reason="size_too_small",
         customer_notes="Please exchange with size L",
         exchange_variant_id=data["variant_l"].id,
+        quantity=2,
     )
     db_session.flush()
     assert ret.status == "requested"
-    assert ret.return_type == "size_exchange"
+    assert ret.return_type == "refund_bank_transfer"
 
     # 2. Admin approves return
     app_ret = approve_return_request(db_session, return_id=ret.id)
@@ -105,7 +114,9 @@ def test_return_lifecycle_and_restock(db_session: Session, setup_order_with_stoc
     # Initial on hand before restock
     initial_on_hand = bal_m.on_hand
 
-    # 3. Admin completes return with restock
+    # 3. Receipt is quarantined; only inspection restores sellable units.
+    receive_return_items(db_session, return_id=ret.id, received_quantity=2)
+    inspect_return_items(db_session, return_id=ret.id, sellable_quantity=2, damaged_quantity=0)
     comp_ret = complete_return_and_restock(
         db_session,
         return_id=ret.id,
@@ -136,6 +147,7 @@ def test_returns_api_endpoints(admin_client: TestClient, db_session: Session, se
             "return_type": "refund_bank_transfer",
             "reason": "damaged_defective",
             "customer_notes": "Stitching unraveled at collar",
+            "quantity": 2,
         },
     )
     assert sub_res.status_code == 201
@@ -151,7 +163,11 @@ def test_returns_api_endpoints(admin_client: TestClient, db_session: Session, se
     assert app_res.status_code == 200
     assert app_res.json()["status"] == "approved"
 
-    # 4. Admin completes return
+    # 4. Admin records receipt and inspection, then completes return.
+    assert admin_client.post(f"/api/v1/admin/returns/{ret_id}/receive",
+                             json={"received_quantity": 2}).status_code == 200
+    assert admin_client.post(f"/api/v1/admin/returns/{ret_id}/inspect",
+                             json={"sellable_quantity": 2, "damaged_quantity": 0}).status_code == 200
     comp_res = admin_client.post(
         f"/api/v1/admin/returns/{ret_id}/complete",
         json={"refund_reference": "MEZN-REF-9988", "should_restock": True},

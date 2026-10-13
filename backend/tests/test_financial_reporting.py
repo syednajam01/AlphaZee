@@ -11,6 +11,8 @@ Covers:
 """
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("configured_bank")
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 

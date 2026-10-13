@@ -53,6 +53,14 @@ class OrderReturn(Base):
     __tablename__ = "order_returns"
     __table_args__ = (
         CheckConstraint("refund_amount_minor >= 0", name="ck_order_returns_refund_nonnegative"),
+        CheckConstraint('quantity IS NULL OR quantity > 0', name='ck_order_returns_quantity_positive'),
+        CheckConstraint('received_quantity >= 0 AND (quantity IS NULL OR received_quantity <= quantity)',
+                        name='ck_order_returns_received_bounds'),
+        CheckConstraint('sellable_quantity >= 0 AND damaged_quantity >= 0 AND '
+                        'sellable_quantity + damaged_quantity <= received_quantity',
+                        name='ck_order_returns_inspection_bounds'),
+        CheckConstraint("inspection_state IN ('pending', 'legacy_review')",
+                        name='ck_order_returns_inspection_state'),
         CheckConstraint(
             f"return_type IN ({', '.join(repr(t) for t in sorted(ALLOWED_RETURN_TYPES))})",
             name="ck_order_returns_type",
@@ -133,6 +141,16 @@ class OrderReturn(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+    quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    received_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text('0'))
+    sellable_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text('0'))
+    damaged_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text('0'))
+    inspection_state: Mapped[str] = mapped_column(String(24), nullable=False,
+        default='pending', server_default=text("'pending'"))
+    inspection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    inspected_by_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    inspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

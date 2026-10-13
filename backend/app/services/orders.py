@@ -6,7 +6,7 @@ Coordinates:
 - Atomic stock reservation holds on order placement (rolling back on insufficient stock).
 - Bank transfer receipt verification.
 - Order cancellation (immediate release of held stock).
-- Order delivery / fulfillment (synchronizing physical inventory deductions and stock events).
+- Order delivery / fulfillment after the dispatch stock movement.
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ from app.models.orders import (
 from app.models.inventory import InventoryBalance
 from app.models.promotions import Coupon
 from app.services.checkout_attempts import fingerprint_order
+from app.config import settings
 from app.queries.inventory import get_active_supplier_variant
 from app.queries.reservations import (
     InsufficientStockError,
@@ -45,6 +46,14 @@ from app.services.promotions import record_coupon_usage, validate_coupon
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _locked_order(db: Session, order_id: uuid.UUID) -> Order:
+    order = db.scalar(select(Order).where(Order.id == order_id).with_for_update()
+                      .execution_options(populate_existing=True))
+    if order is None:
+        raise ValueError(f'Order {order_id} not found.')
+    return order
 
 
 @dataclass(frozen=True)
@@ -121,9 +130,11 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
     if not order_data.items:
         raise ValueError("Order must contain at least one item.")
 
-    if order_data.payment_method not in ALLOWED_PAYMENT_METHODS:
+    if order_data.payment_method not in settings.permitted_payment_methods:
         raise ValueError(
-            f"Invalid payment method {order_data.payment_method!r}. Must be one of {sorted(ALLOWED_PAYMENT_METHODS)}."
+            'Bank transfer is unavailable until valid bank account details are configured.'
+            if order_data.payment_method == 'bank_transfer' else
+            f"Invalid payment method {order_data.payment_method!r}."
         )
 
     clean_phone = normalize_pakistan_phone(order_data.customer_phone)
@@ -199,10 +210,6 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
 
     total_minor = max(0, subtotal_minor - discount_amount_minor + order_data.shipping_fee_minor)
 
-    payment_deadline_at = None
-    if order_data.payment_method == "bank_transfer":
-        payment_deadline_at = _utcnow() + timedelta(hours=4)
-
     # 3. Create Order Header
     order = Order(
         order_number=generate_order_number(),
@@ -226,7 +233,7 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         utm_medium=order_data.utm_medium.strip() if order_data.utm_medium else None,
         utm_campaign=order_data.utm_campaign.strip() if order_data.utm_campaign else None,
         customer_notes=order_data.customer_notes.strip() if order_data.customer_notes else None,
-        payment_deadline_at=payment_deadline_at,
+        payment_deadline_at=None,
         idempotency_key=clean_idemp,
         checkout_session_hash=order_data.checkout_session_hash,
         request_fingerprint=fingerprint,
@@ -278,9 +285,14 @@ def upload_payment_receipt(
     bank_reference: str | None = None,
 ) -> PaymentReceipt:
     """Record an uploaded bank payment receipt screenshot for an order."""
-    order = db.get(Order, order_id)
-    if order is None:
-        raise ValueError(f"Order {order_id} not found.")
+    order = _locked_order(db, order_id)
+    if (order.payment_method != 'bank_transfer' or order.payment_status != 'pending'
+            or order.payment_instructions_sent_at is None
+            or order.order_status in ('cancelled', 'delivered', 'rto')):
+        raise ValueError('Payment proof can be submitted only after bank instructions are sent for an active order.')
+    if order.payment_deadline_at and order.payment_deadline_at < _utcnow() and order.payment_review_status == 'none':
+        order.payment_review_status = 'required'
+        order.payment_review_started_at = _utcnow()
 
     receipt = PaymentReceipt(
         order_id=order.id,
@@ -298,23 +310,34 @@ def verify_bank_payment(
     order_id: uuid.UUID,
     verified_by_user_id: uuid.UUID,
     receipt_id: uuid.UUID | None = None,
+    allow_review: bool = False,
 ) -> Order:
     """
     Owner confirms cleared funds in AlphaZee's bank account.
     Marks payment as verified only. Does NOT mark supplier confirmed or advance reservations.
     """
-    order = db.get(Order, order_id)
-    if order is None:
-        raise ValueError(f"Order {order_id} not found.")
-
-    order.payment_status = "verified"
+    order = _locked_order(db, order_id)
+    if order.payment_method != 'bank_transfer' or order.order_status in ('cancelled', 'delivered', 'rto'):
+        raise ValueError('Bank payment can only be verified for an active bank transfer order.')
+    if not allow_review and (order.payment_review_status == 'required' or
+                             (order.payment_deadline_at and order.payment_deadline_at <= _utcnow())):
+        raise ValueError('Resolve the expired payment review before verifying funds.')
+    if order.payment_status == 'verified':
+        return order
+    if order.payment_status != 'pending':
+        raise ValueError(f'Cannot verify payment in status {order.payment_status!r}.')
 
     now = _utcnow()
     if receipt_id:
         receipt = db.get(PaymentReceipt, receipt_id)
-        if receipt and receipt.order_id == order.id:
-            receipt.verified_at = now
-            receipt.verified_by_user_id = verified_by_user_id
+        if receipt is None or receipt.order_id != order.id:
+            raise ValueError('Receipt does not belong to this order.')
+        receipt.verified_at = now
+        receipt.verified_by_user_id = verified_by_user_id
+
+    order.payment_status = 'verified'
+    order.payment_verified_at = now
+    order.payment_verified_by_user_id = verified_by_user_id
 
     db.flush()
     return order
@@ -330,9 +353,7 @@ def confirm_supplier_acceptance(
     Confirm operational supplier acceptance and readiness to fulfill.
     Advances order_status to 'confirmed' and all open reservations to 'confirmed'.
     """
-    order = db.get(Order, order_id)
-    if order is None:
-        raise ValueError(f"Order {order_id} not found.")
+    order = _locked_order(db, order_id)
 
     if order.order_status != "placed":
         raise ValueError(f"Cannot confirm supplier acceptance for order in status '{order.order_status}'.")
@@ -343,48 +364,130 @@ def confirm_supplier_acceptance(
     if supplier_notes:
         order.supplier_notes = supplier_notes.strip()
 
-    # Advance all open reservations for this order's lines to 'confirmed'
+    # Every purchased quantity must still have a real held allocation.
     stmt = (
         select(StockReservation)
         .where(
             StockReservation.order_line_id.in_([line.id for line in order.lines]),
-            StockReservation.stage == "held",
         )
+        .order_by(StockReservation.id)
+        .with_for_update()
     )
     reservations = db.scalars(stmt).all()
+    if not order.lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id
+                                  and r.stage == 'held') != line.quantity for line in order.lines):
+        raise ValueError('Supplier acceptance requires complete held allocations for every order line.')
     for res in reservations:
+        if res.stage != 'held':
+            continue
         transition_reservation_stage(db, reservation_id=res.id, new_stage="confirmed")
 
     db.flush()
     return order
 
 
-def cancel_expired_bank_orders(db: Session) -> list[Order]:
-    """
-    Find and cancel all placed bank transfer orders whose 4-hour payment
-    deadline has elapsed without payment verification. Releases held stock.
-    """
+def preview_bank_instructions(db: Session, order_id: uuid.UUID) -> dict:
+    order = db.get(Order, order_id)
+    if order is None or order.payment_method != 'bank_transfer':
+        raise ValueError('Bank transfer order not found.')
+    if order.order_status != 'confirmed' or not order.supplier_confirmed_at:
+        raise ValueError('Confirm all supplier allocations before preparing payment instructions.')
+    if order.payment_instructions_sent_at:
+        return {'order_number': order.order_number, 'total_minor': order.total_minor,
+                'bank_name': order.payment_bank_name_snapshot, 'account_title': order.payment_account_title_snapshot,
+                'account_number': order.payment_account_number_snapshot, 'iban': order.payment_iban_snapshot,
+                'already_sent_at': order.payment_instructions_sent_at}
+    if not settings.bank_transfer_enabled:
+        raise ValueError('Bank transfer account is not configured.')
+    return {'order_number': order.order_number, 'total_minor': order.total_minor,
+            'bank_name': settings.bank_name.strip(), 'account_title': settings.bank_account_title.strip(),
+            'account_number': settings.bank_account_number.strip(), 'iban': settings.bank_iban.replace(' ', '').upper(),
+            'already_sent_at': order.payment_instructions_sent_at}
+
+
+def record_payment_instructions_sent(db: Session, *, order_id: uuid.UUID, actor_user_id: uuid.UUID,
+                                     channel: str, reference: str) -> Order:
+    """Record an owner's explicit confirmation of an external successful handoff."""
+    order = _locked_order(db, order_id)
+    if order.payment_method != 'bank_transfer' or order.order_status != 'confirmed' or not order.supplier_confirmed_at:
+        raise ValueError('Confirm the supplier before sending bank instructions.')
+    if order.payment_instructions_sent_at:
+        return order  # Never extend the original payment deadline on retries/resends.
+    if order.payment_status != 'pending' or order.payment_review_status != 'none':
+        raise ValueError('Payment instructions cannot be sent in the current payment state.')
+    if not settings.bank_transfer_enabled:
+        raise ValueError('Bank transfer account is not configured.')
+    clean_channel = channel.strip().lower()
+    clean_reference = reference.strip()
+    if clean_channel not in {'whatsapp', 'sms', 'email', 'phone', 'other'} or len(clean_reference) < 3:
+        raise ValueError('Record a supported handoff channel and reference.')
+    # Recheck the allocation before inviting payment.
+    reservations = db.scalars(select(StockReservation).where(
+        StockReservation.order_line_id.in_([line.id for line in order.lines]),
+        StockReservation.stage == 'confirmed').with_for_update()).all()
+    if not order.lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id)
+                                  != line.quantity for line in order.lines):
+        raise ValueError('All order quantities must be supplier confirmed before payment instructions.')
+    now = _utcnow()
+    order.payment_instructions_sent_at = now
+    order.payment_deadline_at = now + timedelta(hours=4)
+    order.payment_instructions_channel = clean_channel
+    order.payment_instructions_reference = clean_reference
+    order.payment_instructions_sent_by_user_id = actor_user_id
+    order.payment_bank_name_snapshot = settings.bank_name.strip()
+    order.payment_account_title_snapshot = settings.bank_account_title.strip()
+    order.payment_account_number_snapshot = settings.bank_account_number.strip()
+    order.payment_iban_snapshot = settings.bank_iban.replace(' ', '').upper()
+    db.flush()
+    return order
+
+
+def mark_expired_bank_orders_for_review(db: Session) -> list[Order]:
+    """Flag expired unpaid transfers; keep their physical stock and holds intact."""
     now = _utcnow()
     stmt = (
         select(Order)
         .where(
-            Order.order_status == "placed",
+            Order.order_status == "confirmed",
             Order.payment_method == "bank_transfer",
             Order.payment_status == "pending",
+            Order.payment_instructions_sent_at.is_not(None),
             Order.payment_deadline_at.is_not(None),
-            Order.payment_deadline_at < now,
+            Order.payment_deadline_at <= now,
+            Order.payment_review_status == 'none',
         )
+        .order_by(Order.id)
+        .with_for_update(skip_locked=True)
     )
     expired_orders = db.scalars(stmt).all()
-    cancelled = []
     for order in expired_orders:
-        cancelled_order = cancel_order(
-            db,
-            order_id=order.id,
-            reason="Expired 4-hour bank transfer payment window.",
-        )
-        cancelled.append(cancelled_order)
-    return cancelled
+        order.payment_review_status = 'required'
+        order.payment_review_started_at = now
+    db.flush()
+    return expired_orders
+
+
+def resolve_payment_review(db: Session, *, order_id: uuid.UUID, actor_user_id: uuid.UUID,
+                           resolution: str, note: str, funds_checked: bool) -> Order:
+    order = _locked_order(db, order_id)
+    if (order.payment_method != 'bank_transfer' or order.payment_review_status != 'required'
+            or order.order_status != 'confirmed' or not funds_checked or len(note.strip()) < 5):
+        raise ValueError('Review requires an expired active bank order, confirmed funds check, and a note.')
+    if resolution not in {'payment_received', 'release_unpaid'}:
+        raise ValueError('Choose payment_received or release_unpaid.')
+    if resolution == 'payment_received':
+        verify_bank_payment(db, order_id=order.id, verified_by_user_id=actor_user_id, allow_review=True)
+        order.payment_review_status = 'resolved_paid'
+    else:
+        if order.payment_status != 'pending':
+            raise ValueError('Stock cannot be released for an order with verified payment.')
+        cancel_order(db, order_id=order.id, review_release=True)
+        order.payment_review_status = 'released_unpaid'
+    order.payment_reviewed_at = _utcnow()
+    order.payment_reviewed_by_user_id = actor_user_id
+    order.payment_review_note = note.strip()
+    db.flush()
+    return order
 
 
 class OrderNotCancellableError(ValueError):
@@ -396,14 +499,21 @@ def cancel_order(
     *,
     order_id: uuid.UUID,
     reason: str | None = None,
+    review_release: bool = False,
 ) -> Order:
     """
     Cancel an order and immediately release all held stock reservations.
     Refuses cancellation if order is already dispatched (must go through RTO flow).
     """
-    order = db.get(Order, order_id)
-    if order is None:
-        raise ValueError(f"Order {order_id} not found.")
+    order = _locked_order(db, order_id)
+    if order.payment_method == 'bank_transfer':
+        if order.payment_status == 'verified':
+            raise OrderNotCancellableError('Verified bank payments require the refund workflow before stock release.')
+        review_due = bool(order.payment_deadline_at and order.payment_deadline_at <= _utcnow())
+        if (order.payment_review_status == 'required' or review_due) and not review_release:
+            raise OrderNotCancellableError('Expired bank transfers require explicit payment review before releasing stock.')
+        if review_release and order.payment_review_status != 'required':
+            raise OrderNotCancellableError('Review release requires a pending payment review.')
 
     if order.order_status == "dispatched":
         raise OrderNotCancellableError(
@@ -438,53 +548,16 @@ def deliver_order(
     order_id: uuid.UUID,
     actor_user_id: uuid.UUID | None = None,
 ) -> Order:
-    """
-    Mark an order as delivered:
-    - Sets order_status = 'delivered'.
-    - If COD, marks payment_status = 'verified'.
-    - Advances open reservations sequentially (held -> confirmed -> dispatched -> fulfilled).
-    - Decrements physical inventory and records StockEvent upon fulfillment.
-    """
-    order = db.get(Order, order_id)
-    if order is None:
-        raise ValueError(f"Order {order_id} not found.")
-
-    order.order_status = "delivered"
-    if order.payment_method == "cod":
-        order.payment_status = "verified"
-
-    # Fulfill all open reservations through all sequential lifecycle stages
-    stmt = (
-        select(StockReservation)
-        .where(
-            StockReservation.order_line_id.in_([line.id for line in order.lines]),
-            StockReservation.stage.in_(["held", "confirmed", "dispatched"]),
-        )
-    )
-    reservations = db.scalars(stmt).all()
-    for res in reservations:
-        if res.stage == "held":
-            transition_reservation_stage(
-                db,
-                reservation_id=res.id,
-                new_stage="confirmed",
-                actor_user_id=actor_user_id,
-            )
-        if res.stage in ("held", "confirmed"):
-            transition_reservation_stage(
-                db,
-                reservation_id=res.id,
-                new_stage="dispatched",
-                actor_user_id=actor_user_id,
-            )
-        transition_reservation_stage(
-            db,
-            reservation_id=res.id,
-            new_stage="fulfilled",
-            actor_user_id=actor_user_id,
-            notes=f"Delivery of order {order.order_number}",
-        )
-
-    db.flush()
+    """Deliver an existing allocated shipment without changing physical stock."""
+    order = _locked_order(db, order_id)
+    from app.models.shipments import Shipment
+    from app.services.shipments import update_shipment_status
+    shipment = db.scalar(select(Shipment).where(Shipment.order_id == order.id,
+        Shipment.status.in_(['dispatched', 'in_transit', 'out_for_delivery']))
+        .order_by(Shipment.created_at.desc()))
+    if shipment is None:
+        raise ValueError('Delivery requires a previously dispatched shipment with exact allocations.')
+    update_shipment_status(db, shipment_id=shipment.id, status='delivered',
+                           actor_user_id=actor_user_id)
     return order
 

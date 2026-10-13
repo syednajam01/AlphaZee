@@ -83,27 +83,20 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
     ]
 
     returns = [
-        OrderReturnResponseSchema(
-            id=r.id,
-            order_id=r.order_id,
-            order_line_id=r.order_line_id,
-            return_type=r.return_type,
-            reason=r.reason,
-            customer_notes=r.customer_notes,
-            status=r.status,
-            exchange_variant_id=r.exchange_variant_id,
-            refund_amount=CurrencyAmount.from_minor(r.refund_amount_minor),
-            refund_reference=r.refund_reference,
-            restocked_at=r.restocked_at,
-            created_at=r.created_at,
-            updated_at=r.updated_at,
-        )
+        OrderReturnResponseSchema.from_return(r)
         for r in getattr(order, "returns", [])
     ]
 
     bank_instructions = None
-    if order.payment_method == "bank_transfer":
-        bank_instructions = BankInstructionsSchema()
+    if (order.payment_method == 'bank_transfer' and order.payment_instructions_sent_at
+            and all((order.payment_bank_name_snapshot, order.payment_account_title_snapshot,
+                     order.payment_account_number_snapshot, order.payment_iban_snapshot))):
+        bank_instructions = BankInstructionsSchema(
+            bank_name=order.payment_bank_name_snapshot,
+            account_title=order.payment_account_title_snapshot,
+            account_number=order.payment_account_number_snapshot,
+            iban=order.payment_iban_snapshot,
+        )
 
     return OrderResponseSchema(
         id=order.id,
@@ -130,6 +123,12 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
         utm_campaign=order.utm_campaign,
         customer_notes=order.customer_notes,
         payment_deadline_at=order.payment_deadline_at,
+        payment_instructions_sent_at=order.payment_instructions_sent_at,
+        payment_instructions_channel=order.payment_instructions_channel,
+        payment_verified_at=order.payment_verified_at,
+        payment_review_status=order.payment_review_status,
+        payment_review_started_at=order.payment_review_started_at,
+        payment_reviewed_at=order.payment_reviewed_at,
         supplier_confirmed_at=order.supplier_confirmed_at,
         supplier_notes=order.supplier_notes,
         placed_at=order.placed_at,

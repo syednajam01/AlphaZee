@@ -94,12 +94,12 @@ class PaymentReceiptResponseSchema(BaseModel):
 
 
 class BankInstructionsSchema(BaseModel):
-    """Honest bank transfer instructions provided to customer upon checkout."""
+    """Bank details captured when instructions were actually sent."""
 
-    bank_name: str = Field(default_factory=lambda: settings.bank_name)
-    account_title: str = Field(default_factory=lambda: settings.bank_account_title)
-    account_number: str = Field(default_factory=lambda: settings.bank_account_number)
-    iban: str = Field(default_factory=lambda: settings.bank_iban)
+    bank_name: str
+    account_title: str
+    account_number: str
+    iban: str
     instructions: str = (
         "Please transfer the total order amount to the bank account above and upload "
         "a screenshot of the transaction receipt. Funds will be verified by the owner "
@@ -118,6 +118,15 @@ COURIER_DISPLAY_NAMES = {
 }
 
 
+class ShipmentAllocationInfoSchema(BaseModel):
+    order_line_id: uuid.UUID
+    quantity: int
+    received_quantity: int
+    sellable_quantity: int
+    damaged_quantity: int
+    inspection_notes: Optional[str] = None
+
+
 class ShipmentInfoSchema(BaseModel):
     """Customer-facing courier tracking details."""
 
@@ -131,6 +140,9 @@ class ShipmentInfoSchema(BaseModel):
     status: str
     dispatched_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
+    rto_restocked_at: Optional[datetime] = None
+    stock_reconciliation_status: str = 'ready'
+    allocations: list[ShipmentAllocationInfoSchema] = []
 
     @classmethod
     def from_orm_model(cls, s: Any) -> ShipmentInfoSchema:
@@ -144,6 +156,16 @@ class ShipmentInfoSchema(BaseModel):
             status=s.status,
             dispatched_at=s.dispatched_at,
             delivered_at=s.delivered_at,
+            rto_restocked_at=s.rto_restocked_at,
+            stock_reconciliation_status=s.stock_reconciliation_status,
+            allocations=[ShipmentAllocationInfoSchema(
+                order_line_id=a.reservation.order_line_id,
+                quantity=a.quantity,
+                received_quantity=a.received_quantity,
+                sellable_quantity=a.sellable_quantity,
+                damaged_quantity=a.damaged_quantity,
+                inspection_notes=a.inspection_notes,
+            ) for a in s.allocations],
         )
 
 
@@ -176,6 +198,12 @@ class OrderResponseSchema(BaseModel):
     utm_campaign: Optional[str] = None
     customer_notes: Optional[str] = None
     payment_deadline_at: Optional[datetime] = None
+    payment_instructions_sent_at: Optional[datetime] = None
+    payment_instructions_channel: Optional[str] = None
+    payment_verified_at: Optional[datetime] = None
+    payment_review_status: str = 'none'
+    payment_review_started_at: Optional[datetime] = None
+    payment_reviewed_at: Optional[datetime] = None
     supplier_confirmed_at: Optional[datetime] = None
     supplier_notes: Optional[str] = None
     placed_at: datetime

@@ -117,7 +117,7 @@ export function createCheckoutView(onClose) {
                 <input type="radio" name="payment_method" value="bank_transfer" style="margin-top: 2px;" />
                 <div>
                   <strong>Bank Transfer</strong>
-                  <div style="font-size: 0.7rem; color: var(--color-text-muted);">Meezan Bank (Verified prior to dispatch)</div>
+                  <div style="font-size: 0.7rem; color: var(--color-text-muted);">Available after supplier confirmation</div>
                 </div>
               </label>
             </div>
@@ -209,6 +209,14 @@ export function createCheckoutView(onClose) {
 
   function renderCartState(state) {
     const availability = capabilities.getState();
+    const bankAvailable = availability.paymentMethods?.includes('bank_transfer') === true;
+    labelBank.hidden = !bankAvailable;
+    labelBank.style.display = bankAvailable ? 'flex' : 'none';
+    radBank.disabled = !bankAvailable;
+    if (!bankAvailable && radBank.checked) {
+      radCod.checked = true;
+      updateRadioStyle();
+    }
     const capabilityMessage = modal.querySelector('#checkout-capability-message');
     if (capabilityMessage) capabilityMessage.textContent = availability.checkoutEnabled
       ? 'SAMPLE / TEST checkout. No real orders.' : CHECKOUT_UNAVAILABLE;
@@ -339,6 +347,11 @@ export function createCheckoutView(onClose) {
     const postal = modal.querySelector('#input-shipping-postal').value.trim() || null;
     const notes = modal.querySelector('#input-customer-notes').value.trim() || null;
     const paymentMethod = modal.querySelector('input[name="payment_method"]:checked')?.value || 'cod';
+    if (!capabilities.getState().paymentMethods.includes(paymentMethod)) {
+      errorBanner.textContent = 'This payment method is unavailable. Choose Cash on Delivery.';
+      errorBanner.style.display = 'block';
+      return;
+    }
 
     const itemsPayload = cartState.items.map(i => ({
       variant_id: i.id || i.variant_id,
@@ -388,12 +401,18 @@ export function createCheckoutView(onClose) {
     savedCheckoutContent = Array.from(bodyContent.childNodes);
     const badge = modal.querySelector('#checkout-badge');
     if (badge) {
-      badge.textContent = 'Order Confirmed';
+      badge.textContent = 'Order Placed';
       badge.className = 'badge badge-accent';
     }
 
     const isBank = order.payment_method === 'bank_transfer';
-    const bankHtml = isBank ? `
+    const bankHtml = isBank && !order.payment_instructions_sent_at ? `
+      <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: var(--radius-sm); padding: 16px; margin: 20px 0; font-size: 0.8125rem;">
+        <strong>Awaiting supplier confirmation and payment instructions</strong>
+        <p>Your order has been placed. Do not transfer funds until AlphaZee sends your official instructions. The four-hour payment window starts only after that handoff.</p>
+        <p>Track your order for updates or contact AlphaZee using your order number.</p>
+      </div>
+    ` : isBank && order.bank_instructions ? `
       <div style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: var(--radius-sm); padding: 16px; margin: 20px 0;">
         <h3 style="font-size: 0.9375rem; font-weight: 700; color: #166534; margin-bottom: 8px;">
           Bank Transfer Payment Instructions
@@ -402,21 +421,15 @@ export function createCheckoutView(onClose) {
           Please transfer <strong>${order.total.formatted}</strong> to the official AlphaZee account below. Your payment will be verified by the owner before dispatch.
         </p>
         <div style="font-size: 0.8125rem; font-family: monospace; background: #FFFFFF; border: 1px solid #DCFCE7; border-radius: var(--radius-sm); padding: 12px; line-height: 1.6; color: #14532D;">
-          <div><strong>Bank:</strong> ${escapeHtml(order.bank_instructions?.bank_name || 'Meezan Bank Ltd.')}</div>
-          <div><strong>Title:</strong> ${escapeHtml(order.bank_instructions?.account_title || 'AlphaZee Private Limited')}</div>
-          <div><strong>Account #:</strong> ${escapeHtml(order.bank_instructions?.account_number || 'PENDING_CONFIGURATION')}</div>
-          <div><strong>IBAN:</strong> ${escapeHtml(order.bank_instructions?.iban || 'PENDING_IBAN_CONFIGURATION')}</div>
+          <div><strong>Bank:</strong> ${escapeHtml(order.bank_instructions.bank_name)}</div>
+          <div><strong>Title:</strong> ${escapeHtml(order.bank_instructions.account_title)}</div>
+          <div><strong>Account #:</strong> ${escapeHtml(order.bank_instructions.account_number)}</div>
+          <div><strong>IBAN:</strong> ${escapeHtml(order.bank_instructions.iban)}</div>
         </div>
-
-        ${(order.bank_instructions?.iban?.includes('PENDING') || !order.bank_instructions?.iban) ? `
-          <div style="margin-top: 10px; padding: 8px 12px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 4px; font-size: 0.75rem; color: #B45309; line-height: 1.4;">
-            ⚠️ <strong>Configuration Notice:</strong> Official bank transfer accounts are currently pending administrative setup. Manual transfer payments are not yet finalized for real customer transactions.
-          </div>
-        ` : ''}
 
         ${order.payment_deadline_at ? `
           <div style="margin-top: 10px; font-size: 0.75rem; color: #15803D; font-weight: 600;">
-            ⏳ <strong>Payment Window:</strong> Please submit transfer receipt proof within 4 hours. Unverified reservations will be cancelled automatically.
+            <strong>Payment deadline:</strong> ${escapeHtml(new Date(order.payment_deadline_at).toLocaleString())}. Expired transfers are reviewed by the owner before any stock is released.
           </div>
         ` : ''}
 
