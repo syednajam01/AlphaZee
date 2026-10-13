@@ -183,11 +183,11 @@ describe('Storefront Order API Client & Checkout Cart State', () => {
     assert.equal(receiptResult.receipts.length, 1);
   });
 
-  it('fetches order status with phone parameter', async () => {
-    let calledUrl = '';
+  it('exchanges a private code before fetching order status without URL credentials', async () => {
+    const calls = [];
 
-    global.fetch = async (url) => {
-      calledUrl = url;
+    global.fetch = async (url, options) => {
+      calls.push({ url, options });
       return {
         ok: true,
         json: async () => ({
@@ -198,8 +198,10 @@ describe('Storefront Order API Client & Checkout Cart State', () => {
       };
     };
 
-    const statusResult = await fetchOrderStatus('AZ-20261011-A1B2C3', '03001234567');
-    assert.ok(calledUrl.includes('/orders/AZ-20261011-A1B2C3?phone=03001234567'));
+    const statusResult = await fetchOrderStatus('AZ-20261011-A1B2C3', 'private-code');
+    assert.ok(calls[0].url.endsWith('/orders/access'));
+    assert.equal(JSON.parse(calls[0].options.body).access_code, 'private-code');
+    assert.ok(calls[1].url.endsWith('/orders/AZ-20261011-A1B2C3'));
     assert.equal(statusResult.order_status, 'confirmed');
     assert.equal(statusResult.payment_status, 'verified');
   });

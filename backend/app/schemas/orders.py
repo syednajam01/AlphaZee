@@ -71,6 +71,8 @@ class OrderLineResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    fulfillment_kind: str = 'original'
+    replacement_return_id: Optional[uuid.UUID] = None
     variant_id: int
     product_title: str = Field(description="Product title snapshot at purchase time")
     variant_sku: str = Field(description="Variant SKU snapshot")
@@ -133,11 +135,15 @@ class ShipmentInfoSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    replacement_return_id: Optional[uuid.UUID] = None
     courier_code: str
     courier_name: str = ""
     tracking_number: str
     tracking_url: Optional[str] = None
     status: str
+    cod_amount_minor: int = 0
+    settlement_outstanding_minor: int = 0
+    cod_remittance_status: str = 'not_applicable'
     dispatched_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
     rto_restocked_at: Optional[datetime] = None
@@ -149,11 +155,15 @@ class ShipmentInfoSchema(BaseModel):
         code = getattr(s, "courier_code", "manual")
         return cls(
             id=s.id,
+            replacement_return_id=s.replacement_return_id,
             courier_code=code,
             courier_name=COURIER_DISPLAY_NAMES.get(code, code.title()),
             tracking_number=s.tracking_number,
             tracking_url=s.tracking_url,
             status=s.status,
+            cod_amount_minor=s.cod_amount_minor,
+            settlement_outstanding_minor=s.settlement_outstanding_minor,
+            cod_remittance_status=s.cod_remittance_status,
             dispatched_at=s.dispatched_at,
             delivered_at=s.delivered_at,
             rto_restocked_at=s.rto_restocked_at,
@@ -214,14 +224,17 @@ class OrderResponseSchema(BaseModel):
     bank_instructions: Optional[BankInstructionsSchema] = None
 
 
+class OrderCreateResponseSchema(OrderResponseSchema):
+    access_code: str = Field(description='Save this private code to regain access on another device')
+
+
+class OrderAccessExchangeRequest(BaseModel):
+    order_number: str = Field(min_length=3, max_length=50)
+    access_code: str = Field(min_length=43, max_length=43)
+
+
 class PaymentReceiptUploadRequest(BaseModel):
     """Payload for uploading bank transfer transaction proof."""
 
-    customer_phone: str = Field(description="Customer phone number for verification")
     receipt_image_url: str = Field(min_length=5, max_length=500, description="Screenshot URL")
     bank_reference: Optional[str] = Field(default=None, max_length=64, description="Bank transaction ref / transaction ID")
-
-    @field_validator("customer_phone")
-    @classmethod
-    def validate_phone(cls, v: str) -> str:
-        return normalize_pakistan_phone(v)

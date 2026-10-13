@@ -1,12 +1,12 @@
 """
-test_exchange_flow.py — Verification of Phase G (End-to-End Exchange Completion & Ownership Verification).
+test_exchange_flow.py — Verification of Phase G order access and replacement fulfillment.
 
 Covers:
-1. Return request with wrong phone is rejected with HTTP 403 Forbidden.
-2. Return request with valid phone is accepted with HTTP 201 Created.
-3. Approving size exchange creates replacement stock reservation and replacement shipment.
-4. Approving size exchange when replacement variant has no stock raises HTTP 422 InsufficientStockError.
-5. Approving standard bank refund return does not create replacement shipment or reservation.
+1. Phone without a scoped session cannot submit a return.
+2. A scoped session allows a return request.
+3. Exchange approval reserves replacement stock once; dispatch and RTO touch only replacement stock.
+4. Insufficient replacement stock rolls approval back atomically.
+5. A bank refund does not create replacement fulfillment.
 """
 
 import uuid
@@ -19,12 +19,19 @@ from app.database import get_db
 from app.main import app
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
 from app.models.inventory import InventoryBalance, StockReservation, SupplierVariant
-from app.models.orders import Order
+from app.models.orders import Order, OrderLine
 from app.models.returns import OrderReturn
 from app.models.shipments import Shipment
 from app.models.suppliers import Supplier
 from app.services.orders import CreateOrderDTO, OrderItemDTO, place_order, confirm_supplier_acceptance, deliver_order
 from app.services.shipments import create_shipment
+from app.services.order_access import issue_access, cookie_name
+
+
+def _authorize(client, db, order):
+    _, token = issue_access(db, order)
+    db.commit()
+    client.headers['Cookie'] = f"{client.headers.get('Cookie', '')}; {cookie_name()}={token}"
 
 
 def _deliver(db, order):
@@ -163,8 +170,7 @@ def test_return_request_with_wrong_phone_rejected_with_403(
             "customer_notes": "No longer need item",
         },
     )
-    assert res.status_code == 403
-    assert "ownership" in res.json()["detail"].lower() or "phone" in res.json()["detail"].lower()
+    assert res.status_code == 404
 
 
 def test_return_request_with_valid_phone_accepted(
@@ -186,9 +192,10 @@ def test_return_request_with_valid_phone_accepted(
         ),
     )
     _deliver(db_session, order)
+    _authorize(client, db_session, order)
     line_id = order.lines[0].id
 
-    # Formatted phone number should normalize and match
+    # A scoped session authorizes the request; phone is ignored.
     res = client.post(
         "/api/v1/returns/request",
         json={
@@ -233,6 +240,7 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
         ),
     )
     _deliver(db_session, order)
+    _authorize(client, db_session, order)
     line_id = order.lines[0].id
 
     # 1. Customer submits size exchange request from M to L
@@ -252,10 +260,10 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
     assert req_res.status_code == 201
     return_id = req_res.json()["id"]
 
-    # Replacement fulfillment is safely deferred until Phase G.
+    # Approval creates exactly one held replacement allocation.
     app_res = client.post(f"/api/v1/admin/returns/{return_id}/approve")
-    assert app_res.status_code == 400
-    assert 'replacement allocation' in app_res.json()['detail'].lower()
+    assert app_res.status_code == 200, app_res.text
+    assert client.post(f"/api/v1/admin/returns/{return_id}/approve").status_code == 200
 
     # 3. Verify replacement reservation created for variant L
     res_stmt = db_session.query(StockReservation).filter(
@@ -263,7 +271,8 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
         StockReservation.stage == "held",
     )
     res_record = res_stmt.first()
-    assert res_record is None
+    assert res_record is not None
+    assert db_session.get(OrderLine, res_record.order_line_id).fulfillment_kind == 'replacement'
 
     # 4. Verify replacement shipment created for the order
     ship_stmt = db_session.query(Shipment).filter(
@@ -271,6 +280,37 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
         Shipment.status == "booked",
     )
     assert ship_stmt.first() is None
+    assert client.post(f'/api/v1/admin/returns/{return_id}/receive',
+                       json={'received_quantity': 1}).status_code == 200
+    assert client.post(f'/api/v1/admin/returns/{return_id}/inspect',
+                       json={'sellable_quantity': 1, 'damaged_quantity': 0}).status_code == 200
+    dispatched = client.post(f'/api/v1/admin/returns/{return_id}/dispatch-replacement',
+                             json={'courier_code': 'manual', 'tracking_number': 'REPL-12345'})
+    assert dispatched.status_code == 200, dispatched.text
+    assert dispatched.json()['cod_amount_minor'] == 0
+    db_session.refresh(bal_l)
+    assert bal_l.on_hand == initial_l_on_hand - 1
+    assert order.order_status == 'delivered'
+    assert order.payment_status == 'verified'
+    shipment_id = dispatched.json()['id']
+    delivered = client.post(f'/api/v1/admin/shipments/{shipment_id}/status',
+                            json={'status': 'delivered'})
+    assert delivered.status_code == 200, delivered.text
+    assert order.order_status == 'delivered'
+    assert order.payment_status == 'verified'
+    assert client.post(f'/api/v1/admin/shipments/{shipment_id}/status',
+                       json={'status': 'rto_initiated'}).status_code == 200
+    received = client.post(f'/api/v1/admin/shipments/{shipment_id}/status', json={
+        'status': 'rto_delivered', 'received_lines': [
+            {'order_line_id': str(res_record.order_line_id), 'received_quantity': 1}]})
+    assert received.status_code == 200, received.text
+    inspected = client.post(f'/api/v1/admin/shipments/{shipment_id}/inspect-rto', json={
+        'lines': [{'order_line_id': str(res_record.order_line_id), 'sellable_quantity': 1,
+                   'damaged_quantity': 0}], 'notes': 'Returned unopened'})
+    assert inspected.status_code == 200, inspected.text
+    db_session.refresh(bal_l)
+    assert bal_l.on_hand == initial_l_on_hand
+    assert order.order_status == 'delivered'
 
 
 def test_approve_exchange_with_no_stock_raises_422(
@@ -299,6 +339,7 @@ def test_approve_exchange_with_no_stock_raises_422(
         ),
     )
     _deliver(db_session, order)
+    _authorize(client, db_session, order)
     line_id = order.lines[0].id
 
     req_res = client.post(
@@ -316,10 +357,9 @@ def test_approve_exchange_with_no_stock_raises_422(
     assert req_res.status_code == 201
     return_id = req_res.json()["id"]
 
-    # Exchange approval remains disabled until dedicated replacement allocations exist.
+    # Failed reservation rolls back both the replacement line and approval.
     app_res = client.post(f"/api/v1/admin/returns/{return_id}/approve")
-    assert app_res.status_code == 400
-    assert "replacement allocation" in app_res.json()["detail"].lower()
+    assert app_res.status_code == 422
 
     # Verify return status remains "requested"
     ret = db_session.get(OrderReturn, uuid.UUID(return_id))
@@ -345,6 +385,7 @@ def test_approve_refund_return_does_not_create_replacement_shipment(
         ),
     )
     _deliver(db_session, order)
+    _authorize(client, db_session, order)
     line_id = order.lines[0].id
 
     req_res = client.post(

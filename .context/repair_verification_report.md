@@ -180,3 +180,48 @@ The additive migration flags historical shipments for owner reconciliation. It n
 | Browser | None used, per owner request; visual and native browser flows remain unverified |
 
 Evidence: `phase_d_stock_transition_table.md` and `phase_d_migration_verification.json`. Exchange approval remains intentionally blocked until Phase G provides separately allocated replacement fulfillment. Phase F will repair refund execution and settlement accounting; Phase L2 will finish the broader owner form and browser journey integration.
+
+## Docker containerization before Phase G
+
+Date: 2026-10-13. The local Compose stack now runs the existing PostgreSQL volume, a one-shot Alembic migration job, a Python 3.13 FastAPI image, and a Vite frontend image with source mounts. The production Compose stack is separate: it builds static frontend assets into Caddy, serves HTTPS with `/api/*` proxied internally to FastAPI, and keeps API/PostgreSQL ports off the host. It runs production configuration preflight and migrations before the API. Filled deployment settings are ignored by Git; the backend Docker build excludes local `.env` and tests.
+
+| Check | Result |
+| --- | --- |
+| Compose syntax | Development and production `config --quiet` passed |
+| Images | Development API/frontend and production API/Caddy images built |
+| Local stack | `docker compose --env-file .env.docker.local up --wait -d` reached healthy DB, API and frontend on 5433/18000/13000, leaving native 8000/3000 services untouched |
+| End-to-end HTTP through container frontend | Home and frontend module 200; API readiness 200; capabilities kept checkout disabled; anonymous owner 401; public order POST 503 |
+| Migration/data | Alembic `d61f4b8c2a90 (head)` inside container; five commerce table counts remained zero |
+| Production validation | Caddy config valid; only web publishes 80/443; example domain rejected by preflight; dummy valid-shaped settings passed preflight without launching production |
+| Frontend checks | 81 tests passed; production frontend build passed inside Docker |
+
+Deployment commands, credentials, DNS/TLS requirements and backup guidance are in `docker_deployment_runbook.md`. A real production deployment was not started because no domain or credentials were provided. Browser behavior remains unverified at the owner's request. Containerization does not open public checkout or complete the pending Phase G/F/L2 commerce work.
+
+## Phase G — private order access and replacement fulfillment
+
+Date: 2026-10-13. Checkout issues a private order access code once, stores only its hash, and establishes an HttpOnly order-scoped session. Tracking, receipt upload, return submission, and exchange options require that session. Code exchange is rate limited; codes and sessions expire and can be revoked. Owner-assisted recovery requires a verification note. No customer credential is placed in a URL. Size exchange approval atomically creates one zero-priced replacement line and held supplier reservation. Replacement dispatch, delivery, RTO receipt, and inspection use exact allocations without changing the original sale status, payment, total, or COD. Any explicit replacement charge is stored separately. The owner console and customer tracking view expose the new flow.
+
+| Check | Result |
+| --- | --- |
+| Backend suite | 206 passed; one upstream Starlette/AnyIO deprecation warning |
+| Focused recovery and analytics checks | 4 passed |
+| Frontend suite and production build | 81 passed; build passed |
+| Development migration | `a72e901b4c63 (head)` applied; `alembic check` found no missing operations |
+| Docker development stack | API, database, and web healthy on ports 18000, 5433, and 13000 |
+| Browser | None used, per owner request |
+
+Operational instructions are in `phase_g_runbook.md`. Phase F settlement reporting is documented below; Phase L2 broader owner workflows remain planned work.
+
+## Phase F — reports, executed refunds and courier settlements
+
+Date: 2026-10-13. Delivered sales, verified bank cash, courier-held COD, bank receipts, documented deductions, refund liabilities, executed refund payments, product cost and courier expenses now have separate report fields. Return completion no longer records a paid refund reference. Settlement and refund payment references are append-only evidence; a final short payout remains disputed. The owner console can record partial courier receipts/deductions and paid refunds, with refreshed balances.
+
+| Check | Result |
+| --- | --- |
+| Backend suite | 208 passed; one upstream Starlette/AnyIO deprecation warning |
+| Frontend suite and production build | 81 passed; build passed |
+| Development migration | `c94e31f7d562 (head)` applied; `alembic check` found no missing operations |
+| Focused financial scenarios | Unpaid/undelivered sales, COD delivery without bank cash, cumulative partial settlement, deductions without duplicate courier expense, disputed short payout, partial refunds, duplicate and excess references passed |
+| Browser | None used, per owner request |
+
+Operational definitions and entry instructions are in `phase_f_runbook.md`. Phase L2 remains planned.

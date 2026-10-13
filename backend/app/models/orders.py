@@ -366,6 +366,12 @@ class OrderLine(Base):
         CheckConstraint("line_total_minor >= 0", name="ck_order_lines_line_total_nonnegative"),
         Index("idx_ol_order_id", "order_id"),
         Index("idx_ol_variant_id", "variant_id"),
+        CheckConstraint("fulfillment_kind IN ('original', 'replacement')", name='ck_order_lines_fulfillment_kind'),
+        CheckConstraint("(fulfillment_kind = 'original' AND replacement_return_id IS NULL) OR "
+                        "(fulfillment_kind = 'replacement' AND replacement_return_id IS NOT NULL)",
+                        name='ck_order_lines_replacement_link'),
+        Index('uq_order_lines_replacement_return', 'replacement_return_id', unique=True,
+              postgresql_where=text('replacement_return_id IS NOT NULL')),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -380,6 +386,12 @@ class OrderLine(Base):
         ForeignKey("orders.id", ondelete="CASCADE"),
         nullable=False,
     )
+
+    fulfillment_kind: Mapped[str] = mapped_column(String(20), nullable=False, default='original',
+                                                   server_default=text("'original'"))
+    replacement_return_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey('order_returns.id', ondelete='RESTRICT',
+                                     use_alter=True, name='fk_order_lines_replacement_return'), nullable=True)
 
     variant_id: Mapped[int] = mapped_column(
         Integer,

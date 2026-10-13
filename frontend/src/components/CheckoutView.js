@@ -484,6 +484,8 @@ export function createCheckoutView(onClose) {
         <p style="font-size: 0.8125rem; color: var(--color-text-muted); margin-top: 4px;">
           A confirmation has been recorded for <strong>${escapeHtml(order.customer_phone)}</strong>.
         </p>
+        <p style="font-size: 0.8125rem; margin-top: 12px;">Save this private access code to track your order on another device. It is shown only here. If lost, contact the store for verified recovery.</p>
+        <code id="checkout-access-code" style="display: block; overflow-wrap: anywhere; user-select: all; padding: 10px; background: var(--color-bg);">${escapeHtml(order.access_code || '')}</code>
       </div>
 
       <div style="background: var(--color-bg); border-radius: var(--radius-btn); padding: 16px;">
@@ -524,7 +526,6 @@ export function createCheckoutView(onClose) {
 
         try {
           await uploadReceipt(order.order_number, {
-            customer_phone: order.customer_phone,
             receipt_image_url: imageUrl,
             bank_reference: ref,
           });

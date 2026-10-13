@@ -4,8 +4,8 @@ test_api_orders.py — Integration tests for Customer Order Storefront API endpo
 Tests:
 - POST /api/v1/orders: Valid COD and Bank Transfer orders, authoritative price snapshotting, stock reservation holding.
 - POST /api/v1/orders: 422 on invalid phone format, 409 on insufficient inventory, 400 on unavailable variant.
-- POST /api/v1/orders/{order_number}/receipt: Payment proof submission with verified customer phone lookup.
-- GET /api/v1/orders/{order_number}: Customer tracking lookup with phone verification.
+- POST /api/v1/orders/{order_number}/receipt: Payment proof submission with order-scoped session.
+- GET /api/v1/orders/{order_number}: Customer tracking with private-code access.
 """
 
 from __future__ import annotations
@@ -307,7 +307,8 @@ def test_receipt_upload_and_tracking(client, db_session):
         "receipt_image_url": "https://storage.alphazee.pk/receipts/proof-123.jpg",
         "bank_reference": "TXN998877",
     }
-    receipt_res = client.post(f"/api/v1/orders/{order_num}/receipt", json=receipt_payload)
+    receipt_res = client.post(f"/api/v1/orders/{order_num}/receipt", json=receipt_payload,
+                              headers={'Origin': 'http://localhost:3000'})
     assert receipt_res.status_code == 200
     receipt_data = receipt_res.json()
     assert len(receipt_data["receipts"]) == 1
@@ -320,6 +321,82 @@ def test_receipt_upload_and_tracking(client, db_session):
     assert track_res.json()["order_number"] == order_num
     assert len(track_res.json()["receipts"]) == 1
 
-    # 4. Mismatched phone lookup returns 404
-    bad_track_res = client.get(f"/api/v1/orders/{order_num}?phone=03001112233")
+    # Phone numbers cannot authorize access; the private code can restore a session.
+    from fastapi.testclient import TestClient
+    from app.main import app
+    other_client = TestClient(app)
+    bad_track_res = other_client.get(f"/api/v1/orders/{order_num}?phone=03451234567")
     assert bad_track_res.status_code == 404
+    restored = other_client.post('/api/v1/orders/access', json={
+        'order_number': order_num, 'access_code': order_res.json()['access_code']},
+        headers={'Origin': 'http://localhost:3000'})
+    assert restored.status_code == 200
+    assert other_client.get(f"/api/v1/orders/{order_num}").status_code == 200
+
+
+def test_order_access_is_scoped_hashed_and_revocable(client, db_session):
+    from app.models.order_access import OrderAccessGrant
+    from app.services.order_access import revoke_order_access
+    item = _create_catalog_item(db_session, on_hand=3)
+    payload = {
+        'customer_name': 'SAMPLE Buyer', 'customer_phone': '03001234567',
+        'shipping_address_line1': 'SAMPLE Street 1', 'shipping_city': 'Lahore',
+        'shipping_province': 'Punjab', 'payment_method': 'cod',
+        'items': [{'variant_id': item['variant'].id, 'quantity': 1}],
+    }
+    first = _post_order(client, payload)
+    second = _post_order(client, payload)
+    assert first.status_code == second.status_code == 201
+    first_number = first.json()['order_number']
+    second_number = second.json()['order_number']
+    first_code = first.json()['access_code']
+    assert first_code not in str(db_session.scalars(select(OrderAccessGrant.code_hash)).all())
+    assert client.get(f'/api/v1/orders/{first_number}?phone=03001234567').status_code == 404
+    assert client.get(f'/api/v1/orders/{second_number}').status_code == 200
+    wrong = client.post('/api/v1/orders/access', json={
+        'order_number': first_number, 'access_code': second.json()['access_code']},
+        headers={'Origin': 'http://localhost:3000'})
+    assert wrong.status_code == 404
+    restored = client.post('/api/v1/orders/access', json={
+        'order_number': first_number, 'access_code': first_code},
+        headers={'Origin': 'http://localhost:3000'})
+    assert restored.status_code == 200
+    assert client.get(f'/api/v1/orders/{first_number}').status_code == 200
+    revoke_order_access(db_session, uuid.UUID(first.json()['id']))
+    db_session.commit()
+    assert client.get(f'/api/v1/orders/{first_number}').status_code == 404
+    assert client.post('/api/v1/orders/access', json={
+        'order_number': first_number, 'access_code': first_code},
+        headers={'Origin': 'http://localhost:3000'}).status_code == 404
+    attempts = [client.post('/api/v1/orders/access', json={
+        'order_number': first_number, 'access_code': 'A' * 43},
+        headers={'Origin': 'http://localhost:3000'}).status_code for _ in range(10)]
+    assert 429 in attempts
+
+
+def test_owner_assisted_access_recovery_requires_note_and_supports_revoke(admin_client, db_session):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    item = _create_catalog_item(db_session, on_hand=2)
+    from app.services.orders import CreateOrderDTO, OrderItemDTO, place_order
+    order = place_order(db_session, CreateOrderDTO(
+        customer_name='SAMPLE Historical Buyer', customer_phone='03001234567',
+        shipping_address_line1='SAMPLE Street 2', shipping_city='Lahore',
+        shipping_province='Punjab', payment_method='cod',
+        items=[OrderItemDTO(variant_id=item['variant'].id, quantity=1)]))
+    db_session.commit()
+    customer = TestClient(app)
+    assert customer.get(f'/api/v1/orders/{order.order_number}').status_code == 404
+    assert admin_client.post(f'/api/v1/admin/orders/{order.id}/access-recovery', json={
+        'verification_note': 'short'}).status_code == 422
+    recovered = admin_client.post(f'/api/v1/admin/orders/{order.id}/access-recovery', json={
+        'verification_note': 'Identity verified through original payment evidence'})
+    assert recovered.status_code == 200, recovered.text
+    assert recovered.headers['Cache-Control'] == 'no-store'
+    exchanged = customer.post('/api/v1/orders/access', json={
+        'order_number': order.order_number, 'access_code': recovered.json()['access_code']},
+        headers={'Origin': 'http://localhost:3000'})
+    assert exchanged.status_code == 200, exchanged.text
+    assert customer.get(f'/api/v1/orders/{order.order_number}').status_code == 200
+    assert admin_client.post(f'/api/v1/admin/orders/{order.id}/access-revoke').status_code == 200
+    assert customer.get(f'/api/v1/orders/{order.order_number}').status_code == 404

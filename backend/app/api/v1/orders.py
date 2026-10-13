@@ -10,6 +10,7 @@ Handles:
 from __future__ import annotations
 
 from typing import Optional
+import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy import select
@@ -19,12 +20,16 @@ from app.database import get_db
 from app.dependencies.checkout import require_checkout_enabled
 from app.dependencies.auth import require_trusted_origin
 from app.services.checkout_attempts import mint_checkout_session, require_checkout_session
-from app.models.orders import Order, normalize_pakistan_phone
+from app.models.orders import Order
+from app.models.catalog import Variant
+from app.services.order_access import exchange_access_code, issue_access, require_order_access, set_order_session_cookie
 from app.queries.reservations import InsufficientStockError
 from app.schemas.catalog import CurrencyAmount
 from app.schemas.orders import (
     BankInstructionsSchema,
     OrderCreateRequest,
+    OrderCreateResponseSchema,
+    OrderAccessExchangeRequest,
     OrderLineResponseSchema,
     OrderResponseSchema,
     PaymentReceiptResponseSchema,
@@ -54,6 +59,8 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
     lines = [
         OrderLineResponseSchema(
             id=line.id,
+            fulfillment_kind=line.fulfillment_kind,
+            replacement_return_id=line.replacement_return_id,
             variant_id=line.variant_id,
             product_title=line.product_title_snapshot,
             variant_sku=line.variant_sku_snapshot,
@@ -142,7 +149,7 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
 
 @router.post(
     "",
-    response_model=OrderResponseSchema,
+    response_model=OrderCreateResponseSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Place a new customer order",
     dependencies=[Depends(require_checkout_enabled), Depends(require_trusted_origin)],
@@ -153,11 +160,12 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
 )
 def create_customer_order(
     payload: OrderCreateRequest,
+    response: Response,
     idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=16, max_length=64,
                                   pattern=r'^[A-Za-z0-9_-]+$'),
     checkout_session_hash: str = Depends(require_checkout_session),
     db: Session = Depends(get_db),
-) -> OrderResponseSchema:
+) -> OrderCreateResponseSchema:
     if payload.idempotency_key and payload.idempotency_key != idempotency_key:
         raise HTTPException(status.HTTP_409_CONFLICT, 'Checkout attempt keys do not match.')
     effective_idemp = idempotency_key
@@ -187,6 +195,7 @@ def create_customer_order(
 
     try:
         order = place_order(db, dto)
+        access_code, session_token = issue_access(db, order)
         db.commit()
         db.refresh(order)
     except CheckoutAttemptConflict as err:
@@ -205,7 +214,29 @@ def create_customer_order(
             detail=str(err),
         ) from err
 
+    set_order_session_cookie(response, session_token)
+    return OrderCreateResponseSchema(**_order_to_response(order).model_dump(), access_code=access_code)
+
+
+@router.post('/access', response_model=OrderResponseSchema,
+             dependencies=[Depends(require_trusted_origin)])
+def access_customer_order(payload: OrderAccessExchangeRequest, request: Request,
+                          response: Response, db: Session = Depends(get_db)) -> OrderResponseSchema:
+    order = exchange_access_code(db, order_number=payload.order_number,
+                                 code=payload.access_code, request=request, response=response)
     return _order_to_response(order)
+
+
+@router.get('/{order_number}/exchange-options/{line_id}')
+def exchange_options(order_number: str, line_id: uuid.UUID, request: Request,
+                     db: Session = Depends(get_db)) -> list[dict]:
+    order = require_order_access(db, request, order_number=order_number)
+    line = next((item for item in order.lines if item.id == line_id and item.fulfillment_kind == 'original'), None)
+    if line is None:
+        raise HTTPException(404, 'Order access unavailable')
+    variants = db.scalars(select(Variant).where(Variant.product_id == line.variant.product_id,
+        Variant.id != line.variant_id, Variant.is_active.is_(True)).order_by(Variant.id)).all()
+    return [{'id': v.id, 'size': v.size, 'color': v.color, 'sku': v.sku} for v in variants]
 
 
 @router.post(
@@ -213,20 +244,15 @@ def create_customer_order(
     response_model=OrderResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Upload bank transfer payment proof",
+    dependencies=[Depends(require_trusted_origin)],
 )
 def upload_order_receipt(
     order_number: str,
     payload: PaymentReceiptUploadRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> OrderResponseSchema:
-    stmt = select(Order).where(Order.order_number == order_number.strip())
-    order = db.scalars(stmt).first()
-
-    if order is None or order.customer_phone != payload.customer_phone:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Order {order_number!r} not found for this customer phone number.",
-        )
+    order = require_order_access(db, request, order_number=order_number)
 
     if order.payment_method != "bank_transfer":
         raise HTTPException(
@@ -249,40 +275,12 @@ def upload_order_receipt(
 @router.get(
     "/{order_number}",
     response_model=OrderResponseSchema,
-    summary="Track order status by order number and verified phone",
+    summary="Track order status with an order-scoped session",
 )
 def track_order(
     order_number: str,
-    phone: str = Query(..., description="Customer phone number used when placing order"),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> OrderResponseSchema:
-    try:
-        clean_phone = normalize_pakistan_phone(phone)
-    except ValueError as err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(err),
-        ) from err
-
-    stmt = (
-        select(Order)
-        .where(
-            Order.order_number == order_number.strip(),
-            Order.customer_phone == clean_phone,
-        )
-        .options(
-            selectinload(Order.lines),
-            selectinload(Order.receipts),
-            selectinload(Order.shipments),
-            selectinload(Order.returns),
-        )
-    )
-    order = db.scalars(stmt).first()
-
-    if order is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Order {order_number!r} not found for phone number {clean_phone}.",
-        )
-
+    order = require_order_access(db, request, order_number=order_number)
     return _order_to_response(order)

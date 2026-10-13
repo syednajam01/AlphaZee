@@ -181,11 +181,20 @@ class LegacyShipmentReconcileRequest(BaseModel):
     note: str = Field(min_length=5, max_length=500)
 
 
+class SettlementDeductionRequest(BaseModel):
+    entry_type: Literal['outbound_shipping', 'rto_shipping', 'other_deduction']
+    amount_minor: int = Field(ge=1)
+    reference: str = Field(min_length=3, max_length=120)
+    note: str = Field(min_length=5, max_length=500)
+
+
 class CodRemittanceRequest(BaseModel):
     """Payload to record courier COD cash remittance into bank account."""
 
-    remitted_amount_minor: int = Field(ge=1, description="Actual cash remitted into bank account in paisas")
-    reference: Optional[str] = Field(default=None, max_length=100, description="Bank deposit ref / courier payout invoice number")
+    remitted_amount_minor: int = Field(ge=0, description="Actual cash received in bank in paisas; zero for deduction-only")
+    reference: Optional[str] = Field(default=None, max_length=120, description="Bank deposit ref / courier payout invoice number")
+    deductions: list[SettlementDeductionRequest] = []
+    final_statement: bool = False
     is_partial: bool = Field(default=False, description="Flag explicitly confirming this is a partial remittance")
     partial: Optional[bool] = Field(default=None, description="Alias for is_partial")
     partial_reason: Optional[str] = Field(default=None, max_length=255, description="Reason for short remittance from courier")
@@ -197,6 +206,7 @@ class ShipmentAdminResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    replacement_return_id: Optional[uuid.UUID] = None
     order_id: uuid.UUID
     courier_code: str
     tracking_number: str
@@ -206,6 +216,9 @@ class ShipmentAdminResponseSchema(BaseModel):
     stock_reconciliation_status: str = 'ready'
     cod_amount_minor: int
     cod_remitted_amount_minor: int
+    settlement_deductions_minor: int = 0
+    settlement_outstanding_minor: int = 0
+    settlement_entries: list['SettlementEntryResponseSchema'] = []
     remittance_amount_minor: int = 0
     cod_remittance_status: str
     is_partial_remittance: bool = False
@@ -218,10 +231,33 @@ class ShipmentAdminResponseSchema(BaseModel):
     delivered_at: Optional[datetime] = None
 
 
+class SettlementEntryResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    entry_type: str
+    amount_minor: int
+    reference: str
+    note: Optional[str] = None
+    final_statement: bool
+    recorded_at: datetime
+
+
 class ProfitLossResponseSchema(BaseModel):
     """Financial gross profit, COGS, courier expenses, and unit economics report."""
 
     gross_revenue_minor: int
+    order_value_minor: int = 0
+    delivered_sales_minor: int = 0
+    bank_customer_payments_minor: int = 0
+    cod_collected_minor: int = 0
+    courier_held_cod_minor: int = 0
+    courier_deductions_minor: int = 0
+    other_deductions_minor: int = 0
+    business_cash_received_minor: int = 0
+    refund_paid_minor: int = 0
+    refund_outstanding_minor: int = 0
+    sales_reversals_minor: int = 0
+    cogs_reversals_minor: int = 0
     formatted_gross_revenue: str
     net_revenue_minor: int = 0
     formatted_net_revenue: Optional[str] = None

@@ -1,7 +1,8 @@
 import { createOverlay } from '../utils/overlay.js';
 import { createBrandLogo } from './BrandLogo.js';
-import { fetchOrderStatus, uploadReceipt, requestOrderReturn, ApiError } from '../utils/api.js';
+import { fetchOrderStatus, fetchExchangeOptions, uploadReceipt, requestOrderReturn, ApiError } from '../utils/api.js';
 import { escapeHtml } from '../utils/dom.js';
+import { formatPkr } from '../utils/money.js';
 
 export function createOrderTrackingModal(onClose) {
   const modal = document.createElement('div');
@@ -32,7 +33,7 @@ export function createOrderTrackingModal(onClose) {
       <div id="tracking-content-area" style="padding: 24px; max-height: 75vh; overflow-y: auto;">
         <form id="tracking-search-form" style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
           <p style="font-size: 0.875rem; color: var(--color-text-muted); margin: 0 0 4px 0;">
-            Enter your AlphaZee order number and the mobile number used during checkout to track your order.
+            Enter your order number and private access code. If you lost the code, contact the store for verified recovery.
           </p>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -41,8 +42,8 @@ export function createOrderTrackingModal(onClose) {
               <input type="text" id="tracking-order-num" required placeholder="AZ-20261011-A1B2C3" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
             </div>
             <div>
-              <label for="tracking-phone" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Phone Number *</label>
-              <input type="tel" id="tracking-phone" required placeholder="0300-1234567" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
+              <label for="tracking-code" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Access Code</label>
+              <input type="password" id="tracking-code" autocomplete="off" placeholder="Private code (or use this device's session)" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
             </div>
           </div>
 
@@ -76,22 +77,23 @@ export function createOrderTrackingModal(onClose) {
     resultsArea.style.display = 'none';
 
     const orderNum = modal.querySelector('#tracking-order-num').value.trim();
-    const phone = modal.querySelector('#tracking-phone').value.trim();
+    const code = modal.querySelector('#tracking-code').value.trim();
 
-    if (!orderNum || !phone) return;
+    if (!orderNum) return;
 
     searchBtn.disabled = true;
     searchBtn.textContent = 'Searching...';
 
     try {
-      const order = await fetchOrderStatus(orderNum, phone);
+      const order = await fetchOrderStatus(orderNum, code);
+      modal.querySelector('#tracking-code').value = '';
       searchBtn.disabled = false;
       searchBtn.textContent = 'Lookup Order';
       renderOrderDetails(order);
     } catch (err) {
       searchBtn.disabled = false;
       searchBtn.textContent = 'Lookup Order';
-      errorBanner.textContent = err.message || 'Order not found. Please verify the order number and phone number.';
+      errorBanner.textContent = err.message || 'Order access unavailable. Check your code or contact the store.';
       errorBanner.style.display = 'block';
     }
   });
@@ -113,7 +115,7 @@ export function createOrderTrackingModal(onClose) {
       failed: 'badge-neutral',
     }[order.payment_status] || 'badge-neutral';
 
-    const linesHtml = order.lines.map(l => `
+    const linesHtml = order.lines.filter(l => l.fulfillment_kind === 'original').map(l => `
       <div style="display: flex; justify-content: space-between; font-size: 0.875rem; padding: 6px 0; border-bottom: 1px solid var(--color-border-subtle);">
         <div>
           <strong>${escapeHtml(l.product_title)}</strong> × ${l.quantity}
@@ -122,6 +124,11 @@ export function createOrderTrackingModal(onClose) {
           </div>
         </div>
         <div style="font-weight: 600;">${l.line_total.formatted}</div>
+      </div>
+    `).join('');
+    const replacementHtml = order.lines.filter(l => l.fulfillment_kind === 'replacement').map(l => `
+      <div style="font-size: .8125rem; padding: 8px; background: #F0FDF4; margin-top: 6px;">
+        Replacement: ${escapeHtml(l.product_title)} (${escapeHtml(l.size || l.color || l.variant_sku)}) × ${l.quantity}
       </div>
     `).join('');
 
@@ -176,7 +183,8 @@ export function createOrderTrackingModal(onClose) {
               </span>
             </div>
             <div>Reason: ${escapeHtml(r.reason)}</div>
-            ${r.refund_reference ? `<div>Bank Refund Ref: <code>${escapeHtml(r.refund_reference)}</code></div>` : ''}
+            ${r.return_type === 'refund_bank_transfer' ? `<div>Refund paid: ${escapeHtml(r.refund_paid.formatted)} · Remaining: ${escapeHtml(r.refund_outstanding.formatted)}</div>` : ''}
+            ${r.refund_executions?.map(payment => `<div>Paid ${escapeHtml(formatPkr(payment.amount_minor))} via ${escapeHtml(payment.channel)} · Ref: <code>${escapeHtml(payment.reference)}</code></div>`).join('') || ''}
           </div>
         `).join('')}
       </div>
@@ -203,6 +211,7 @@ export function createOrderTrackingModal(onClose) {
 
         <div style="font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 6px;">Ordered Items</div>
         ${linesHtml}
+        ${replacementHtml ? `<div style="font-size: .8125rem; font-weight: 700; margin-top: 12px;">Exchange replacements</div>${replacementHtml}` : ''}
         ${discountHtml}
 
         <div style="display: flex; justify-content: space-between; font-size: 1rem; font-weight: 700; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--color-border);">
@@ -210,23 +219,23 @@ export function createOrderTrackingModal(onClose) {
           <span>${order.total.formatted}</span>
         </div>
 
-        ${order.shipments && order.shipments.length > 0 ? `
+        ${order.shipments?.map(shipment => `
           <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span style="font-size: 0.8125rem; font-weight: 700; color: var(--color-text);">Courier Delivery Tracking</span>
-              <span class="badge badge-accent" style="text-transform: capitalize; font-size: 0.7rem;">${escapeHtml(order.shipments[0].status)}</span>
+              <span style="font-size: 0.8125rem; font-weight: 700; color: var(--color-text);">${shipment.replacement_return_id ? 'Replacement' : 'Original'} Courier Tracking</span>
+              <span class="badge badge-accent" style="text-transform: capitalize; font-size: 0.7rem;">${escapeHtml(shipment.status)}</span>
             </div>
             <div style="font-size: 0.8125rem; color: var(--color-text-muted); line-height: 1.5;">
-              <div><strong>Courier:</strong> ${escapeHtml(order.shipments[0].courier_name || order.shipments[0].courier_code)}</div>
-              <div><strong>Tracking #:</strong> <span style="font-family: monospace; font-weight: 700; color: var(--color-accent);">${escapeHtml(order.shipments[0].tracking_number)}</span></div>
+              <div><strong>Courier:</strong> ${escapeHtml(shipment.courier_name || shipment.courier_code)}</div>
+              <div><strong>Tracking #:</strong> <span style="font-family: monospace; font-weight: 700; color: var(--color-accent);">${escapeHtml(shipment.tracking_number)}</span></div>
             </div>
-            ${order.shipments[0].tracking_url ? `
-              <a href="${escapeHtml(order.shipments[0].tracking_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="display: inline-block; margin-top: 8px; padding: 4px 10px; font-size: 0.75rem; text-decoration: none;">
+            ${shipment.tracking_url ? `
+              <a href="${escapeHtml(shipment.tracking_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="display: inline-block; margin-top: 8px; padding: 4px 10px; font-size: 0.75rem; text-decoration: none;">
                 Track on Courier Site ↗
               </a>
             ` : ''}
           </div>
-        ` : ''}
+        `).join('') || ''}
 
         ${uploadReceiptHtml}
         ${returnsListHtml}
@@ -243,7 +252,7 @@ export function createOrderTrackingModal(onClose) {
               <div>
                 <label style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 2px;">Select Item</label>
                 <select id="return-select-line" required style="width: 100%; padding: 6px 10px; font-size: 0.8125rem; border: 1px solid var(--color-border); border-radius: var(--radius-btn);">
-                  ${order.lines.map(l => `<option value="${l.id}">${escapeHtml(l.product_title)} (${l.size || ''})</option>`).join('')}
+                  ${order.lines.filter(l => l.fulfillment_kind === 'original').map(l => `<option value="${l.id}">${escapeHtml(l.product_title)} (${escapeHtml(l.size || '')})</option>`).join('')}
                 </select>
               </div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -251,7 +260,7 @@ export function createOrderTrackingModal(onClose) {
                   <label style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 2px;">Request Type</label>
                   <select id="return-select-type" style="width: 100%; padding: 6px 10px; font-size: 0.8125rem; border: 1px solid var(--color-border); border-radius: var(--radius-btn);">
                     <option value="refund_bank_transfer">Bank Refund</option>
-                    <option value="size_exchange" disabled>Size Exchange (unavailable)</option>
+                    <option value="size_exchange">Size Exchange</option>
                     <option value="store_credit">Store Credit</option>
                   </select>
                 </div>
@@ -265,6 +274,10 @@ export function createOrderTrackingModal(onClose) {
                     <option value="changed_mind">Changed Mind</option>
                   </select>
                 </div>
+              </div>
+              <div id="return-exchange-options" style="display: none;">
+                <label for="return-exchange-variant" style="font-size: 0.75rem; font-weight: 600;">Replacement variant</label>
+                <select id="return-exchange-variant" style="width: 100%; padding: 6px 10px;"></select>
               </div>
               <div>
                 <label for="return-quantity" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 2px;">Quantity to return</label>
@@ -293,11 +306,31 @@ export function createOrderTrackingModal(onClose) {
 
     // Handle return request form submission
     const returnForm = resultsArea.querySelector('#form-submit-return');
+    const refreshExchangeOptions = async () => {
+      const exchange = resultsArea.querySelector('#return-select-type').value === 'size_exchange';
+      const panel = resultsArea.querySelector('#return-exchange-options');
+      panel.style.display = exchange ? 'block' : 'none';
+      if (!exchange) return;
+      const selector = resultsArea.querySelector('#return-exchange-variant');
+      selector.replaceChildren();
+      try {
+        const options = await fetchExchangeOptions(order.order_number, resultsArea.querySelector('#return-select-line').value);
+        for (const option of options) {
+          const item = document.createElement('option');
+          item.value = String(option.id);
+          item.textContent = [option.size, option.color, option.sku].filter(Boolean).join(' / ');
+          selector.appendChild(item);
+        }
+        if (!options.length) returnMsg.textContent = 'No replacement variants are available.';
+      } catch (error) { returnMsg.textContent = error.message; returnMsg.style.display = 'block'; }
+    };
+    resultsArea.querySelector('#return-select-type')?.addEventListener('change', refreshExchangeOptions);
     resultsArea.querySelector('#return-select-line')?.addEventListener('change', (event) => {
       const selected = order.lines.find(line => line.id === event.target.value);
       const quantityInput = resultsArea.querySelector('#return-quantity');
       quantityInput.max = String(selected?.quantity || 1);
       if (Number(quantityInput.value) > Number(quantityInput.max)) quantityInput.value = quantityInput.max;
+      refreshExchangeOptions();
     });
     const returnSubmitBtn = resultsArea.querySelector('#btn-submit-return-req');
     const returnMsg = resultsArea.querySelector('#return-req-msg');
@@ -309,6 +342,12 @@ export function createOrderTrackingModal(onClose) {
       const retType = resultsArea.querySelector('#return-select-type').value;
       const reason = resultsArea.querySelector('#return-select-reason').value;
       const notes = resultsArea.querySelector('#return-notes').value.trim() || null;
+      const replacementVariant = Number(resultsArea.querySelector('#return-exchange-variant')?.value || 0);
+      if (retType === 'size_exchange' && !replacementVariant) {
+        returnMsg.textContent = 'Select an available replacement variant.';
+        returnMsg.style.display = 'block';
+        return;
+      }
 
       returnSubmitBtn.disabled = true;
       returnSubmitBtn.textContent = 'Submitting...';
@@ -322,6 +361,7 @@ export function createOrderTrackingModal(onClose) {
           return_type: retType,
           reason,
           customer_notes: notes,
+          exchange_variant_id: retType === 'size_exchange' ? replacementVariant : null,
         });
         returnMsg.style.color = '#15803D';
         returnMsg.textContent = 'Return request submitted! Owner will review and coordinate pickup/exchange.';
@@ -352,7 +392,6 @@ export function createOrderTrackingModal(onClose) {
 
         try {
           await uploadReceipt(order.order_number, {
-            customer_phone: order.customer_phone,
             receipt_image_url: url,
             bank_reference: ref,
           });

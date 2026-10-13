@@ -20,6 +20,8 @@ from app.models.shipments import Shipment, ShipmentAllocation  # noqa: F401
 from app.models.promotions import Coupon  # noqa: F401
 from app.models.returns import OrderReturn  # noqa: F401
 from app.models.auth import OwnerCredential, OwnerSession, OwnerLoginBucket  # noqa: F401
+from app.models.order_access import OrderAccessGrant, OrderAccessSession, OrderAccessAttempt  # noqa: F401
+from app.models.finance import CourierSettlementEntry, RefundExecution  # noqa: F401
 
 __all__ = [
     "Base",
@@ -41,6 +43,11 @@ __all__ = [
     "ShipmentAllocation",
     "Coupon",
     "OrderReturn",
+    "OrderAccessGrant",
+    "OrderAccessSession",
+    "OrderAccessAttempt",
+    "CourierSettlementEntry",
+    "RefundExecution",
 ]
 
 

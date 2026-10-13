@@ -53,6 +53,7 @@ class OrderReturn(Base):
     __tablename__ = "order_returns"
     __table_args__ = (
         CheckConstraint("refund_amount_minor >= 0", name="ck_order_returns_refund_nonnegative"),
+        CheckConstraint('replacement_charge_minor >= 0', name='ck_order_returns_replacement_charge_nonnegative'),
         CheckConstraint('quantity IS NULL OR quantity > 0', name='ck_order_returns_quantity_positive'),
         CheckConstraint('received_quantity >= 0 AND (quantity IS NULL OR received_quantity <= quantity)',
                         name='ck_order_returns_received_bounds'),
@@ -131,6 +132,8 @@ class OrderReturn(Base):
         default=0,
         server_default=text("0"),
     )
+    replacement_charge_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0,
+                                                           server_default=text('0'))
 
     refund_reference: Mapped[str | None] = mapped_column(
         String(100),
@@ -172,6 +175,7 @@ class OrderReturn(Base):
         "Order",
         back_populates="returns",
     )
+    refund_executions = relationship('RefundExecution', order_by='RefundExecution.executed_at')
 
     @validates("return_type")
     def validate_type(self, key: str, value: str) -> str:

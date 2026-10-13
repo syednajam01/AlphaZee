@@ -21,6 +21,8 @@ import {
   dispatchAdminOrder,
   updateAdminShipmentStatus,
   recordAdminCodRemittance,
+  fetchAdminShipmentSettlement,
+  recordAdminRefundExecution,
   fetchAdminSuppliers,
   createAdminSupplier,
   assignSupplierVariant,
@@ -30,6 +32,10 @@ import {
   deleteAdminCoupon,
   fetchAdminReturns,
   approveAdminReturn,
+  dispatchAdminReplacement,
+  inspectAdminShipmentRto,
+  recoverAdminOrderAccess,
+  revokeAdminOrderAccess,
   receiveAdminReturn,
   inspectAdminReturn,
   completeAdminReturn,
@@ -54,6 +60,7 @@ export function createAdminConsoleModal() {
 
   let activeTab = 'overview';
   let authenticated = false;
+  let currentRemitOutstandingMinor = 0;
   let authGeneration = 0;
   removeLegacyAdminCredentials();
   let isCollapsed = false;
@@ -219,18 +226,27 @@ export function createAdminConsoleModal() {
         <h3 style="font-size: 1rem; font-weight: 700; margin: 0 0 12px 0;">Record COD Bank Remittance</h3>
         <form id="admin-remittance-form" style="display: flex; flex-direction: column; gap: 10px;">
           <input type="hidden" id="remit-shipment-id" />
+          <div id="remit-summary" style="font-size: .8rem; color: #FBBF24;"></div>
+          <div id="remit-history" style="font-size: .72rem; max-height: 90px; overflow: auto;"></div>
           <div>
-            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Remitted Amount Cleared in Bank (PKR) *</label>
-            <input type="number" id="remit-amount-pkr" required min="1" step="1" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">New cash received in bank (PKR; 0 for deduction only)</label>
+            <input type="number" id="remit-amount-pkr" required min="0" step="0.01" value="0" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
           </div>
           <div>
-            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Courier Payout Reference / Bank Advice</label>
+            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Bank payout reference (required for cash)</label>
             <input type="text" id="remit-ref" placeholder="e.g. TRAX-WEEKLY-PAYOUT-OCT" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
           </div>
+          <label style="font-size: .75rem;">Documented deduction (optional)
+            <select id="remit-deduction-type"><option value="">None</option><option value="outbound_shipping">Outbound courier fee</option><option value="rto_shipping">RTO courier fee</option><option value="other_deduction">Other documented deduction</option></select>
+          </label>
+          <input type="number" id="remit-deduction-pkr" min="0" step="0.01" placeholder="Deduction amount PKR" />
+          <input type="text" id="remit-deduction-ref" maxlength="120" placeholder="Deduction invoice/reference" />
+          <input type="text" id="remit-deduction-note" maxlength="500" placeholder="Evidence note (at least 5 characters)" />
+          <label style="font-size: .75rem;"><input type="checkbox" id="remit-final-statement" /> Courier marked this as the final payout</label>
           <div id="remit-error" style="display: none; color: #F87171; font-size: 0.75rem; font-weight: 600;"></div>
           <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
             <button type="button" id="btn-cancel-remit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8125rem;">Cancel</button>
-            <button type="submit" id="btn-submit-remit" disabled class="btn btn-primary" style="padding: 6px 14px; font-size: 0.8125rem;">Remittance entry unavailable</button>
+            <button type="submit" id="btn-submit-remit" class="btn btn-primary" style="padding: 6px 14px; font-size: 0.8125rem;">Record settlement</button>
           </div>
         </form>
       </div>
@@ -451,8 +467,8 @@ export function createAdminConsoleModal() {
       const isPaid = o.payment_status === 'verified';
       const isDelivered = o.order_status === 'delivered';
       const isCancelled = o.order_status === 'cancelled';
-      const hasShipment = o.shipments && o.shipments.length > 0;
-      const shipment = hasShipment ? o.shipments[0] : null;
+      const shipment = o.shipments?.find(s => !s.replacement_return_id) || null;
+      const hasShipment = Boolean(shipment);
 
       return `
         <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
@@ -479,6 +495,8 @@ export function createAdminConsoleModal() {
             ${isBank && o.payment_deadline_at ? `<div style="font-size: 0.7rem;">Deadline ${escapeHtml(new Date(o.payment_deadline_at).toLocaleString())}</div>` : ''}
           </td>
           <td style="padding: 12px 8px; text-align: right;">
+            <button class="btn btn-secondary btn-recover-order-access" data-order-id="${o.id}" style="padding: 4px 8px; font-size: .7rem;">Recover Access</button>
+            <button class="btn btn-secondary btn-revoke-order-access" data-order-id="${o.id}" style="padding: 4px 8px; font-size: .7rem;">Revoke Access</button>
             ${!isPaid && isBank && !isCancelled && o.payment_review_status !== 'required' ? `
               <button class="btn btn-primary btn-verify-payment" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
                 Verify Bank Transfer
@@ -505,6 +523,9 @@ export function createAdminConsoleModal() {
               <button class="btn btn-secondary btn-rto-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; color: #FBBF24; border-color: rgba(251, 191, 36, 0.4);">
                 Initiate RTO
               </button>
+            ` : ''}
+            ${shipment?.cod_amount_minor > 0 && (shipment.status === 'delivered' || shipment.delivered_at) ? `
+              <button class="btn btn-secondary btn-remit-order" data-shipment-id="${shipment.id}" style="padding: 4px 8px; font-size: .7rem;">COD Settlement (${formatPkr(shipment.settlement_outstanding_minor)})</button>
             ` : ''}
             ${o.order_status === 'rto' && shipment?.status === 'rto_initiated' && shipment.stock_reconciliation_status !== 'legacy_review' ? `
               <button class="btn btn-primary btn-rto-receive" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; background: #E11D48; border-color: #E11D48;">
@@ -549,6 +570,39 @@ export function createAdminConsoleModal() {
       </div>
       <div id="payment-workflow-panel" role="region" aria-live="polite"></div>
     `;
+
+    container.querySelectorAll('.btn-recover-order-access').forEach(b => b.addEventListener('click', async () => {
+      const note = prompt('Describe how you independently verified this customer before issuing a new code:');
+      if (note === null) return;
+      if (note.trim().length < 10) { alert('Enter a verification note of at least 10 characters.'); return; }
+      b.disabled = true;
+      try {
+        const result = await recoverAdminOrderAccess(b.getAttribute('data-order-id'), note.trim());
+        prompt(`Private code for ${result.order_number}. Copy it now and convey it through the verified channel; it will not be shown again.`, result.access_code);
+      } catch (error) { alert(error.message || 'Access recovery failed'); }
+      finally { b.disabled = false; }
+    }));
+    container.querySelectorAll('.btn-revoke-order-access').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Revoke all customer codes and sessions for this order?')) return;
+      b.disabled = true;
+      try { await revokeAdminOrderAccess(b.getAttribute('data-order-id')); alert('Order access revoked. Issue a new code after verifying the customer.'); }
+      catch (error) { alert(error.message || 'Access revocation failed'); }
+      finally { b.disabled = false; }
+    }));
+    container.querySelectorAll('.btn-remit-order').forEach(b => b.addEventListener('click', async () => {
+      const shipmentId = b.getAttribute('data-shipment-id');
+      b.disabled = true;
+      try {
+        const shipment = await fetchAdminShipmentSettlement(shipmentId);
+        currentRemitOutstandingMinor = shipment.settlement_outstanding_minor;
+        modal.querySelector('#remit-shipment-id').value = shipmentId;
+        modal.querySelector('#remit-summary').textContent = `Gross COD ${formatPkr(shipment.cod_amount_minor)} · Bank receipts ${formatPkr(shipment.cod_remitted_amount_minor)} · Deductions ${formatPkr(shipment.settlement_deductions_minor)} · Outstanding ${formatPkr(shipment.settlement_outstanding_minor)}`;
+        modal.querySelector('#remit-history').textContent = shipment.settlement_entries.map(entry => `${entry.entry_type}: ${formatPkr(entry.amount_minor)} (${entry.reference})`).join(' | ') || 'No settlement entries yet.';
+        modal.querySelector('#remit-error').style.display = 'none';
+        modal.querySelector('#admin-remittance-modal').style.display = 'flex';
+      } catch (error) { alert(error.message || 'Unable to load settlement'); }
+      finally { b.disabled = false; }
+    }));
 
     const purgeBtn = container.querySelector('#btn-review-expired-orders');
     if (purgeBtn) {
@@ -991,7 +1045,7 @@ export function createAdminConsoleModal() {
         <td style="padding: 12px 8px; text-transform: capitalize;">${escapeHtml(r.return_type)}</td>
         <td style="padding: 12px 8px;">${escapeHtml(r.reason)}</td>
         <td style="padding: 12px 8px; color: rgba(255, 255, 255, 0.6);">${escapeHtml(r.customer_notes || '—')}</td>
-        <td style="padding: 12px 8px; font-weight: 600;">${r.refund_amount.formatted}</td>
+        <td style="padding: 12px 8px; font-weight: 600;">${r.refund_amount.formatted}<div style="font-size: .7rem;">Paid: ${r.refund_paid.formatted} · Due: ${r.refund_outstanding.formatted}</div></td>
         <td style="padding: 12px 8px;">
           <span class="badge ${r.status === 'completed' ? 'badge-accent' : r.status === 'approved' ? 'badge-primary' : 'badge-neutral'}" style="font-size: 0.65rem; text-transform: capitalize;">
             ${escapeHtml(r.status)}
@@ -1009,6 +1063,12 @@ export function createAdminConsoleModal() {
             ${r.inspection_state !== 'legacy_review' && r.received_quantity > r.sellable_quantity + r.damaged_quantity ? `<button class="btn btn-secondary btn-inspect-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Inspect Units</button>` : ''}
             ${r.received_quantity > 0 && r.sellable_quantity + r.damaged_quantity === r.received_quantity ? `<button class="btn btn-primary btn-complete-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: 0.7rem;">Complete Return</button>` : ''}
           ` : ''}
+          ${r.return_type === 'size_exchange' && ['inspected_passed', 'completed'].includes(r.status) && r.received_quantity === r.quantity && !r.replacement_shipment_id ? `<button class="btn btn-primary btn-dispatch-replacement" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Dispatch Replacement</button>` : ''}
+          ${r.return_type === 'refund_bank_transfer' && r.status === 'completed' && r.refund_outstanding.minor > 0 ? `<button class="btn btn-primary btn-record-refund" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Record Paid Refund</button>` : ''}
+          ${r.replacement_shipment_id ? `<div style="font-size: .7rem;">Replacement: ${escapeHtml(r.replacement_shipment_status)}</div>
+            ${['dispatched', 'in_transit', 'out_for_delivery'].includes(r.replacement_shipment_status) ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="delivered">Mark Delivered</button><button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="rto_initiated">Start RTO</button>` : ''}
+            ${r.replacement_shipment_status === 'rto_initiated' ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="rto_delivered">Receive RTO</button>` : ''}
+            ${r.replacement_shipment_status === 'rto_delivered' ? `<button class="btn btn-secondary btn-inspect-replacement-rto" data-ret-id="${r.id}">Inspect RTO</button>` : ''}` : ''}
         </td>
       </tr>
     `).join('');
@@ -1038,8 +1098,21 @@ export function createAdminConsoleModal() {
     container.querySelectorAll('.btn-approve-ret').forEach(b => {
       b.addEventListener('click', async () => {
         const id = b.getAttribute('data-ret-id');
+        const ret = returns.find(item => item.id === id);
+        const payload = {};
+        if (ret?.return_type === 'size_exchange') {
+          const charge = prompt('Additional replacement charge in PKR (default 0; original COD is never charged again):', '0');
+          if (charge === null) return;
+          const amount = Number(charge);
+          if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))
+              || Math.round(amount * 100) > 2147483647) {
+            alert('Enter a non-negative amount in PKR.');
+            return;
+          }
+          payload.replacement_charge_minor = Math.round(amount * 100);
+        }
         b.disabled = true;
-        try { await approveAdminReturn(id); await loadActiveTabData(); }
+        try { await approveAdminReturn(id, payload); await loadActiveTabData(); }
         catch (error) { alert(error.message || 'Failed to approve return'); b.disabled = false; }
       });
     });
@@ -1053,19 +1126,84 @@ export function createAdminConsoleModal() {
       });
     });
 
+    container.querySelectorAll('.btn-dispatch-replacement').forEach(b => b.addEventListener('click', async () => {
+      const courier = prompt('Courier code (manual, trax, leopards, tcs, mnp, postex, call_courier):', 'manual');
+      if (courier === null) return;
+      const tracking = prompt('Replacement tracking number:');
+      if (!tracking) return;
+      b.disabled = true;
+      try {
+        await dispatchAdminReplacement(b.getAttribute('data-ret-id'), { courier_code: courier, tracking_number: tracking });
+        await loadActiveTabData();
+      } catch (error) { alert(error.message || 'Replacement dispatch failed'); b.disabled = false; }
+    }));
+    container.querySelectorAll('.btn-replacement-status').forEach(b => b.addEventListener('click', async () => {
+      const ret = returns.find(item => item.id === b.getAttribute('data-ret-id'));
+      const next = b.getAttribute('data-next');
+      const payload = { status: next };
+      if (next === 'rto_delivered') {
+        const value = prompt(`Received replacement units (0-${ret.quantity}):`, String(ret.quantity));
+        if (value === null) return;
+        const quantity = Number(value);
+        if (!Number.isInteger(quantity) || quantity < 0 || quantity > ret.quantity) return;
+        payload.received_lines = [{ order_line_id: ret.replacement_line_id, received_quantity: quantity }];
+      }
+      b.disabled = true;
+      try { await updateAdminShipmentStatus(ret.replacement_shipment_id, payload); await loadActiveTabData(); }
+      catch (error) { alert(error.message || 'Replacement status update failed'); b.disabled = false; }
+    }));
+    container.querySelectorAll('.btn-inspect-replacement-rto').forEach(b => b.addEventListener('click', async () => {
+      const ret = returns.find(item => item.id === b.getAttribute('data-ret-id'));
+      const value = prompt('Sellable replacement units received:', '0');
+      if (value === null) return;
+      const sellable = Number(value);
+      const damagedValue = prompt('Damaged replacement units:', '0');
+      if (damagedValue === null) return;
+      const damaged = Number(damagedValue);
+      if (![sellable, damaged].every(Number.isInteger) || sellable < 0 || damaged < 0) return;
+      const notes = prompt('Inspection findings (required if damaged):', '');
+      if (notes === null) return;
+      b.disabled = true;
+      try {
+        await inspectAdminShipmentRto(ret.replacement_shipment_id, {
+          lines: [{ order_line_id: ret.replacement_line_id, sellable_quantity: sellable, damaged_quantity: damaged }], notes,
+        });
+        await loadActiveTabData();
+      } catch (error) { alert(error.message || 'Replacement inspection failed'); b.disabled = false; }
+    }));
+
     container.querySelectorAll('.btn-complete-ret').forEach(b => {
       b.addEventListener('click', async () => {
         const id = b.getAttribute('data-ret-id');
-        const ref = prompt('Enter Bank Refund Reference / Transaction ID (or leave blank for physical exchange):', 'MEZN-REF-');
-        if (ref !== null) {
+        if (confirm('Complete the inspected return? A refund is recorded separately only after money has actually been sent.')) {
           b.disabled = true;
           try {
-            await completeAdminReturn(id, { refund_reference: ref.trim(), should_restock: true });
+            await completeAdminReturn(id, { should_restock: true });
             await loadActiveTabData();
           } catch (error) { alert(error.message || 'Failed to complete return'); b.disabled = false; }
         }
       });
     });
+    container.querySelectorAll('.btn-record-refund').forEach(b => b.addEventListener('click', async () => {
+      const ret = returns.find(item => item.id === b.getAttribute('data-ret-id'));
+      const amountValue = prompt(`Actual refund sent (PKR; remaining ${formatPkr(ret.refund_outstanding.minor)}):`,
+        String(ret.refund_outstanding.minor / 100));
+      if (amountValue === null) return;
+      const amount = Number(amountValue);
+      const amountMinor = pkrToMinor(amount);
+      if (!Number.isFinite(amount) || amountMinor <= 0 || amountMinor > ret.refund_outstanding.minor) {
+        alert('Enter a positive refund within the remaining approved amount.'); return;
+      }
+      const reference = prompt('Bank transfer or cash payment reference:');
+      if (reference === null) return;
+      if (reference.trim().length < 3) { alert('Enter a payment reference.'); return; }
+      b.disabled = true;
+      try {
+        await recordAdminRefundExecution(ret.id, { amount_minor: amountMinor,
+          reference: reference.trim(), channel: 'bank_transfer' });
+        await loadActiveTabData();
+      } catch (error) { alert(error.message || 'Unable to record paid refund'); b.disabled = false; }
+    }));
 
     container.querySelectorAll('.btn-receive-ret').forEach(b => b.addEventListener('click', async () => {
       const ret = returns.find(item => item.id === b.getAttribute('data-ret-id'));
@@ -1212,9 +1350,9 @@ export function createAdminConsoleModal() {
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
         
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Realized Gross Revenue</div>
+          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Delivered Sales</div>
           <div style="font-size: 1.5rem; font-weight: 800; color: #4ADE80;">${escapeHtml(data.formatted_gross_revenue)}</div>
-          <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Delivered & active verified orders</div>
+          <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Undelivered and unpaid orders excluded</div>
         </div>
 
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
@@ -1224,11 +1362,30 @@ export function createAdminConsoleModal() {
         </div>
 
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Net Commercial Margin</div>
+          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Estimated Contribution</div>
           <div style="font-size: 1.5rem; font-weight: 800; color: #38BDF8;">${escapeHtml(data.formatted_gross_profit)}</div>
-          <div style="font-size: 0.7rem; color: #38BDF8; font-weight: 700; margin-top: 4px;">${data.gross_margin_percent}% Gross Margin</div>
+          <div style="font-size: 0.7rem; color: #38BDF8; font-weight: 700; margin-top: 4px;">${data.gross_margin_percent}% after recorded product/courier costs; excludes other overhead</div>
         </div>
 
+      </div>
+
+      <div style="background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); padding: 16px; margin-bottom: 20px;">
+        <h4 style="font-size: .8125rem; margin: 0 0 10px;">Sales and cash reconciliation · all-time PKR</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; font-size: .8rem;">
+          <div>Order value: ${formatPkr(data.order_value_minor)}</div>
+          <div>Delivered sales: ${formatPkr(data.delivered_sales_minor)}</div>
+          <div>Bank payments verified: ${formatPkr(data.bank_customer_payments_minor)}</div>
+          <div>COD collected by couriers: ${formatPkr(data.cod_collected_minor)}</div>
+          <div>COD receipts cleared in bank: ${formatPkr(data.cod_remitted_minor)}</div>
+          <div>Documented courier deductions: ${formatPkr(data.courier_deductions_minor)}</div>
+          <div>COD outstanding with couriers: ${formatPkr(data.courier_held_cod_minor)}</div>
+          <div>Refunds approved/completed: ${formatPkr(data.sales_reversals_minor)}</div>
+          <div>Refunds actually paid: ${formatPkr(data.refund_paid_minor)}</div>
+          <div>Refunds still payable: ${formatPkr(data.refund_outstanding_minor)}</div>
+          <div>Business cash after refunds: ${formatPkr(data.business_cash_received_minor)}</div>
+          <div>Sellable return COGS reversal: ${formatPkr(data.cogs_reversals_minor)}</div>
+          <div>Other evidenced deductions: ${formatPkr(data.other_deductions_minor)}</div>
+        </div>
       </div>
 
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
@@ -1312,17 +1469,62 @@ export function createAdminConsoleModal() {
     overlay.close();
   }
 
-  // These forms are completed with the fulfillment/settlement repairs. Until
-  // then, keep them dismissible and prevent an unhandled native form reload.
+  // Dispatch remains in Phase L2; settlement is handled below.
   for (const [formId, cancelId, dialogId] of [
     ['admin-dispatch-form', 'btn-cancel-dispatch', 'admin-dispatch-modal'],
-    ['admin-remittance-form', 'btn-cancel-remit', 'admin-remittance-modal'],
   ]) {
     modal.querySelector(`#${formId}`).addEventListener('submit', event => event.preventDefault());
     modal.querySelector(`#${cancelId}`).addEventListener('click', () => {
       modal.querySelector(`#${dialogId}`).style.display = 'none';
     });
   }
+  modal.querySelector('#btn-cancel-remit').addEventListener('click', () => {
+    modal.querySelector('#admin-remittance-modal').style.display = 'none';
+  });
+  modal.querySelector('#admin-remittance-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = form.querySelector('#btn-submit-remit');
+    const error = form.querySelector('#remit-error');
+    const amount = Number(form.querySelector('#remit-amount-pkr').value);
+    const deductionType = form.querySelector('#remit-deduction-type').value;
+    const deductionAmount = Number(form.querySelector('#remit-deduction-pkr').value || 0);
+    const cashMinor = pkrToMinor(amount);
+    const deductionMinor = pkrToMinor(deductionAmount);
+    const cashRef = form.querySelector('#remit-ref').value.trim();
+    const deductionRef = form.querySelector('#remit-deduction-ref').value.trim();
+    const deductionNote = form.querySelector('#remit-deduction-note').value.trim();
+    const invalid = ![amount, deductionAmount].every(Number.isFinite) || amount < 0 || deductionAmount < 0
+      || !Number.isSafeInteger(cashMinor) || !Number.isSafeInteger(deductionMinor)
+      || cashMinor + deductionMinor <= 0 || cashMinor + deductionMinor > currentRemitOutstandingMinor
+      || (cashMinor > 0 && cashRef.length < 3)
+      || (deductionType ? deductionMinor <= 0 || deductionRef.length < 3 || deductionNote.length < 5 : deductionMinor > 0);
+    if (invalid) {
+      error.textContent = 'Enter a valid cash receipt and/or evidenced deduction within the outstanding COD amount.';
+      error.style.display = 'block';
+      return;
+    }
+    const deductions = deductionType ? [{ entry_type: deductionType,
+      amount_minor: deductionMinor, reference: deductionRef, note: deductionNote }] : [];
+    error.style.display = 'none';
+    submit.disabled = true;
+    submit.textContent = 'Recording...';
+    try {
+      await recordAdminCodRemittance(form.querySelector('#remit-shipment-id').value, {
+        remitted_amount_minor: cashMinor, reference: cashMinor ? cashRef : null,
+        deductions, final_statement: form.querySelector('#remit-final-statement').checked,
+      });
+      form.reset();
+      modal.querySelector('#admin-remittance-modal').style.display = 'none';
+      await loadActiveTabData();
+    } catch (requestError) {
+      error.textContent = requestError.message || 'Unable to record settlement.';
+      error.style.display = 'block';
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Record settlement';
+    }
+  });
 
   const overlay = createOverlay({ element: modal, onClose: () => {
     modal.querySelector('#admin-dispatch-modal').style.display = 'none';

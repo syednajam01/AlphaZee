@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.inventory import InventoryBalance, StockReservation
 from app.models.orders import Order, OrderLine
 from app.models.shipments import ALLOWED_COURIER_CODES, ALLOWED_SHIPMENT_STATUSES, Shipment, ShipmentAllocation
+from app.models.returns import OrderReturn
 from app.queries.inventory import adjust_inventory
 from app.queries.reservations import transition_reservation_stage
 
@@ -70,16 +71,18 @@ def create_shipment(
 
     if not order.supplier_confirmed_at:
         raise OrderNotDispatchableError('Supplier acceptance must be recorded before dispatch.')
-    if db.scalar(select(Shipment.id).where(Shipment.order_id == order.id)) is not None:
+    if db.scalar(select(Shipment.id).where(Shipment.order_id == order.id,
+                                               Shipment.replacement_return_id.is_(None))) is not None:
         raise OrderNotDispatchableError('Order already has a shipment; dispatch it through its existing allocation.')
 
-    line_ids = [line.id for line in order.lines]
+    original_lines = [line for line in order.lines if line.fulfillment_kind == 'original']
+    line_ids = [line.id for line in original_lines]
     reservations = db.scalars(select(StockReservation).where(
         StockReservation.order_line_id.in_(line_ids),
         StockReservation.stage == 'confirmed').order_by(StockReservation.supplier_variant_id,
                                                         StockReservation.id).with_for_update()).all()
-    if not order.lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id)
-                              != line.quantity for line in order.lines):
+    if not original_lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id)
+                              != line.quantity for line in original_lines):
         raise OrderNotDispatchableError('Dispatch requires complete supplier-confirmed allocations for every line.')
 
     clean_courier = courier_code.strip().lower()
@@ -173,7 +176,7 @@ def update_shipment_status(
 
     now = _utcnow()
     if clean_status == "delivered":
-        if order.payment_method == 'bank_transfer' and order.payment_status != 'verified':
+        if shipment.replacement_return_id is None and order.payment_method == 'bank_transfer' and order.payment_status != 'verified':
             raise ShipmentError('Bank funds must be verified before delivery.')
         if any(a.reservation.stage != 'dispatched' for a in allocations):
             raise ShipmentError('Delivery requires every allocated reservation to be dispatched.')
@@ -181,14 +184,16 @@ def update_shipment_status(
             transition_reservation_stage(db, reservation_id=allocation.reservation_id,
                                          new_stage='fulfilled', actor_user_id=actor_user_id)
         shipment.delivered_at = now
-        order.order_status = "delivered"
-        order.updated_at = now
-        if order.payment_method == "cod":
-            order.payment_status = "verified"
+        if shipment.replacement_return_id is None:
+            order.order_status = "delivered"
+            order.updated_at = now
+            if order.payment_method == "cod":
+                order.payment_status = "verified"
 
     elif clean_status == 'rto_initiated':
-        order.order_status = "rto"
-        order.updated_at = now
+        if shipment.replacement_return_id is None:
+            order.order_status = "rto"
+            order.updated_at = now
         if rto_reason:
             shipment.rto_reason = rto_reason.strip()
         if rto_courier_cost_minor > 0:
@@ -203,8 +208,9 @@ def update_shipment_status(
             if received < 0 or received > allocation.quantity:
                 raise ShipmentError('Received quantity is outside the dispatched allocation.')
             allocation.received_quantity = received
-        order.order_status = 'rto'
-        order.updated_at = now
+        if shipment.replacement_return_id is None:
+            order.order_status = 'rto'
+            order.updated_at = now
         if rto_reason:
             shipment.rto_reason = rto_reason.strip()
         if rto_courier_cost_minor > 0:
@@ -217,16 +223,56 @@ def update_shipment_status(
     return shipment
 
 
+def dispatch_replacement(db: Session, *, return_id: uuid.UUID, courier_code: str,
+                         tracking_number: str, shipping_cost_minor: int = 0,
+                         tracking_url: str | None = None,
+                         actor_user_id: uuid.UUID | None = None) -> Shipment:
+    ret = db.scalar(select(OrderReturn).where(OrderReturn.id == return_id).with_for_update())
+    if ret is None or ret.return_type != 'size_exchange' or ret.status not in ('inspected_passed', 'completed'):
+        raise OrderNotDispatchableError('Exchange requires received and inspected original items.')
+    if ret.received_quantity != ret.quantity:
+        raise OrderNotDispatchableError('Receive every exchanged original unit before dispatch.')
+    if db.scalar(select(Shipment.id).where(Shipment.replacement_return_id == return_id)):
+        raise OrderNotDispatchableError('Replacement has already been dispatched.')
+    line = db.scalar(select(OrderLine).where(OrderLine.replacement_return_id == return_id))
+    if line is None:
+        raise OrderNotDispatchableError('Replacement allocation is missing.')
+    reservation = db.scalar(select(StockReservation).where(
+        StockReservation.order_line_id == line.id).with_for_update())
+    if reservation is None or reservation.quantity != line.quantity or reservation.stage != 'held':
+        raise OrderNotDispatchableError('Replacement stock is not fully reserved.')
+    clean_courier = courier_code.strip().lower()
+    if clean_courier not in ALLOWED_COURIER_CODES or not tracking_number.strip() or shipping_cost_minor < 0:
+        raise ValueError('Provide a valid courier, tracking number, and non-negative cost.')
+    charge = ret.replacement_charge_minor
+    shipment = Shipment(order_id=ret.order_id, replacement_return_id=ret.id,
+        courier_code=clean_courier, tracking_number=tracking_number.strip(),
+        tracking_url=tracking_url.strip() if tracking_url else None,
+        shipping_cost_minor=shipping_cost_minor, status='dispatched',
+        cod_amount_minor=charge, cod_remittance_status=('pending_remittance' if charge else 'not_applicable'),
+        dispatched_at=_utcnow())
+    db.add(shipment)
+    db.flush()
+    transition_reservation_stage(db, reservation_id=reservation.id, new_stage='confirmed',
+                                 actor_user_id=actor_user_id)
+    transition_reservation_stage(db, reservation_id=reservation.id, new_stage='dispatched',
+                                 actor_user_id=actor_user_id)
+    db.add(ShipmentAllocation(shipment_id=shipment.id, reservation_id=reservation.id,
+                              quantity=reservation.quantity))
+    db.flush()
+    return shipment
+
+
 def preview_legacy_stock(db: Session, shipment_id: uuid.UUID) -> dict:
     shipment = db.get(Shipment, shipment_id)
     if shipment is None or shipment.stock_reconciliation_status != 'legacy_review':
         raise ShipmentError('Legacy shipment requiring reconciliation was not found.')
     order = shipment.order
     reservations = db.scalars(select(StockReservation).where(
-        StockReservation.order_line_id.in_([line.id for line in order.lines]),
+        StockReservation.order_line_id.in_([line.id for line in order.lines if line.fulfillment_kind == 'original']),
         StockReservation.stage.in_(['dispatched', 'fulfilled'])).order_by(StockReservation.id)).all()
     return {'shipment_id': str(shipment.id), 'order_id': str(order.id), 'status': shipment.status,
-            'shipment_count': len(order.shipments), 'lines': [
+            'shipment_count': len([s for s in order.shipments if s.replacement_return_id is None]), 'lines': [
                 {'reservation_id': str(r.id), 'order_line_id': str(r.order_line_id),
                  'supplier_variant_id': str(r.supplier_variant_id), 'quantity': r.quantity,
                  'stage': r.stage, 'legacy_stock_hold': r.legacy_stock_hold}
@@ -242,16 +288,16 @@ def reconcile_legacy_stock(db: Session, *, shipment_id: uuid.UUID,
     if shipment is None or shipment.stock_reconciliation_status != 'legacy_review':
         raise ShipmentError('Legacy shipment requiring reconciliation was not found.')
     order = db.scalar(select(Order).where(Order.id == shipment.order_id).with_for_update())
-    if not note or len(note.strip()) < 5 or len(order.shipments) != 1:
+    if not note or len(note.strip()) < 5 or len([s for s in order.shipments if s.replacement_return_id is None]) != 1:
         raise ShipmentError('A note and an unambiguous single-shipment order are required.')
     reservations = db.scalars(select(StockReservation).where(
-        StockReservation.order_line_id.in_([line.id for line in order.lines]),
+        StockReservation.order_line_id.in_([line.id for line in order.lines if line.fulfillment_kind == 'original']),
         StockReservation.stage.in_(['dispatched', 'fulfilled']))
         .order_by(StockReservation.supplier_variant_id, StockReservation.id).with_for_update()
         .execution_options(populate_existing=True)).all()
     if (not reservations or set(decisions) != {r.id for r in reservations}
             or any(sum(r.quantity for r in reservations if r.order_line_id == line.id)
-                   != line.quantity for line in order.lines)):
+                   != line.quantity for line in order.lines if line.fulfillment_kind == 'original')):
         raise ShipmentError('Provide a physical deduction decision for every exact historical allocation.')
     for reservation in reservations:
         deducted, received = decisions[reservation.id]
@@ -288,44 +334,13 @@ def record_cod_remittance(
     is_partial: bool = False,
     partial_reason: str | None = None,
 ) -> Shipment:
-    """
-    Record courier cash remittance into AlphaZee's business bank account.
-    Guards:
-    - Rejects non-COD shipments.
-    - Rejects remitted_amount_minor <= 0.
-    - Rejects remitted_amount_minor < cod_amount_minor unless explicit is_partial=True and partial_reason provided.
-    """
-    shipment = db.get(Shipment, shipment_id)
-    if not shipment:
-        raise ShipmentNotFoundError(f"Shipment {shipment_id} not found.")
-
-    if shipment.cod_amount_minor <= 0:
-        raise ShipmentError("Cannot record COD remittance on a non-COD shipment.")
-
-    if remitted_amount_minor <= 0:
-        raise InvalidRemittanceError("Remitted amount must be greater than zero.")
-
-    expected_cod = shipment.cod_amount_minor
-    if remitted_amount_minor < expected_cod:
-        if not is_partial:
-            raise InvalidRemittanceError(
-                f"Remitted amount ({remitted_amount_minor} paisas) is less than expected COD amount ({expected_cod} paisas). "
-                "Partial remittance requires explicit is_partial=True."
-            )
-        if not partial_reason or not partial_reason.strip():
-            raise InvalidRemittanceError(
-                "Partial remittance requires an explicit partial_reason explaining the courier short settlement."
-            )
-
-    now = _utcnow()
-    shipment.cod_remitted_amount_minor = int(remitted_amount_minor)
-    shipment.cod_remittance_status = "remitted"
-    shipment.cod_remittance_reference = reference.strip() if reference else None
-    shipment.cod_remitted_at = now
-    shipment.updated_at = now
-
-    db.flush()
-    return shipment
+    """Compatibility entry point; short payouts remain partial until reconciled."""
+    from app.services.finance import FinanceError, record_settlement
+    try:
+        return record_settlement(db, shipment_id=shipment_id,
+            amount_minor=remitted_amount_minor, reference=reference, deductions=[])
+    except FinanceError as error:
+        raise InvalidRemittanceError(str(error)) from error
 
 
 def mark_cod_remitted(
@@ -342,7 +357,7 @@ def mark_cod_remitted(
     """
     stmt = (
         select(Shipment)
-        .where(Shipment.order_id == order_id)
+        .where(Shipment.order_id == order_id, Shipment.replacement_return_id.is_(None))
         .order_by(Shipment.created_at.desc())
     )
     shipment = db.scalar(stmt)
@@ -383,7 +398,8 @@ def initiate_rto_order(
 
     # Find the active shipment
     shipment = db.scalars(
-        select(Shipment).where(Shipment.order_id == order_id).order_by(Shipment.created_at.desc())
+        select(Shipment).where(Shipment.order_id == order_id,
+                               Shipment.replacement_return_id.is_(None)).order_by(Shipment.created_at.desc())
     ).first()
 
     if not shipment:
@@ -415,7 +431,8 @@ def receive_rto_parcel(
         raise ShipmentError(f"Order {order_id} not found.")
 
     shipment = db.scalars(
-        select(Shipment).where(Shipment.order_id == order_id).order_by(Shipment.created_at.desc())
+        select(Shipment).where(Shipment.order_id == order_id,
+                               Shipment.replacement_return_id.is_(None)).order_by(Shipment.created_at.desc())
     ).first()
 
     if not shipment or shipment.status != "rto_initiated":
@@ -445,9 +462,21 @@ def inspect_and_restock_order(
     if order is None:
         raise ShipmentError(f'Order {order_id} not found.')
     shipment = db.scalar(select(Shipment).where(Shipment.order_id == order_id,
+        Shipment.replacement_return_id.is_(None),
         Shipment.status == 'rto_delivered').order_by(Shipment.created_at.desc())
         .with_for_update().execution_options(populate_existing=True))
     if shipment is None or shipment.stock_reconciliation_status == 'legacy_review':
+        raise ShipmentError('A received and reconciled RTO shipment is required for inspection.')
+    return inspect_rto_shipment(db, shipment_id=shipment.id, lines=lines,
+                                notes=notes, actor_user_id=actor_user_id)
+
+
+def inspect_rto_shipment(db: Session, *, shipment_id: uuid.UUID,
+                         lines: dict[uuid.UUID, tuple[int, int]], notes: str | None = None,
+                         actor_user_id: uuid.UUID | None = None) -> Shipment:
+    shipment = db.scalar(select(Shipment).where(Shipment.id == shipment_id)
+                         .with_for_update().execution_options(populate_existing=True))
+    if shipment is None or shipment.status != 'rto_delivered' or shipment.stock_reconciliation_status == 'legacy_review':
         raise ShipmentError('A received and reconciled RTO shipment is required for inspection.')
     allocations = db.scalars(select(ShipmentAllocation).where(
         ShipmentAllocation.shipment_id == shipment.id).order_by(ShipmentAllocation.id)

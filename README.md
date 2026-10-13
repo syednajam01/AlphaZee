@@ -48,6 +48,10 @@ AlphaZee Workspace
 
 ## 3. Quickstart
 
+The current full-stack path is `docker compose up --build --wait -d` as described
+in the [Docker deployment runbook](.context/docker_deployment_runbook.md). The
+split-service steps below remain available for manual local development.
+
 ### 3.1 Local PostgreSQL Database
 ```bash
 docker compose up -d db

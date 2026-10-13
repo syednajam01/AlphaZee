@@ -11,7 +11,9 @@ from typing import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.inventory import StockReservation, InventoryBalance
+from app.models.inventory import StockReservation, InventoryBalance, SupplierVariant
+from app.models.catalog import Variant, Product
+from app.queries.reservations import create_stock_reservation, transition_reservation_stage
 from app.models.orders import Order, OrderLine, normalize_pakistan_phone
 from app.models.returns import (
     ALLOWED_RETURN_REASONS,
@@ -66,7 +68,7 @@ def create_return_request(
             raise CustomerOwnershipError("Customer phone number does not match order record.")
 
     line = db.get(OrderLine, order_line_id)
-    if line is None or line.order_id != order.id:
+    if line is None or line.order_id != order.id or line.fulfillment_kind != 'original':
         raise ValueError(f"Order line {order_line_id} does not belong to order {order_id}.")
     if quantity <= 0 or quantity > line.quantity:
         raise ValueError('Return quantity exceeds the purchased line quantity.')
@@ -80,6 +82,10 @@ def create_return_request(
         raise ValueError(
             f"Invalid return type {return_type!r}. Must be one of {sorted(ALLOWED_RETURN_TYPES)}."
         )
+    if clean_type == 'size_exchange':
+        replacement = db.get(Variant, exchange_variant_id) if exchange_variant_id else None
+        if replacement is None or replacement.product_id != line.variant.product_id or replacement.id == line.variant_id:
+            raise ValueError('Select another variant of the purchased product for exchange.')
 
     clean_reason = reason.strip().lower()
     if clean_reason not in ALLOWED_RETURN_REASONS:
@@ -112,6 +118,7 @@ def approve_return_request(
     *,
     return_id: uuid.UUID,
     refund_amount_minor: int | None = None,
+    replacement_charge_minor: int = 0,
 ) -> OrderReturn:
     """
     Approve a requested return.
@@ -123,13 +130,40 @@ def approve_return_request(
     if return_obj is None:
         raise ValueError(f"Return request {return_id} not found.")
 
+    if return_obj.status == 'approved' and return_obj.return_type == 'size_exchange':
+        return return_obj
     if return_obj.status != "requested":
         raise ValueError(
             f"Cannot approve return in status '{return_obj.status}'. Only 'requested' can be approved."
         )
 
-    if return_obj.return_type in ('exchange', 'size_exchange'):
-        raise ValueError('Exchange approval requires the dedicated replacement allocation workflow.')
+    if return_obj.return_type == 'size_exchange':
+        if refund_amount_minor is not None:
+            raise ValueError('An exchange cannot override the original refund amount.')
+        if replacement_charge_minor < 0:
+            raise ValueError('Replacement charge must be non-negative.')
+        variant = db.get(Variant, return_obj.exchange_variant_id)
+        original = db.get(OrderLine, return_obj.order_line_id)
+        if (variant is None or not variant.is_active or not variant.product.is_active
+                or variant.product_id != original.variant.product_id):
+            raise ValueError('Replacement variant is unavailable.')
+        supplier = db.scalar(select(SupplierVariant).where(
+            SupplierVariant.variant_id == variant.id, SupplierVariant.active.is_(True)))
+        if supplier is None:
+            raise ValueError('Replacement supplier is unavailable.')
+        line = OrderLine(order_id=return_obj.order_id, fulfillment_kind='replacement',
+            replacement_return_id=return_obj.id, variant_id=variant.id,
+            product_title_snapshot=variant.product.title, variant_sku_snapshot=variant.sku,
+            variant_size_snapshot=variant.size, variant_color_snapshot=variant.color,
+            unit_price_minor=0, unit_cost_minor=supplier.supplier_cost_minor,
+            quantity=return_obj.quantity, line_total_minor=0)
+        db.add(line)
+        db.flush()
+        create_stock_reservation(db, supplier_variant_id=supplier.id,
+            order_line_id=line.id, quantity=return_obj.quantity)
+        return_obj.replacement_charge_minor = replacement_charge_minor
+    elif replacement_charge_minor:
+        raise ValueError('Replacement charge applies only to exchanges.')
 
     return_obj.status = "approved"
     if refund_amount_minor is not None:
@@ -150,7 +184,8 @@ def receive_return_items(db: Session, *, return_id: uuid.UUID, received_quantity
     if ret.status not in ('approved', 'item_received'):
         raise ValueError('Return must be approved before receipt.')
     if ret.order.order_status != 'delivered' or any(
-            shipment.status != 'delivered' for shipment in ret.order.shipments):
+            shipment.status != 'delivered' for shipment in ret.order.shipments
+            if shipment.replacement_return_id is None):
         raise ValueError('Customer return receipt requires a delivered parcel outside the RTO flow.')
     if received_quantity < 0 or received_quantity > ret.quantity:
         raise ValueError('Received quantity exceeds the approved return.')
@@ -228,8 +263,7 @@ def complete_return_and_restock(db: Session, *, return_id: uuid.UUID,
     if not should_restock and ret.sellable_quantity > 0:
         raise ValueError('Sellable units were already restocked at inspection.')
     ret.status = 'completed'
-    if refund_reference:
-        ret.refund_reference = refund_reference.strip()
+    # Completion approves the liability; only an executed payment supplies a reference.
     db.flush()
     return ret
 
@@ -247,6 +281,16 @@ def reject_return_request(
 
     if return_obj.status not in ('requested', 'approved') or return_obj.received_quantity:
         raise ValueError('Only unreceived pending returns can be rejected.')
+
+    if return_obj.return_type == 'size_exchange' and return_obj.status == 'approved':
+        line = db.scalar(select(OrderLine).where(OrderLine.replacement_return_id == return_obj.id))
+        if line is not None:
+            reservations = db.scalars(select(StockReservation).where(
+                StockReservation.order_line_id == line.id).with_for_update()).all()
+            if any(res.stage != 'held' for res in reservations):
+                raise ValueError('Dispatched replacement cannot be rejected.')
+            for res in reservations:
+                transition_reservation_stage(db, reservation_id=res.id, new_stage='cancelled')
 
     return_obj.status = "rejected"
     db.flush()

@@ -66,9 +66,11 @@ app.include_router(auth_router.router, prefix="/api/v1")
 @app.middleware('http')
 async def private_owner_responses(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith(('/api/v1/auth/', '/api/v1/admin/')):
+    if request.url.path.startswith(('/api/v1/auth/', '/api/v1/admin/',
+                                    '/api/v1/orders', '/api/v1/returns/')):
         response.headers['Cache-Control'] = 'no-store'
         response.headers['Pragma'] = 'no-cache'
+        response.headers['Referrer-Policy'] = 'no-referrer'
     return response
 
 

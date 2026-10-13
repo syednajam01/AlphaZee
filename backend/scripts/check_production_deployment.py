@@ -34,6 +34,10 @@ def main() -> None:
             not database.password or len(database.password) < 20 or
             'REPLACE' in database.password.upper() or 'CHANGEME' in database.password.upper()):
         raise SystemExit('Use a strong production PostgreSQL URL pointing to db:5432.')
+    if (database.username != os.environ.get('POSTGRES_USER') or
+            database.database != os.environ.get('POSTGRES_DB') or
+            database.password != os.environ.get('POSTGRES_PASSWORD')):
+        raise SystemExit('DATABASE_URL credentials must match the PostgreSQL service configuration.')
 
     print('Production deployment configuration passed preflight.')
 

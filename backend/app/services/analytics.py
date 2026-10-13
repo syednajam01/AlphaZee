@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.orders import Order, OrderLine
 from app.models.returns import OrderReturn
 from app.models.shipments import Shipment
+from app.models.inventory import StockReservation
 
 
 def get_profit_loss_summary(db: Session) -> dict:
@@ -38,6 +39,9 @@ def get_profit_loss_summary(db: Session) -> dict:
 
     res_orders = db.execute(order_stmt).one()
     gross_revenue_minor = int(res_orders.gross_revenue)
+    replacement_revenue = db.scalar(select(func.coalesce(func.sum(Shipment.cod_amount_minor), 0)).where(
+        Shipment.replacement_return_id.is_not(None), Shipment.status == 'delivered')) or 0
+    gross_revenue_minor += int(replacement_revenue)
     subtotal_revenue_minor = int(res_orders.subtotal_revenue)
     discount_total_minor = int(res_orders.discount_total)
     shipping_revenue_minor = int(res_orders.shipping_revenue)
@@ -63,9 +67,16 @@ def get_profit_loss_summary(db: Session) -> dict:
         .where(
             Order.order_status.in_(["placed", "confirmed", "dispatched", "delivered"]),
             Order.payment_status.in_(["verified", "verified_received", "cod_collected"]),
+            OrderLine.fulfillment_kind == 'original',
         )
     )
     cogs_minor = int(db.scalar(cogs_stmt) or 0)
+    replacement_cogs = db.scalar(select(func.coalesce(func.sum(
+        OrderLine.unit_cost_minor * StockReservation.quantity), 0)).join(
+        StockReservation, StockReservation.order_line_id == OrderLine.id).where(
+        OrderLine.fulfillment_kind == 'replacement',
+        StockReservation.stage.in_(['dispatched', 'fulfilled', 'returned']))) or 0
+    cogs_minor += int(replacement_cogs)
 
     # 3. Courier expenses and RTO metrics from shipments
     ship_stmt = select(

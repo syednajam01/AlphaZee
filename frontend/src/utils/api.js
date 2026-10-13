@@ -236,14 +236,36 @@ export async function uploadReceipt(orderNumber, receiptData) {
 }
 
 /**
- * Track order status with phone verification.
+ * Track order status with a private access code or existing scoped session.
  * @param {string} orderNumber
- * @param {string} phone
+ * @param {string} accessCode
  * @returns {Promise<Object>} Order details
  */
-export async function fetchOrderStatus(orderNumber, phone) {
-  const query = new URLSearchParams({ phone });
-  return request(`/orders/${encodeURIComponent(orderNumber)}?${query.toString()}`);
+export async function fetchOrderStatus(orderNumber, accessCode) {
+  if (accessCode) {
+    await request('/orders/access', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_number: orderNumber, access_code: accessCode }),
+    });
+  }
+  return request(`/orders/${encodeURIComponent(orderNumber)}`);
+}
+
+export async function fetchExchangeOptions(orderNumber, lineId) {
+  return request(`/orders/${encodeURIComponent(orderNumber)}/exchange-options/${encodeURIComponent(lineId)}`);
+}
+
+export async function recoverAdminOrderAccess(orderId, verificationNote) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/access-recovery`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ verification_note: verificationNote }),
+  });
+}
+
+export async function revokeAdminOrderAccess(orderId) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/access-revoke`, {
+    method: 'POST',
+  });
 }
 
 /**
@@ -499,6 +521,16 @@ export async function recordAdminCodRemittance(shipmentId, payload) {
   });
 }
 
+export async function fetchAdminShipmentSettlement(shipmentId) {
+  return request(`/admin/shipments/${encodeURIComponent(shipmentId)}/settlement`);
+}
+
+export async function recordAdminRefundExecution(returnId, payload) {
+  return request(`/admin/returns/${encodeURIComponent(returnId)}/refund-executions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
 /**
  * Fetch owner gross profit, COGS, courier expenses, and unit economics report.
  * @returns {Promise<Object>}
@@ -597,6 +629,18 @@ export async function approveAdminReturn(returnId, payload = {}) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function dispatchAdminReplacement(returnId, payload) {
+  return request(`/admin/returns/${encodeURIComponent(returnId)}/dispatch-replacement`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+export async function inspectAdminShipmentRto(shipmentId, payload) {
+  return request(`/admin/shipments/${encodeURIComponent(shipmentId)}/inspect-rto`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
 }
 

@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import uuid
 from typing import Optional
+from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.v1.orders import _order_to_response
@@ -21,6 +23,7 @@ from app.database import get_db
 from app.models.catalog import Variant
 from app.models.inventory import InventoryBalance, SupplierVariant
 from app.models.orders import Order
+from app.models.shipments import Shipment
 from app.models.suppliers import Supplier, UserAccount
 from app.queries.inventory import StaleInventoryError, adjust_inventory
 from app.queries.reservations import InsufficientStockError, get_inventory_summary as get_stock_summary
@@ -59,8 +62,12 @@ from app.schemas.returns import (
     OrderReturnReceiveRequest,
     OrderReturnInspectRequest,
     OrderReturnResponseSchema,
+    RefundExecutionRequest,
+    RefundExecutionResponse,
 )
-from app.services.analytics import get_marketing_attribution_summary, get_profit_loss_summary
+from app.services.finance import FinanceError, record_refund_execution, record_settlement
+from app.services.analytics import get_marketing_attribution_summary
+from app.services.financial_report import get_financial_summary
 from app.services.orders import (
     OrderNotCancellableError,
     mark_expired_bank_orders_for_review,
@@ -87,8 +94,10 @@ from app.services.shipments import (
     ShipmentError,
     ShipmentNotFoundError,
     create_shipment,
+    dispatch_replacement,
     initiate_rto_order,
     inspect_and_restock_order,
+    inspect_rto_shipment,
     mark_cod_remitted,
     receive_rto_parcel,
     record_cod_remittance,
@@ -97,12 +106,41 @@ from app.services.shipments import (
     reconcile_legacy_stock,
 )
 from app.dependencies.auth import OwnerPrincipal, require_owner_session
+from app.services.order_access import issue_access, revoke_order_access
 
 router = APIRouter(
     prefix="/admin",
     tags=["Owner Administration"],
     dependencies=[Depends(require_owner_session)],
 )
+
+
+class OrderAccessRecoveryRequest(BaseModel):
+    verification_note: str = Field(min_length=10, max_length=500)
+
+
+@router.post('/orders/{order_id}/access-recovery')
+def recover_order_access(order_id: uuid.UUID, payload: OrderAccessRecoveryRequest,
+                         response: Response, db: Session = Depends(get_db),
+                         principal: OwnerPrincipal = Depends(require_owner_session)) -> dict:
+    order = db.get(Order, order_id)
+    if order is None:
+        raise HTTPException(404, 'Order not found')
+    code, _ = issue_access(db, order, issued_by_user_id=principal.owner.user_id,
+                           note=payload.verification_note)
+    db.commit()
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return {'order_number': order.order_number, 'access_code': code}
+
+
+@router.post('/orders/{order_id}/access-revoke')
+def revoke_customer_access(order_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+    if db.get(Order, order_id) is None:
+        raise HTTPException(404, 'Order not found')
+    count = revoke_order_access(db, order_id)
+    db.commit()
+    return {'revoked_grants': count}
 
 
 @router.get(
@@ -739,6 +777,40 @@ def dispatch_order_endpoint(
         )
 
 
+@router.post('/returns/{return_id}/dispatch-replacement', response_model=ShipmentAdminResponseSchema)
+def dispatch_replacement_endpoint(return_id: uuid.UUID, payload: ShipmentCreateRequest,
+                                  db: Session = Depends(get_db),
+                                  principal: OwnerPrincipal = Depends(require_owner_session)) -> ShipmentAdminResponseSchema:
+    try:
+        shipment = dispatch_replacement(db, return_id=return_id,
+            courier_code=payload.courier_code, tracking_number=payload.tracking_number,
+            shipping_cost_minor=payload.shipping_cost_minor, tracking_url=payload.tracking_url,
+            actor_user_id=principal.owner.user_id)
+        db.commit()
+        db.refresh(shipment)
+        return ShipmentAdminResponseSchema.model_validate(shipment)
+    except (ShipmentError, InsufficientStockError, ValueError) as err:
+        db.rollback()
+        raise HTTPException(400, str(err)) from err
+
+
+@router.post('/shipments/{shipment_id}/inspect-rto', response_model=ShipmentAdminResponseSchema)
+def inspect_shipment_rto_endpoint(shipment_id: uuid.UUID, payload: RtoInspectionRequest,
+                                  db: Session = Depends(get_db),
+                                  principal: OwnerPrincipal = Depends(require_owner_session)) -> ShipmentAdminResponseSchema:
+    try:
+        shipment = inspect_rto_shipment(db, shipment_id=shipment_id,
+            lines={line.order_line_id: (line.sellable_quantity, line.damaged_quantity)
+                   for line in payload.lines}, notes=payload.notes,
+            actor_user_id=principal.owner.user_id)
+        db.commit()
+        db.refresh(shipment)
+        return ShipmentAdminResponseSchema.model_validate(shipment)
+    except (ShipmentError, ValueError) as err:
+        db.rollback()
+        raise HTTPException(400, str(err)) from err
+
+
 @router.post(
     "/shipments/{shipment_id}/status",
     response_model=ShipmentAdminResponseSchema,
@@ -810,6 +882,14 @@ def reconcile_legacy_stock_endpoint(shipment_id: uuid.UUID,
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
 
+@router.get('/shipments/{shipment_id}/settlement', response_model=ShipmentAdminResponseSchema)
+def get_shipment_settlement(shipment_id: uuid.UUID, db: Session = Depends(get_db)) -> ShipmentAdminResponseSchema:
+    shipment = db.get(Shipment, shipment_id)
+    if shipment is None:
+        raise HTTPException(404, 'Shipment not found.')
+    return ShipmentAdminResponseSchema.model_validate(shipment)
+
+
 @router.post(
     "/shipments/{shipment_id}/remittance",
     response_model=ShipmentAdminResponseSchema,
@@ -820,20 +900,21 @@ def record_cod_remittance_endpoint(
     shipment_id: uuid.UUID,
     payload: CodRemittanceRequest,
     db: Session = Depends(get_db),
+    principal: OwnerPrincipal = Depends(require_owner_session),
 ) -> ShipmentAdminResponseSchema:
     try:
-        shipment = record_cod_remittance(
-            db,
-            shipment_id=shipment_id,
-            remitted_amount_minor=payload.remitted_amount_minor,
-            reference=payload.reference,
-            is_partial=payload.is_partial or bool(payload.partial),
-            partial_reason=payload.partial_reason,
-        )
+        shipment = record_settlement(db, shipment_id=shipment_id,
+            amount_minor=payload.remitted_amount_minor, reference=payload.reference,
+            deductions=[(item.entry_type, item.amount_minor, item.reference, item.note)
+                        for item in payload.deductions], final_statement=payload.final_statement,
+            actor_user_id=principal.owner.user_id)
         db.commit()
         db.refresh(shipment)
         return ShipmentAdminResponseSchema.model_validate(shipment)
-    except InvalidRemittanceError as e:
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(409, 'Settlement reference already recorded.') from e
+    except (InvalidRemittanceError, FinanceError) as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -863,20 +944,25 @@ def record_order_cod_remittance_endpoint(
     order_id: uuid.UUID,
     payload: CodRemittanceRequest,
     db: Session = Depends(get_db),
+    principal: OwnerPrincipal = Depends(require_owner_session),
 ) -> ShipmentAdminResponseSchema:
     try:
-        shipment = mark_cod_remitted(
-            db,
-            order_id=order_id,
-            amount_minor=payload.remitted_amount_minor,
-            reference=payload.reference,
-            is_partial=payload.is_partial or bool(payload.partial),
-            partial_reason=payload.partial_reason,
-        )
+        target = db.scalar(select(Shipment).where(Shipment.order_id == order_id,
+            Shipment.replacement_return_id.is_(None)))
+        if target is None:
+            raise ShipmentNotFoundError('Original order shipment not found.')
+        shipment = record_settlement(db, shipment_id=target.id,
+            amount_minor=payload.remitted_amount_minor, reference=payload.reference,
+            deductions=[(item.entry_type, item.amount_minor, item.reference, item.note)
+                        for item in payload.deductions], final_statement=payload.final_statement,
+            actor_user_id=principal.owner.user_id)
         db.commit()
         db.refresh(shipment)
         return ShipmentAdminResponseSchema.model_validate(shipment)
-    except InvalidRemittanceError as e:
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(409, 'Settlement reference already recorded.') from e
+    except (InvalidRemittanceError, FinanceError) as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -902,7 +988,7 @@ def record_order_cod_remittance_endpoint(
     summary="Get owner gross profit, COGS, courier costs, and unit economics report",
 )
 def get_profit_loss_endpoint(db: Session = Depends(get_db)) -> ProfitLossResponseSchema:
-    data = get_profit_loss_summary(db)
+    data = get_financial_summary(db)
 
     gross_rev = data["gross_revenue_minor"]
     net_rev = data.get("net_revenue_minor", gross_rev)
@@ -917,6 +1003,18 @@ def get_profit_loss_endpoint(db: Session = Depends(get_db)) -> ProfitLossRespons
         margin_pct = 0.0
 
     return ProfitLossResponseSchema(
+        order_value_minor=data['order_value_minor'],
+        delivered_sales_minor=data['delivered_sales_minor'],
+        bank_customer_payments_minor=data['bank_customer_payments_minor'],
+        cod_collected_minor=data['cod_collected_minor'],
+        courier_held_cod_minor=data['courier_held_cod_minor'],
+        courier_deductions_minor=data['courier_deductions_minor'],
+        other_deductions_minor=data['other_deductions_minor'],
+        business_cash_received_minor=data['business_cash_received_minor'],
+        refund_paid_minor=data['refund_paid_minor'],
+        refund_outstanding_minor=data['refund_outstanding_minor'],
+        sales_reversals_minor=data['sales_reversals_minor'],
+        cogs_reversals_minor=data['cogs_reversals_minor'],
         gross_revenue_minor=gross_rev,
         formatted_gross_revenue=CurrencyAmount.from_minor(gross_rev).formatted,
         net_revenue_minor=net_rev,
@@ -1103,7 +1201,8 @@ def approve_admin_return_endpoint(
 ) -> OrderReturnResponseSchema:
     refund_minor = payload.refund_amount_minor if payload else None
     try:
-        ret = approve_return_request(db, return_id=return_id, refund_amount_minor=refund_minor)
+        ret = approve_return_request(db, return_id=return_id, refund_amount_minor=refund_minor,
+            replacement_charge_minor=payload.replacement_charge_minor if payload else 0)
         db.commit()
         db.refresh(ret)
         return OrderReturnResponseSchema.from_return(ret)
@@ -1199,6 +1298,26 @@ def reject_admin_return_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(err),
         ) from err
+
+
+@router.post('/returns/{return_id}/refund-executions', response_model=RefundExecutionResponse)
+def record_refund_execution_endpoint(return_id: uuid.UUID, payload: RefundExecutionRequest,
+                                     db: Session = Depends(get_db),
+                                     principal: OwnerPrincipal = Depends(require_owner_session)) -> RefundExecutionResponse:
+    try:
+        execution = record_refund_execution(db, return_id=return_id,
+            amount_minor=payload.amount_minor, reference=payload.reference,
+            channel=payload.channel, note=payload.note,
+            actor_user_id=principal.owner.user_id)
+        db.commit()
+        db.refresh(execution)
+        return RefundExecutionResponse.model_validate(execution)
+    except FinanceError as error:
+        db.rollback()
+        raise HTTPException(422, str(error)) from error
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(409, 'Refund reference already recorded.') from error
 
 
 

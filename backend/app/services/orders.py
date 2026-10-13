@@ -368,14 +368,15 @@ def confirm_supplier_acceptance(
     stmt = (
         select(StockReservation)
         .where(
-            StockReservation.order_line_id.in_([line.id for line in order.lines]),
+            StockReservation.order_line_id.in_([line.id for line in order.lines if line.fulfillment_kind == 'original']),
         )
         .order_by(StockReservation.id)
         .with_for_update()
     )
     reservations = db.scalars(stmt).all()
-    if not order.lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id
-                                  and r.stage == 'held') != line.quantity for line in order.lines):
+    original_lines = [line for line in order.lines if line.fulfillment_kind == 'original']
+    if not original_lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id
+                                  and r.stage == 'held') != line.quantity for line in original_lines):
         raise ValueError('Supplier acceptance requires complete held allocations for every order line.')
     for res in reservations:
         if res.stage != 'held':
@@ -423,10 +424,11 @@ def record_payment_instructions_sent(db: Session, *, order_id: uuid.UUID, actor_
         raise ValueError('Record a supported handoff channel and reference.')
     # Recheck the allocation before inviting payment.
     reservations = db.scalars(select(StockReservation).where(
-        StockReservation.order_line_id.in_([line.id for line in order.lines]),
+        StockReservation.order_line_id.in_([line.id for line in order.lines if line.fulfillment_kind == 'original']),
         StockReservation.stage == 'confirmed').with_for_update()).all()
-    if not order.lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id)
-                                  != line.quantity for line in order.lines):
+    original_lines = [line for line in order.lines if line.fulfillment_kind == 'original']
+    if not original_lines or any(sum(r.quantity for r in reservations if r.order_line_id == line.id)
+                                  != line.quantity for line in original_lines):
         raise ValueError('All order quantities must be supplier confirmed before payment instructions.')
     now = _utcnow()
     order.payment_instructions_sent_at = now
@@ -530,7 +532,7 @@ def cancel_order(
     stmt = (
         select(StockReservation)
         .where(
-            StockReservation.order_line_id.in_([line.id for line in order.lines]),
+            StockReservation.order_line_id.in_([line.id for line in order.lines if line.fulfillment_kind == 'original']),
             StockReservation.stage.in_(["held", "confirmed", "dispatched"]),
         )
     )
@@ -553,6 +555,7 @@ def deliver_order(
     from app.models.shipments import Shipment
     from app.services.shipments import update_shipment_status
     shipment = db.scalar(select(Shipment).where(Shipment.order_id == order.id,
+        Shipment.replacement_return_id.is_(None),
         Shipment.status.in_(['dispatched', 'in_transit', 'out_for_delivery']))
         .order_by(Shipment.created_at.desc()))
     if shipment is None:

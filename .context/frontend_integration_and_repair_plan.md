@@ -1,7 +1,7 @@
 # AlphaZee: frontend integration and corrected launch repair plan
 
 Date: 2026-10-13
-Status: Phase 0, Phase L1, Phase A, Phase B, Phase C and Phase D/E implemented (2026-10-13). Verification used the terminal at the owner's explicit request; no browser execution or visual verification was performed. Phase G and subsequent phases remain pending. See `repair_verification_report.md`, `frontend_control_inventory.md`, `phase_c_payment_runbook.md` and `phase_d_stock_transition_table.md`.
+Status: Phase 0, Phase L1, Phase A, Phase B, Phase C, Phase D/E, Phase G and Phase F implemented (2026-10-13). Docker containerization was inserted before Phase G at the owner's request. Verification used the terminal at the owner's explicit request; no browser execution or visual verification was performed. Phase L2 and later phases remain pending. See `repair_verification_report.md`, `frontend_control_inventory.md`, `phase_c_payment_runbook.md`, `phase_d_stock_transition_table.md`, `phase_g_runbook.md`, `phase_f_runbook.md` and `docker_deployment_runbook.md`.
 Source of requirements: `next_target.txt` in this directory.
 
 This plan supersedes the completion and launch-readiness claims in `launch_blocker_plan.md`. Preserve that file as historical context. Existing implementations are a starting point, not evidence that the corrected requirements pass.
@@ -38,6 +38,7 @@ The workspace contains extensive existing uncommitted work. Preserve it and insp
 4. Phase B: whole-order idempotency and reservation concurrency.
 5. Phase C: supplier confirmation, payment instructions and expiry review.
 6. Phase D/E: consistent stock movement, shipment transitions and inspected returns.
+6a. Docker containerization: reproducible development and production stacks, automated migrations, TLS serving and deployment runbook.
 7. Phase G: secure customer order access and independently allocated exchanges.
 8. Phase F: financial reporting and courier settlement using the corrected lifecycle.
 9. Phase L2: finish all remaining frontend integration and persisted browser journeys.
@@ -140,6 +141,8 @@ Acceptance: dispatch deducts once; delivery deducts zero; receipt adds zero sell
 
 ## 10. Phase G — secure order access and exchanges
 
+Implemented 2026-10-13. Terminal-only verification and operations are documented in `phase_g_runbook.md`.
+
 - Replace order-number/phone knowledge as authorization with an unguessable, order-scoped access credential issued securely to the purchaser. Store token hashes, support revocation/expiry and prevent cross-order access.
 - Prefer exchanging credentials for an HttpOnly scoped session. Keep tokens out of logs, analytics and referrers. Recovery for lost credentials or historical orders requires a verified channel/owner-assisted process, not phone matching alone.
 - Apply the same authorization to tracking/details and every customer return/exchange mutation, with generic failure responses and rate limits.
@@ -162,7 +165,7 @@ Acceptance: unpaid/undelivered orders do not inflate delivered sales; COD delive
 
 ## 12. Phase L2 — finish frontend integration
 
-- Complete dispatch and remittance submit/cancel handlers, using repaired API contracts and server validation messages.
+- Complete dispatch submit/cancel handlers, and refine the Phase F remittance workflow where broader owner integration requires it.
 - Add inventory adjustments with supplier/variant, signed quantity change, reason and audit result. Refresh physical, held and available quantities after success.
 - Wire payment review, supplier confirmation, shipment updates, inspected quantities, refund recording and independent replacement operations.
 - Give every mutation pending, success and recoverable failure states. Prevent duplicate clicks while preserving retries. Avoid duplicate listeners after rerender or reopen.

@@ -193,7 +193,11 @@ def test_public_order_tracking_endpoint_returns_courier_details(
     )
     assert disp_res.status_code == 201, disp_res.text
 
-    # Fetch public tracking
+    # Fetch customer tracking with an order-scoped session.
+    from app.services.order_access import issue_access, cookie_name
+    _, token = issue_access(db_session, order)
+    db_session.commit()
+    client.headers['Cookie'] = f"{client.headers.get('Cookie', '')}; {cookie_name()}={token}"
     res = client.get(f"/api/v1/orders/{order.order_number}?phone=03219876543")
     assert res.status_code == 200
     track_data = res.json()
@@ -366,8 +370,9 @@ def test_cod_remittance_lifecycle(
         json={
             "remitted_amount_minor": 580000,  # PKR 5,800 (net of 200 courier fee)
             "reference": "POSTEX-WEEKLY-PAYOUT-OCT11",
-            "is_partial": True,
-            "partial_reason": "Net of 200 courier fee",
+            "deductions": [{"entry_type": "outbound_shipping", "amount_minor": 20000,
+                            "reference": "POSTEX-COURIER-FEE-OCT11",
+                            "note": "Courier invoice for original delivery"}],
         },
     )
     assert remit_res.status_code == 200
@@ -376,3 +381,90 @@ def test_cod_remittance_lifecycle(
     assert remit_data["cod_remitted_amount_minor"] == 580000
     assert remit_data["cod_remittance_reference"] == "POSTEX-WEEKLY-PAYOUT-OCT11"
     assert remit_data["cod_remitted_at"] is not None
+    assert remit_data['settlement_deductions_minor'] == 20000
+    assert remit_data['settlement_outstanding_minor'] == 0
+    assert len(remit_data['settlement_entries']) == 2
+
+
+def test_partial_settlement_reconciles_without_overwriting_and_rejects_bad_evidence(
+    client: TestClient, db_session: Session, setup_catalog_and_supplier: dict,
+):
+    order = place_order(db_session, CreateOrderDTO(
+        customer_name='Settlement Customer', customer_phone='03001112222',
+        shipping_address_line1='Main Street', shipping_city='Lahore',
+        shipping_province='Punjab', payment_method='cod',
+        items=[OrderItemDTO(variant_id=setup_catalog_and_supplier['variant'].id, quantity=1)],
+    ))
+    db_session.commit()
+    assert client.get('/api/v1/admin/analytics/profit-loss').json()['delivered_sales_minor'] == 0
+    client.post(f'/api/v1/admin/orders/{order.id}/confirm-supplier')
+    dispatched = client.post(f'/api/v1/admin/orders/{order.id}/dispatch', json={
+        'courier_code': 'trax', 'tracking_number': 'TRX-SETTLEMENT-01',
+        'shipping_cost_minor': 20000,
+    })
+    shipment_id = dispatched.json()['id']
+    assert client.post(f'/api/v1/admin/shipments/{shipment_id}/remittance', json={
+        'remitted_amount_minor': 10000, 'reference': 'EARLY-RECEIPT',
+    }).status_code == 422
+    client.post(f'/api/v1/admin/shipments/{shipment_id}/status', json={'status': 'delivered'})
+    report = client.get('/api/v1/admin/analytics/profit-loss').json()
+    assert report['delivered_sales_minor'] == 600000
+    assert report['cod_collected_minor'] == 600000
+    assert report['business_cash_received_minor'] == 0
+    first = client.post(f'/api/v1/admin/shipments/{shipment_id}/remittance', json={
+        'remitted_amount_minor': 200000, 'reference': 'PAYOUT-PART-01',
+    })
+    assert first.status_code == 200, first.text
+    assert first.json()['cod_remittance_status'] == 'partial'
+    assert first.json()['settlement_outstanding_minor'] == 400000
+    duplicate = client.post(f'/api/v1/admin/shipments/{shipment_id}/remittance', json={
+        'remitted_amount_minor': 10000, 'reference': 'payout-part-01',
+    })
+    assert duplicate.status_code == 422
+    excessive = client.post(f'/api/v1/admin/shipments/{shipment_id}/remittance', json={
+        'remitted_amount_minor': 400001, 'reference': 'PAYOUT-TOO-MUCH',
+    })
+    assert excessive.status_code == 422
+    final = client.post(f'/api/v1/admin/orders/{order.id}/remittance', json={
+        'remitted_amount_minor': 380000, 'reference': 'PAYOUT-PART-02',
+        'deductions': [{'entry_type': 'outbound_shipping', 'amount_minor': 20000,
+                        'reference': 'COURIER-INVOICE-01', 'note': 'Delivery invoice 01'}],
+        'final_statement': True,
+    })
+    assert final.status_code == 200, final.text
+    assert final.json()['cod_remitted_amount_minor'] == 580000
+    assert final.json()['settlement_deductions_minor'] == 20000
+    assert final.json()['settlement_outstanding_minor'] == 0
+    assert final.json()['cod_remittance_status'] == 'remitted'
+    assert len(final.json()['settlement_entries']) == 3
+    report = client.get('/api/v1/admin/analytics/profit-loss').json()
+    assert report['business_cash_received_minor'] == 580000
+    assert report['total_courier_expenses_minor'] == 20000
+    assert report['gross_profit_minor'] == 230000
+
+
+def test_final_short_payout_is_disputed_not_reconciled(
+    client: TestClient, db_session: Session, setup_catalog_and_supplier: dict,
+):
+    order = place_order(db_session, CreateOrderDTO(
+        customer_name='Short Payout', customer_phone='03004445555',
+        shipping_address_line1='Main Street', shipping_city='Lahore',
+        shipping_province='Punjab', payment_method='cod',
+        items=[OrderItemDTO(variant_id=setup_catalog_and_supplier['variant'].id, quantity=1)],
+    ))
+    db_session.commit()
+    client.post(f'/api/v1/admin/orders/{order.id}/confirm-supplier')
+    dispatched = client.post(f'/api/v1/admin/orders/{order.id}/dispatch', json={
+        'courier_code': 'trax', 'tracking_number': 'TRX-SHORT-02',
+        'shipping_cost_minor': 20000,
+    })
+    shipment_id = dispatched.json()['id']
+    client.post(f'/api/v1/admin/shipments/{shipment_id}/status', json={'status': 'delivered'})
+    payout = client.post(f'/api/v1/admin/shipments/{shipment_id}/remittance', json={
+        'remitted_amount_minor': 500000, 'reference': 'SHORT-FINAL-01',
+        'final_statement': True,
+    })
+    assert payout.status_code == 200, payout.text
+    assert payout.json()['cod_remittance_status'] == 'disputed'
+    assert payout.json()['settlement_outstanding_minor'] == 100000
+    assert client.get('/api/v1/admin/analytics/profit-loss').json()['courier_held_cod_minor'] == 100000

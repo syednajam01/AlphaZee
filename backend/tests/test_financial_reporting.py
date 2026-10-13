@@ -178,12 +178,14 @@ def test_verified_bank_and_cod_collected_included_in_revenue(
     )
     assert res_pay.status_code == 200
 
-    # Query Profit & Loss report: Bank order should now be recognized as revenue
+    # Verified prepayment is cash, but no sale exists until delivery.
     res = client.get("/api/v1/admin/analytics/profit-loss")
     assert res.status_code == 200
     data = res.json()
-    assert data["gross_revenue_minor"] == bank_order.total_minor
-    assert data["cogs_minor"] == 200000  # supplier cost for 1 unit
+    assert data["gross_revenue_minor"] == 0
+    assert data["cogs_minor"] == 0
+    assert data['bank_customer_payments_minor'] == bank_order.total_minor
+    assert data['business_cash_received_minor'] == bank_order.total_minor
 
     # 2. Place COD order, confirm supplier, dispatch, and mark delivered
     cod_order = place_order(
@@ -219,12 +221,14 @@ def test_verified_bank_and_cod_collected_included_in_revenue(
     )
     assert res_deliv.status_code == 200
 
-    # Both orders now realized: bank_order + cod_order
+    # Only delivered COD is a sale; the bank prepayment remains cash.
     res = client.get("/api/v1/admin/analytics/profit-loss")
     assert res.status_code == 200
     data = res.json()
-    assert data["gross_revenue_minor"] == bank_order.total_minor + cod_order.total_minor
-    assert data["cogs_minor"] == 400000  # 2 units * 200,000
+    assert data["gross_revenue_minor"] == cod_order.total_minor
+    assert data["cogs_minor"] == 200000
+    assert data['cod_collected_minor'] == cod_order.total_minor
+    assert data['business_cash_received_minor'] == bank_order.total_minor
 
 
 def test_completed_returns_deducted_from_revenue(
@@ -249,6 +253,14 @@ def test_completed_returns_deducted_from_revenue(
     )
     db_session.commit()
     client.post(f"/api/v1/admin/orders/{order.id}/verify-payment")
+    client.post(f"/api/v1/admin/orders/{order.id}/confirm-supplier")
+    dispatched = client.post(f"/api/v1/admin/orders/{order.id}/dispatch", json={
+        'courier_code': 'trax', 'tracking_number': 'TRX-RETURN-FIN-01',
+        'shipping_cost_minor': 0,
+    })
+    assert dispatched.status_code == 201, dispatched.text
+    assert client.post(f"/api/v1/admin/shipments/{dispatched.json()['id']}/status",
+                       json={'status': 'delivered'}).status_code == 200
 
     # Pre-return check
     res_before = client.get("/api/v1/admin/analytics/profit-loss").json()
@@ -361,7 +373,7 @@ def test_partial_cod_remittance_requires_explicit_flag_and_reason(
 
     partial_amount = cod_amount - 50000  # 500 PKR short
 
-    # 1. Partial remittance without is_partial flag -> 422
+    # An undispatched payout cannot be recorded.
     res_no_flag = client.post(
         f"/api/v1/admin/shipments/{shipment_id}/remittance",
         json={
@@ -383,7 +395,9 @@ def test_partial_cod_remittance_requires_explicit_flag_and_reason(
     )
     assert res_no_reason.status_code == 422
 
-    # 3. Partial remittance with is_partial=True and clear partial_reason -> 200
+    # Delivery enables a partial receipt; a reason does not write off the remainder.
+    assert client.post(f'/api/v1/admin/shipments/{shipment_id}/status',
+                       json={'status': 'delivered'}).status_code == 200
     res_success = client.post(
         f"/api/v1/admin/shipments/{shipment_id}/remittance",
         json={
@@ -396,9 +410,10 @@ def test_partial_cod_remittance_requires_explicit_flag_and_reason(
     assert res_success.status_code == 200
     data = res_success.json()
     assert data["cod_remitted_amount_minor"] == partial_amount
-    assert data["cod_remittance_status"] == "remitted"
+    assert data["cod_remittance_status"] == "partial"
     assert data["is_partial_remittance"] is True
     assert data["remittance_amount_minor"] == partial_amount
+    assert data['settlement_outstanding_minor'] == 50000
 
 
 def test_mark_cod_remitted_by_order_id_endpoint(
@@ -434,7 +449,9 @@ def test_mark_cod_remitted_by_order_id_endpoint(
     assert d.status_code in (200, 201)
     cod_amount = d.json()["cod_amount_minor"]
 
-    # Remit full amount by order ID endpoint
+    # Remit full amount by order ID endpoint after delivery.
+    assert client.post(f'/api/v1/admin/shipments/{d.json()["id"]}/status',
+                       json={'status': 'delivered'}).status_code == 200
     res = client.post(
         f"/api/v1/admin/orders/{order.id}/remittance",
         json={

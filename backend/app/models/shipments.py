@@ -50,6 +50,7 @@ ALLOWED_SHIPMENT_STATUSES = {
 
 ALLOWED_REMITTANCE_STATUSES = {
     "pending_remittance",
+    "partial",
     "remitted",
     "not_applicable",
     "disputed",
@@ -90,6 +91,8 @@ class Shipment(Base):
         Index("idx_shipments_tracking", "courier_code", "tracking_number"),
         Index("idx_shipments_status", "status"),
         Index("idx_shipments_remittance_status", "cod_remittance_status"),
+        Index('uq_shipments_replacement_return', 'replacement_return_id', unique=True,
+              postgresql_where=text('replacement_return_id IS NOT NULL')),
         CheckConstraint("stock_reconciliation_status IN ('ready', 'legacy_review', 'resolved')",
                         name="ck_shipments_stock_reconciliation_status"),
     )
@@ -106,6 +109,9 @@ class Shipment(Base):
         ForeignKey("orders.id", ondelete="CASCADE"),
         nullable=False,
     )
+
+    replacement_return_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey('order_returns.id', ondelete='RESTRICT'), nullable=True)
 
     courier_code: Mapped[str] = mapped_column(
         String(32),
@@ -143,6 +149,7 @@ class Shipment(Base):
 
     allocations: Mapped[list[ShipmentAllocation]] = relationship(
         'ShipmentAllocation', back_populates='shipment', cascade='all, delete-orphan')
+    settlement_entries = relationship('CourierSettlementEntry', order_by='CourierSettlementEntry.recorded_at')
 
     # Cash On Delivery & Remittance Tracking
     cod_amount_minor: Mapped[int] = mapped_column(
@@ -232,11 +239,15 @@ class Shipment(Base):
 
     @property
     def is_partial_remittance(self) -> bool:
-        return bool(
-            self.cod_remittance_status == "remitted"
-            and self.cod_amount_minor > 0
-            and self.cod_remitted_amount_minor < self.cod_amount_minor
-        )
+        return self.cod_remittance_status in ('partial', 'disputed')
+
+    @property
+    def settlement_deductions_minor(self) -> int:
+        return sum(entry.amount_minor for entry in self.settlement_entries if entry.entry_type != 'receipt')
+
+    @property
+    def settlement_outstanding_minor(self) -> int:
+        return max(0, self.cod_amount_minor - self.cod_remitted_amount_minor - self.settlement_deductions_minor)
 
     @validates("courier_code")
     def validate_courier(self, key: str, value: str) -> str:

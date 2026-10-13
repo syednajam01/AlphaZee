@@ -124,7 +124,7 @@ def test_return_lifecycle_and_restock(db_session: Session, setup_order_with_stoc
         should_restock=True,
     )
     assert comp_ret.status == "completed"
-    assert comp_ret.refund_reference == "EXCHANGE-SENT-01"
+    assert comp_ret.refund_reference is None
     assert comp_ret.restocked_at is not None
 
     # Check inventory balance updated
@@ -136,6 +136,10 @@ def test_returns_api_endpoints(admin_client: TestClient, db_session: Session, se
     data = setup_order_with_stock
     order = data["order"]
     line = data["line"]
+    from app.services.order_access import issue_access, cookie_name
+    _, token = issue_access(db_session, order)
+    db_session.commit()
+    admin_client.headers['Cookie'] = f"{admin_client.headers.get('Cookie', '')}; {cookie_name()}={token}"
 
     # 1. Storefront submits return
     sub_res = admin_client.post(
@@ -162,6 +166,9 @@ def test_returns_api_endpoints(admin_client: TestClient, db_session: Session, se
     app_res = admin_client.post(f"/api/v1/admin/returns/{ret_id}/approve", json={"refund_amount_minor": 600000})
     assert app_res.status_code == 200
     assert app_res.json()["status"] == "approved"
+    assert admin_client.post(f'/api/v1/admin/returns/{ret_id}/refund-executions', json={
+        'amount_minor': 100000, 'reference': 'BANK-TOO-EARLY', 'channel': 'bank_transfer',
+    }).status_code == 422
 
     # 4. Admin records receipt and inspection, then completes return.
     assert admin_client.post(f"/api/v1/admin/returns/{ret_id}/receive",
@@ -174,4 +181,25 @@ def test_returns_api_endpoints(admin_client: TestClient, db_session: Session, se
     )
     assert comp_res.status_code == 200
     assert comp_res.json()["status"] == "completed"
-    assert comp_res.json()["refund_reference"] == "MEZN-REF-9988"
+    assert comp_res.json()["refund_reference"] is None
+    assert comp_res.json()['refund_paid']['minor'] == 0
+    assert comp_res.json()['refund_outstanding']['minor'] == 600000
+    partial = admin_client.post(f'/api/v1/admin/returns/{ret_id}/refund-executions', json={
+        'amount_minor': 200000, 'reference': 'BANK-REFUND-01', 'channel': 'bank_transfer',
+    })
+    assert partial.status_code == 200, partial.text
+    assert admin_client.post(f'/api/v1/admin/returns/{ret_id}/refund-executions', json={
+        'amount_minor': 10000, 'reference': 'bank-refund-01', 'channel': 'bank_transfer',
+    }).status_code == 422
+    assert admin_client.post(f'/api/v1/admin/returns/{ret_id}/refund-executions', json={
+        'amount_minor': 400001, 'reference': 'BANK-REFUND-EXCESS', 'channel': 'bank_transfer',
+    }).status_code == 422
+    remainder = admin_client.post(f'/api/v1/admin/returns/{ret_id}/refund-executions', json={
+        'amount_minor': 400000, 'reference': 'BANK-REFUND-02', 'channel': 'bank_transfer',
+    })
+    assert remainder.status_code == 200, remainder.text
+    fetched = admin_client.get('/api/v1/admin/returns')
+    ret_data = next(item for item in fetched.json() if item['id'] == ret_id)
+    assert ret_data['refund_paid']['minor'] == 600000
+    assert ret_data['refund_outstanding']['minor'] == 0
+    assert len(ret_data['refund_executions']) == 2
