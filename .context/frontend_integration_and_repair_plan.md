@@ -1,7 +1,7 @@
 # AlphaZee: frontend integration and corrected launch repair plan
 
 Date: 2026-10-13
-Status: Phase 0, Phase L1, Phase A, Phase B, Phase C, Phase D/E, Phase G and Phase F implemented (2026-10-13). Docker containerization was inserted before Phase G at the owner's request. Verification used the terminal at the owner's explicit request; no browser execution or visual verification was performed. Phase L2 and later phases remain pending. See `repair_verification_report.md`, `frontend_control_inventory.md`, `phase_c_payment_runbook.md`, `phase_d_stock_transition_table.md`, `phase_g_runbook.md`, `phase_f_runbook.md` and `docker_deployment_runbook.md`.
+Status: Phase 0, Phase L1, Phase A, Phase B, Phase C, Phase D/E, Phase G, Phase F and Phase L2 implemented (2026-10-13). Docker containerization was inserted before Phase G at the owner's request. Phase V terminal regression, migration and local HTTP verification passed. The owner explicitly requested no browser use, so browser journeys, visual verification and final launch acceptance remain open. Public checkout remains disabled. See `repair_verification_report.md`, `frontend_control_inventory.md`, `phase_c_payment_runbook.md`, `phase_d_stock_transition_table.md`, `phase_g_runbook.md`, `phase_f_runbook.md` and `docker_deployment_runbook.md`.
 Source of requirements: `next_target.txt` in this directory.
 
 This plan supersedes the completion and launch-readiness claims in `launch_blocker_plan.md`. Preserve that file as historical context. Existing implementations are a starting point, not evidence that the corrected requirements pass.

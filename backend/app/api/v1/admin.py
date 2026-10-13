@@ -49,6 +49,7 @@ from app.schemas.admin import (
     SupplierResponseSchema,
     SupplierVariantAssignRequest,
     SupplierVariantResponseSchema,
+    CatalogVariantAdminSchema,
     SupplierAcceptanceRequest,
     PaymentInstructionsSentRequest,
     PaymentReviewResolutionRequest,
@@ -154,6 +155,7 @@ def get_inventory_summary_endpoint(db: Session = Depends(get_db)) -> InventorySu
         .where(SupplierVariant.active.is_(True))
         .options(
             joinedload(SupplierVariant.variant),
+            joinedload(SupplierVariant.supplier),
         )
     )
     supplier_variants = db.scalars(stmt).unique().all()
@@ -168,6 +170,8 @@ def get_inventory_summary_endpoint(db: Session = Depends(get_db)) -> InventorySu
         items.append(
             InventoryMetricResponse(
                 supplier_variant_id=sv.id,
+                supplier_id=sv.supplier_id,
+                supplier_name=sv.supplier.name,
                 variant_id=sv.variant_id,
                 product_title=product.title if product else "Unknown Product",
                 sku=variant.sku if variant else "UNKNOWN",
@@ -244,6 +248,8 @@ def adjust_inventory_endpoint(
 
     return InventoryMetricResponse(
         supplier_variant_id=payload.supplier_variant_id,
+        supplier_id=sv.supplier_id,
+        supplier_name=sv.supplier.name,
         variant_id=sv.variant_id if sv else 0,
         product_title=product.title if product else "Unknown Product",
         sku=variant.sku if variant else "UNKNOWN",
@@ -555,9 +561,9 @@ def inspect_rto_endpoint(
     summary="Get high-level business metrics for owner dashboard",
 )
 def get_admin_overview(db: Session = Depends(get_db)) -> AdminOverviewMetricsResponse:
-    # 1. Total Gross Revenue (Verified payments)
-    rev_stmt = select(func.coalesce(func.sum(Order.total_minor), 0)).where(Order.payment_status == "verified")
-    gross_rev_minor = db.scalar(rev_stmt) or 0
+    # A bank prepayment is cash, not a delivered sale. Keep the legacy field name
+    # for API compatibility while showing the delivered-sales definition.
+    gross_rev_minor = get_financial_summary(db)['delivered_sales_minor']
 
     # 2. Orders breakdown
     total_orders = db.scalar(select(func.count(Order.id))) or 0
@@ -657,6 +663,19 @@ def create_supplier_endpoint(
         status=supplier.status,
         notes=supplier.notes,
     )
+
+
+@router.get('/catalog/variants', response_model=list[CatalogVariantAdminSchema])
+def list_catalog_variants_for_owner(db: Session = Depends(get_db)) -> list[CatalogVariantAdminSchema]:
+    variants = db.scalars(select(Variant).options(joinedload(Variant.product)).order_by(Variant.sku)).all()
+    active_links = db.scalars(select(SupplierVariant).where(SupplierVariant.active.is_(True))).all()
+    links = {link.variant_id: link for link in active_links}
+    return [CatalogVariantAdminSchema(
+        id=variant.id, product_title=variant.product.title, sku=variant.sku,
+        size=variant.size, color=variant.color, is_active=variant.is_active,
+        active_supplier_id=links[variant.id].supplier_id if variant.id in links else None,
+        supplier_cost_minor=links[variant.id].supplier_cost_minor if variant.id in links else None,
+    ) for variant in variants]
 
 
 @router.post(

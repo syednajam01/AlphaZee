@@ -24,6 +24,7 @@ import {
   updateAdminShipmentStatus,
   recordAdminCodRemittance,
   fetchAdminSuppliers,
+  fetchAdminCatalogVariants,
   createAdminSupplier,
   assignSupplierVariant,
   fetchAdminProfitLoss,
@@ -66,6 +67,15 @@ describe('Admin API Client Methods', () => {
     assert.equal(overview.total_orders, 12);
     assert.equal(overview.formatted_gross_revenue, 'PKR 64,800');
     assert.equal(overview.low_stock_skus, 1);
+  });
+
+  it('lists owner catalog variants for supplier mapping', async () => {
+    global.fetch = async url => {
+      assert.ok(url.endsWith('/api/v1/admin/catalog/variants'));
+      return { ok: true, json: async () => [{ id: 7, sku: 'TEST-SKU', active_supplier_id: null }] };
+    };
+    const variants = await fetchAdminCatalogVariants();
+    assert.equal(variants[0].sku, 'TEST-SKU');
   });
 
   it('adjusts physical inventory with optimistic concurrency payload', async () => {

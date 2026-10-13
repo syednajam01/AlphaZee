@@ -1,0 +1,18 @@
+{
+  "checked_at_utc": "2026-10-13T18:47:00.426364+00:00",
+  "target": "local Docker development stack, loopback 13000/18000",
+  "browser_used": false,
+  "checks": {
+    "storefront_home": 200,
+    "proxied_ready": 200,
+    "proxied_checkout_enabled": false,
+    "proxied_overview_anonymous": 401,
+    "proxied_variants_anonymous": 401,
+    "direct_ready": 200,
+    "direct_checkout_enabled": false,
+    "direct_overview_anonymous": 401,
+    "direct_variants_anonymous": 401,
+    "direct_public_order_post": 503
+  },
+  "passed": true
+}

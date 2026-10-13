@@ -225,3 +225,49 @@ Date: 2026-10-13. Delivered sales, verified bank cash, courier-held COD, bank re
 | Browser | None used, per owner request |
 
 Operational definitions and entry instructions are in `phase_f_runbook.md`. Phase L2 remains planned.
+
+## Phase L2 — owner control integration
+
+Date: 2026-10-13. The owner console now submits courier dispatch with validated tracking and fee data, confirms shipment progression/delivery, adjusts a selected supplier variant's physical stock with optimistic version and an audit reason, and assigns supplier wholesale cost to any catalog variant through a new owner-only catalog list. Tab responses are ignored after navigation to a newer view. Coupon discounts are invalidated when cart contents or prices change. Nested dispatch/settlement dialogs handle Escape and backdrop close while restoring focus. Opening Orders no longer writes expired-payment review state automatically; its explicit review button remains.
+
+| Check | Result |
+| --- | --- |
+| Frontend DOM/API tests | 83 passed; terminal Node fixture covers one dispatch despite duplicate submit, delivery, stock adjustment, mapping, refresh and nested Escape close |
+| Frontend build | Passed |
+| Backend suite | 208 passed before final overview refinement; final focused admin/financial run 11 passed, including delivered-sales overview and persisted supplier mapping |
+| Browser | None used, per owner request; no visual, pointer or mobile claim |
+
+Phase V is recorded below. Public checkout stays disabled.
+
+## Phase V — terminal verification and release decision
+
+Date: 2026-10-13. The owner requested terminal-only work. No browser was opened.
+The final verification distinguishes isolated PostgreSQL tests, a disposable
+migration target, and read-only HTTP checks against the local development stack.
+
+| Layer | Command / target | Result |
+| --- | --- | --- |
+| Backend API and service regression | `backend\.venv\Scripts\python.exe -m pytest backend/tests -q -p no:cacheprovider --tb=short`; database tests use guarded `alphazee_test` PostgreSQL target | 209 passed, 1 Starlette/AnyIO deprecation warning; suite also includes isolated unit tests |
+| Frontend DOM/unit | `npm.cmd test` in `frontend`; Node DOM fixtures and mocked API responses | 83 passed; does not establish native browser rendering |
+| Frontend production bundle | `npm.cmd run build` in `frontend` | Passed |
+| Separate-session financial contention | `backend/tests/test_finance_concurrency.py`, included in full suite; two PostgreSQL sessions record 70% of one COD settlement concurrently | Exactly one succeeds; one rejects; one ledger row and 30% outstanding. Test fixture cleans its committed rows. |
+| G/F migration cycle | `backend\.venv\Scripts\python.exe backend/scripts/verify_phase_v_migrations.py`; unique disposable `alphazee_phase_v_7bcc4ac33c_test` | Upgraded from `d61f4b8c2a90` to `c94e31f7d562`, downgraded to D, re-upgraded; historical short payout remains partial, its receipt imports once, no refund cash is invented, append-only UPDATE is rejected, `alembic check` passed. Test DB retained for inspection; development DB was not modified by this cycle. |
+| Compose syntax and local runtime | `docker compose --env-file .env.docker.local config --quiet`, `docker compose --env-file .env.production.example -f compose.prod.yml config --quiet`, `docker compose --env-file .env.docker.local up --build --wait -d`, `docker compose --env-file .env.docker.local ps` | Both configs valid. Local DB, API and web healthy on 5433/18000/13000. Rebuild was required because an older migration image did not contain the current revision. No production deployment was run. |
+| Production image build | `docker compose --env-file .env.production.example -f compose.prod.yml build` | API/migration and static Caddy web images built successfully; this does not test live DNS/TLS or deployed credentials. |
+| Local HTTP | `backend\.venv\Scripts\python.exe backend/scripts/verify_phase_v_http.py`; loopback API 18000 and web proxy 13000 | Home/ready 200, direct and proxied checkout capability false, anonymous owner overview/catalog 401, direct public order POST 503. No order created. |
+
+Machine-readable migration and HTTP observations are in
+`phase_v_migration_verification.json` and `phase_v_http_verification.json`.
+The local container logs showed successful startup, readiness and expected 401/503
+responses, with no startup traceback. The Vite install log reported two npm
+dependency advisories (one moderate, one high); assess them before a production
+release. The production Compose configuration was parsed, but this pass did not
+deploy or exercise production DNS, TLS or credentials.
+
+**Release decision:** terminal regression, migration and local HTTP checks pass,
+but Phase V's browser acceptance remains incomplete by the owner's instruction.
+Desktop/mobile layout, pointer and touch controls, Console/Network traces,
+reload persistence and the planned end-to-end customer/owner browser journeys
+are unverified. Real bank details, support contacts and a verified recovery
+channel also remain business inputs. This is not a production-launch or
+public-checkout sign-off; the server-side checkout gate stays disabled.

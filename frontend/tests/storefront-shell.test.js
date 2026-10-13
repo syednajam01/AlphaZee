@@ -60,7 +60,7 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
     panel.style.display = 'flex';
     document.getElementById(cancelId).click();
     assert.equal(panel.style.display, 'none');
-    assert.equal(document.getElementById(submitId).disabled, panelId === 'admin-dispatch-modal');
+    assert.equal(document.getElementById(submitId).disabled, false);
   }
 
   // Every tracking trigger, including mobile/footer, is wired identically.

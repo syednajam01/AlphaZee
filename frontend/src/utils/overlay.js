@@ -2,7 +2,7 @@
 // descendants whose CSS might otherwise override inherited visibility.
 let activeOverlay = null;
 
-export function createOverlay({ element, backdrop = null, onClose = () => {} }) {
+export function createOverlay({ element, backdrop = null, onClose = () => {}, onEscape = null }) {
   let opener = null;
   let previousOverflow = '';
   const surfaces = backdrop ? [element, backdrop] : [element];
@@ -26,7 +26,7 @@ export function createOverlay({ element, backdrop = null, onClose = () => {} }) 
   function onKeyDown(event) {
     if (event.key === 'Escape') {
       event.preventDefault();
-      close();
+      if (!onEscape?.()) close();
     } else if (event.key === 'Tab') {
       const elements = focusableElements();
       const first = elements[0];

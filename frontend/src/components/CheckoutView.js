@@ -168,6 +168,9 @@ export function createCheckoutView(onClose) {
 
   // Active coupon state
   let appliedCoupon = null;
+  let appliedCouponCartSignature = null;
+  const cartSignature = state => JSON.stringify(state.items.map(item =>
+    [item.id || item.variant_id, item.quantity, item.price_minor]));
 
   // Handle radio styling toggle
   const form = modal.querySelector('#checkout-form');
@@ -208,6 +211,16 @@ export function createCheckoutView(onClose) {
   }
 
   function renderCartState(state) {
+    if (appliedCoupon && appliedCouponCartSignature !== cartSignature(state)) {
+      appliedCoupon = null;
+      appliedCouponCartSignature = null;
+      const feedback = modal.querySelector('#coupon-feedback-msg');
+      if (feedback) {
+        feedback.style.color = '#B45309';
+        feedback.textContent = 'Cart changed. Apply the coupon again to verify its current discount.';
+        feedback.style.display = 'block';
+      }
+    }
     const availability = capabilities.getState();
     const bankAvailable = availability.paymentMethods?.includes('bank_transfer') === true;
     labelBank.hidden = !bankAvailable;
@@ -301,12 +314,14 @@ export function createCheckoutView(onClose) {
     try {
       const res = await validateCoupon(code, rawSubtotalMinor, 0);
       appliedCoupon = res;
+      appliedCouponCartSignature = cartSignature(cartState);
       couponFeedback.style.color = '#15803D';
       couponFeedback.textContent = `✓ ${res.message} (${res.discount_amount.formatted} off)`;
       couponFeedback.style.display = 'block';
       renderCartState(cart.getState());
     } catch (err) {
       appliedCoupon = null;
+      appliedCouponCartSignature = null;
       couponFeedback.style.color = '#DC2626';
       couponFeedback.textContent = err.message || 'Invalid coupon code.';
       couponFeedback.style.display = 'block';
@@ -386,6 +401,7 @@ export function createCheckoutView(onClose) {
       // Clear shopping cart on confirmed order placement
       cart.clear();
       appliedCoupon = null;
+      appliedCouponCartSignature = null;
       renderOrderConfirmation(order);
     } catch (err) {
       placeBtn.disabled = !capabilities.getState().checkoutEnabled;

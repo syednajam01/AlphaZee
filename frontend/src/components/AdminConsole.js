@@ -24,6 +24,7 @@ import {
   fetchAdminShipmentSettlement,
   recordAdminRefundExecution,
   fetchAdminSuppliers,
+  fetchAdminCatalogVariants,
   createAdminSupplier,
   assignSupplierVariant,
   fetchAdminProfitLoss,
@@ -62,6 +63,9 @@ export function createAdminConsoleModal() {
   let authenticated = false;
   let currentRemitOutstandingMinor = 0;
   let authGeneration = 0;
+  let viewGeneration = 0;
+  let dispatchOpener = null;
+  let remitOpener = null;
   removeLegacyAdminCredentials();
   let isCollapsed = false;
 
@@ -214,7 +218,7 @@ export function createAdminConsoleModal() {
           <div id="dispatch-error" style="display: none; color: #F87171; font-size: 0.75rem; font-weight: 600;"></div>
           <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
             <button type="button" id="btn-cancel-dispatch" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8125rem;">Cancel</button>
-            <button type="submit" id="btn-submit-dispatch" disabled class="btn btn-primary" style="padding: 6px 14px; font-size: 0.8125rem;">Dispatch unavailable</button>
+            <button type="submit" id="btn-submit-dispatch" class="btn btn-primary" style="padding: 6px 14px; font-size: 0.8125rem;">Dispatch order</button>
           </div>
         </form>
       </div>
@@ -387,24 +391,26 @@ export function createAdminConsoleModal() {
     if (!contentArea) return;
     if (!authenticated) { renderLogin(); return; }
     const generation = authGeneration;
+    const view = ++viewGeneration;
     contentArea.innerHTML = '<div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 40px 0;">Loading data...</div>';
 
     try {
       if (activeTab === 'overview') {
-        await renderOverviewTab(contentArea);
+        await renderOverviewTab(contentArea, view);
       } else if (activeTab === 'orders') {
-        await renderOrdersTab(contentArea);
+        await renderOrdersTab(contentArea, view);
       } else if (activeTab === 'inventory') {
-        await renderInventoryTab(contentArea);
+        await renderInventoryTab(contentArea, view);
       } else if (activeTab === 'coupons') {
-        await renderCouponsTab(contentArea);
+        await renderCouponsTab(contentArea, view);
       } else if (activeTab === 'returns') {
-        await renderReturnsTab(contentArea);
+        await renderReturnsTab(contentArea, view);
       } else if (activeTab === 'suppliers') {
-        await renderSuppliersTab(contentArea);
+        await renderSuppliersTab(contentArea, view);
       } else if (activeTab === 'analytics') {
-        await renderAnalyticsTab(contentArea);
+        await renderAnalyticsTab(contentArea, view);
       }
+      if (view !== viewGeneration) return;
       if (generation !== authGeneration && !authenticated) renderLogin('Sign in again to continue.');
     } catch (err) {
       if (err.status === 401) {
@@ -412,7 +418,7 @@ export function createAdminConsoleModal() {
         renderLogin('Your session has ended. Sign in again to continue.');
         return;
       }
-      if (generation !== authGeneration) return;
+      if (generation !== authGeneration || view !== viewGeneration) return;
 
       contentArea.innerHTML = `
         <div style="padding: 16px; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 6px; color: #FCA5A5; font-size: 0.875rem;">
@@ -423,14 +429,15 @@ export function createAdminConsoleModal() {
   }
 
   // 1. Overview Tab
-  async function renderOverviewTab(container) {
+  async function renderOverviewTab(container, view) {
     const data = await fetchAdminOverview();
+    if (view !== viewGeneration) return;
     container.innerHTML = `
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Verified Gross Revenue</div>
+          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Delivered Sales</div>
           <div style="font-size: 1.5rem; font-weight: 800; color: #4ADE80;">${escapeHtml(data.formatted_gross_revenue)}</div>
-          <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Bank & confirmed COD revenue</div>
+          <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Bank prepayments and courier-held COD are separate in Analytics</div>
         </div>
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
           <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total Orders</div>
@@ -452,9 +459,9 @@ export function createAdminConsoleModal() {
   }
 
   // 2. Orders Tab
-  async function renderOrdersTab(container) {
-    await reviewExpiredOrders();
+  async function renderOrdersTab(container, view) {
     const res = await fetchAdminOrders();
+    if (view !== viewGeneration) return;
     const orders = res.orders || [];
 
     if (orders.length === 0) {
@@ -519,7 +526,10 @@ export function createAdminConsoleModal() {
                 Dispatch Courier
               </button>
             ` : ''}
-            ${o.order_status === 'dispatched' ? `
+            ${o.order_status === 'dispatched' && shipment?.stock_reconciliation_status !== 'legacy_review' ? `
+              ${shipment?.status === 'dispatched' ? `<button class="btn btn-secondary btn-update-shipment" data-shipment-id="${shipment.id}" data-next="in_transit" style="padding: 4px 8px; font-size: .7rem;">In Transit</button>` : ''}
+              ${['dispatched', 'in_transit'].includes(shipment?.status) ? `<button class="btn btn-secondary btn-update-shipment" data-shipment-id="${shipment.id}" data-next="out_for_delivery" style="padding: 4px 8px; font-size: .7rem;">Out for Delivery</button>` : ''}
+              <button class="btn btn-primary btn-mark-delivered" data-shipment-id="${shipment?.id || ''}" style="padding: 4px 8px; font-size: .7rem;">Mark Delivered</button>
               <button class="btn btn-secondary btn-rto-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; color: #FBBF24; border-color: rgba(251, 191, 36, 0.4);">
                 Initiate RTO
               </button>
@@ -591,6 +601,7 @@ export function createAdminConsoleModal() {
     }));
     container.querySelectorAll('.btn-remit-order').forEach(b => b.addEventListener('click', async () => {
       const shipmentId = b.getAttribute('data-shipment-id');
+      remitOpener = b;
       b.disabled = true;
       try {
         const shipment = await fetchAdminShipmentSettlement(shipmentId);
@@ -600,6 +611,7 @@ export function createAdminConsoleModal() {
         modal.querySelector('#remit-history').textContent = shipment.settlement_entries.map(entry => `${entry.entry_type}: ${formatPkr(entry.amount_minor)} (${entry.reference})`).join(' | ') || 'No settlement entries yet.';
         modal.querySelector('#remit-error').style.display = 'none';
         modal.querySelector('#admin-remittance-modal').style.display = 'flex';
+        modal.querySelector('#remit-amount-pkr').focus();
       } catch (error) { alert(error.message || 'Unable to load settlement'); }
       finally { b.disabled = false; }
     }));
@@ -856,26 +868,45 @@ export function createAdminConsoleModal() {
 
     container.querySelectorAll('.btn-dispatch-order').forEach(b => {
       b.addEventListener('click', () => {
+        dispatchOpener = b;
         const orderId = b.getAttribute('data-order-id');
         const modalEl = modal.querySelector('#admin-dispatch-modal');
         const idInput = modal.querySelector('#dispatch-order-id');
         if (modalEl && idInput) {
+          modal.querySelector('#admin-dispatch-form').reset();
+          modal.querySelector('#dispatch-error').style.display = 'none';
           idInput.value = orderId;
           modalEl.style.display = 'flex';
+          modal.querySelector('#dispatch-courier-code').focus();
         }
       });
     });
+    container.querySelectorAll('.btn-mark-delivered').forEach(b => b.addEventListener('click', async () => {
+      const shipmentId = b.getAttribute('data-shipment-id');
+      if (!shipmentId || !confirm('Confirm the courier delivered this parcel and collected COD, if applicable?')) return;
+      b.disabled = true;
+      try { await updateAdminShipmentStatus(shipmentId, { status: 'delivered' }); await loadActiveTabData(); }
+      catch (error) { alert(error.message || 'Unable to mark delivery'); b.disabled = false; }
+    }));
+    container.querySelectorAll('.btn-update-shipment').forEach(b => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        await updateAdminShipmentStatus(b.getAttribute('data-shipment-id'), { status: b.getAttribute('data-next') });
+        await loadActiveTabData();
+      } catch (error) { alert(error.message || 'Unable to update courier status'); b.disabled = false; }
+    }));
   }
 
   // 3. Inventory Tab
-  async function renderInventoryTab(container) {
+  async function renderInventoryTab(container, view) {
     const res = await fetchAdminInventory();
+    if (view !== viewGeneration) return;
     const items = res.items || [];
 
     const rowsHtml = items.map(it => `
       <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-        <td style="padding: 12px 8px; font-weight: 600;">${escapeHtml(it.product_title)}</td>
-        <td style="padding: 12px 8px; font-family: monospace; color: rgba(255, 255, 255, 0.7);">${escapeHtml(it.sku)}</td>
+        <td style="padding: 12px 8px; font-weight: 600;">${escapeHtml(it.product_title)}<div style="font-size: .7rem; opacity: .7;">${escapeHtml(it.supplier_name || '')}</div></td>
+        <td style="padding: 12px 8px; font-family: monospace; color: rgba(255, 255, 255, 0.7);">${escapeHtml(it.sku)} ${escapeHtml([it.size, it.color].filter(Boolean).join(' / '))}</td>
         <td style="padding: 12px 8px;">${it.physical_on_hand}</td>
         <td style="padding: 12px 8px; color: #FBBF24;">${it.held_reservations}</td>
         <td style="padding: 12px 8px; font-weight: 700; color: ${it.available_to_sell <= 2 ? '#F87171' : '#4ADE80'};">${it.available_to_sell}</td>
@@ -897,12 +928,50 @@ export function createAdminConsoleModal() {
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
+      ${items.length ? `<form id="inventory-adjust-form" style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: end;">
+        <label>Supplier / variant <select id="inventory-target" required>${items.map(it => `<option value="${it.supplier_variant_id}">${escapeHtml(it.supplier_name || '')} / ${escapeHtml(it.sku)} / ${escapeHtml([it.size, it.color].filter(Boolean).join(' / '))}</option>`).join('')}</select></label>
+        <label>Quantity change <input id="inventory-delta" type="number" required step="1" placeholder="+ received / - loss"></label>
+        <label>Reason <select id="inventory-reason" required><option value="supplier_receipt">Supplier receipt</option><option value="manual_count">Physical count</option><option value="adjustment_correction">Damage or correction</option></select></label>
+        <label>Invoice / audit ref <input id="inventory-reference" maxlength="100"></label>
+        <button type="submit" class="btn btn-primary">Save adjustment</button>
+        <p id="inventory-adjust-feedback" role="status" style="width: 100%;"></p>
+      </form>` : '<p>No active supplier variants. Assign a catalog variant to a supplier first.</p>'}
     `;
+    const form = container.querySelector('#inventory-adjust-form');
+    form?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = form.querySelector('button[type="submit"]');
+      if (button.disabled) return;
+      const feedback = form.querySelector('#inventory-adjust-feedback');
+      const item = items.find(row => row.supplier_variant_id === form.querySelector('#inventory-target').value);
+      const delta = Number(form.querySelector('#inventory-delta').value);
+      const reason = form.querySelector('#inventory-reason').value.trim();
+      if (!item || !Number.isSafeInteger(delta) || delta === 0 || reason.length < 3) {
+        feedback.textContent = 'Select a supplier variant, a nonzero whole-unit change, and a reason.'; return;
+      }
+      button.disabled = true;
+      button.textContent = 'Saving...';
+      feedback.textContent = '';
+      try {
+        await adjustAdminInventory({ supplier_variant_id: item.supplier_variant_id,
+          quantity_delta: delta, expected_version: item.version, reason,
+          reference_id: form.querySelector('#inventory-reference').value.trim() || null });
+        await loadActiveTabData();
+        showSessionMessage('Inventory adjustment saved; physical, held, and available stock refreshed.');
+      } catch (error) {
+        feedback.textContent = error.status === 409
+          ? 'Stock changed since this page loaded. Refresh inventory and retry with the current balance.'
+          : error.message || 'Unable to adjust inventory.';
+        button.disabled = false;
+        button.textContent = 'Save adjustment';
+      }
+    });
   }
 
   // 4. Coupons Tab
-  async function renderCouponsTab(container) {
+  async function renderCouponsTab(container, view) {
     const coupons = await fetchAdminCoupons();
+    if (view !== viewGeneration) return;
 
     const rowsHtml = coupons.map(c => `
       <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
@@ -991,8 +1060,8 @@ export function createAdminConsoleModal() {
         const id = b.getAttribute('data-coupon-id');
         if (confirm('Delete this coupon code?')) {
           b.disabled = true;
-          await deleteAdminCoupon(id);
-          await loadActiveTabData();
+          try { await deleteAdminCoupon(id); await loadActiveTabData(); }
+          catch (error) { alert(error.message || 'Unable to delete coupon.'); b.disabled = false; }
         }
       });
     });
@@ -1036,8 +1105,9 @@ export function createAdminConsoleModal() {
   }
 
   // 5. Returns Tab
-  async function renderReturnsTab(container) {
+  async function renderReturnsTab(container, view) {
     const returns = await fetchAdminReturns();
+    if (view !== viewGeneration) return;
 
     const rowsHtml = returns.map(r => `
       <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
@@ -1242,8 +1312,9 @@ export function createAdminConsoleModal() {
   }
 
   // 6. Suppliers Tab
-  async function renderSuppliersTab(container) {
-    const res = await fetchAdminSuppliers();
+  async function renderSuppliersTab(container, view) {
+    const [res, variants] = await Promise.all([fetchAdminSuppliers(), fetchAdminCatalogVariants()]);
+    if (view !== viewGeneration) return;
     const suppliers = res.suppliers || [];
 
     const rowsHtml = suppliers.map(s => `
@@ -1300,7 +1371,43 @@ export function createAdminConsoleModal() {
           </form>
         </div>
       </div>
+      <form id="supplier-variant-form" style="margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; align-items: end;">
+        <h3 style="width: 100%;">Assign supplier and product cost</h3>
+        <label>Supplier <select id="mapping-supplier" required>${suppliers.filter(s => s.status === 'active').map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}</select></label>
+        <label>Catalog variant <select id="mapping-variant" required>${variants.map(v => `<option value="${v.id}">${escapeHtml(v.product_title)} / ${escapeHtml(v.sku)}${v.active_supplier_id ? ' (mapped)' : ' (unmapped)'}</option>`).join('')}</select></label>
+        <label>Wholesale cost PKR <input id="mapping-cost" type="number" required min="0" step="0.01" placeholder="0.00"></label>
+        <button type="submit" class="btn btn-primary" ${!suppliers.some(s => s.status === 'active') || !variants.length ? 'disabled' : ''}>Save cost mapping</button>
+        <p id="mapping-feedback" role="status" style="width: 100%;">${!suppliers.length || !variants.length ? 'Register a supplier and catalog variant to enable mapping.' : ''}</p>
+      </form>
     `;
+
+    const mappingForm = container.querySelector('#supplier-variant-form');
+    mappingForm?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = mappingForm.querySelector('button[type="submit"]');
+      if (button.disabled) return;
+      const cost = Number(mappingForm.querySelector('#mapping-cost').value);
+      const costMinor = pkrToMinor(cost);
+      const feedback = mappingForm.querySelector('#mapping-feedback');
+      if (!Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(costMinor)) {
+        feedback.textContent = 'Enter a nonnegative wholesale cost in PKR.'; return;
+      }
+      button.disabled = true;
+      button.textContent = 'Saving...';
+      feedback.textContent = '';
+      try {
+        await assignSupplierVariant(mappingForm.querySelector('#mapping-supplier').value, {
+          variant_id: Number(mappingForm.querySelector('#mapping-variant').value),
+          supplier_cost_minor: costMinor, active: true,
+        });
+        await loadActiveTabData();
+        showSessionMessage('Supplier cost mapping saved and refreshed.');
+      } catch (error) {
+        feedback.textContent = error.message || 'Unable to map supplier and variant.';
+        button.disabled = false;
+        button.textContent = 'Save cost mapping';
+      }
+    });
 
     const form = container.querySelector('#new-supplier-form');
     const supError = container.querySelector('#sup-error');
@@ -1329,11 +1436,12 @@ export function createAdminConsoleModal() {
   }
 
   // 7. Analytics & Marketing Tab
-  async function renderAnalyticsTab(container) {
+  async function renderAnalyticsTab(container, view) {
     const [data, marketing] = await Promise.all([
       fetchAdminProfitLoss(),
       fetchAdminMarketingAnalytics(),
     ]);
+    if (view !== viewGeneration) return;
 
     const mktRows = (marketing.channels || []).map(c => `
       <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
@@ -1469,22 +1577,60 @@ export function createAdminConsoleModal() {
     overlay.close();
   }
 
-  // Dispatch remains in Phase L2; settlement is handled below.
-  for (const [formId, cancelId, dialogId] of [
-    ['admin-dispatch-form', 'btn-cancel-dispatch', 'admin-dispatch-modal'],
-  ]) {
-    modal.querySelector(`#${formId}`).addEventListener('submit', event => event.preventDefault());
-    modal.querySelector(`#${cancelId}`).addEventListener('click', () => {
-      modal.querySelector(`#${dialogId}`).style.display = 'none';
-    });
-  }
-  modal.querySelector('#btn-cancel-remit').addEventListener('click', () => {
+  const closeDispatch = () => {
+    modal.querySelector('#admin-dispatch-modal').style.display = 'none';
+    dispatchOpener?.focus?.();
+  };
+  const closeRemittance = () => {
     modal.querySelector('#admin-remittance-modal').style.display = 'none';
+    remitOpener?.focus?.();
+  };
+  modal.querySelector('#btn-cancel-dispatch').addEventListener('click', closeDispatch);
+  modal.querySelector('#admin-dispatch-modal').addEventListener('click', event => {
+    if (event.target === event.currentTarget) closeDispatch();
+  });
+  modal.querySelector('#admin-dispatch-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('#btn-submit-dispatch');
+    if (button.disabled) return;
+    const error = form.querySelector('#dispatch-error');
+    const tracking = form.querySelector('#dispatch-tracking-number').value.trim();
+    const cost = Number(form.querySelector('#dispatch-shipping-cost').value);
+    const costMinor = pkrToMinor(cost);
+    const trackingUrl = form.querySelector('#dispatch-tracking-url').value.trim();
+    if (tracking.length < 3 || !Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(costMinor)) {
+      error.textContent = 'Enter a tracking number and a nonnegative courier fee.';
+      error.style.display = 'block'; return;
+    }
+    error.style.display = 'none';
+    button.disabled = true;
+    button.textContent = 'Dispatching...';
+    try {
+      await dispatchAdminOrder(form.querySelector('#dispatch-order-id').value, {
+        courier_code: form.querySelector('#dispatch-courier-code').value,
+        tracking_number: tracking, shipping_cost_minor: costMinor,
+        tracking_url: trackingUrl || null,
+      });
+      modal.querySelector('#admin-dispatch-modal').style.display = 'none';
+      await loadActiveTabData();
+    } catch (requestError) {
+      error.textContent = requestError.message || 'Unable to dispatch this order.';
+      error.style.display = 'block';
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Dispatch order';
+    }
+  });
+  modal.querySelector('#btn-cancel-remit').addEventListener('click', closeRemittance);
+  modal.querySelector('#admin-remittance-modal').addEventListener('click', event => {
+    if (event.target === event.currentTarget) closeRemittance();
   });
   modal.querySelector('#admin-remittance-form').addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
     const submit = form.querySelector('#btn-submit-remit');
+    if (submit.disabled) return;
     const error = form.querySelector('#remit-error');
     const amount = Number(form.querySelector('#remit-amount-pkr').value);
     const deductionType = form.querySelector('#remit-deduction-type').value;
@@ -1526,7 +1672,11 @@ export function createAdminConsoleModal() {
     }
   });
 
-  const overlay = createOverlay({ element: modal, onClose: () => {
+  const overlay = createOverlay({ element: modal, onEscape: () => {
+    if (modal.querySelector('#admin-dispatch-modal').style.display === 'flex') { closeDispatch(); return true; }
+    if (modal.querySelector('#admin-remittance-modal').style.display === 'flex') { closeRemittance(); return true; }
+    return false;
+  }, onClose: () => {
     modal.querySelector('#admin-dispatch-modal').style.display = 'none';
     modal.querySelector('#admin-remittance-modal').style.display = 'none';
   } });

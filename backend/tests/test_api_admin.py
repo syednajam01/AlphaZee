@@ -128,6 +128,14 @@ def test_admin_inventory_summary_and_adjust(admin_client, db_session):
     assert match["held_reservations"] == 0
     assert match["available_to_sell"] == 10
     assert match["version"] == 1
+    assert match['supplier_id'] == str(setup['sv'].supplier_id)
+    assert match['supplier_name'] == setup['sv'].supplier.name
+
+    variants = admin_client.get('/api/v1/admin/catalog/variants')
+    assert variants.status_code == 200
+    mapped = next(item for item in variants.json() if item['id'] == setup['variant'].id)
+    assert mapped['active_supplier_id'] == str(setup['sv'].supplier_id)
+    assert mapped['supplier_cost_minor'] == 180000
 
     # 2. Adjust physical stock (+5 units)
     adjust_payload = {
@@ -285,10 +293,17 @@ def test_admin_overview_metrics(admin_client, db_session):
     ov_res2 = admin_client.get("/api/v1/admin/overview")
     assert ov_res2.status_code == 200
     ov_data2 = ov_res2.json()
-    assert ov_data2["gross_revenue_minor"] >= 320000
+    assert ov_data2["gross_revenue_minor"] == 0
     assert "PKR" in ov_data2["formatted_gross_revenue"]
     assert ov_data2["total_orders"] >= 1
     assert ov_data2["confirmed_orders"] >= 1
+    dispatched = admin_client.post(f'/api/v1/admin/orders/{ord_id}/dispatch', json={
+        'courier_code': 'manual', 'tracking_number': 'OVERVIEW-TEST-01',
+    })
+    assert dispatched.status_code == 201
+    assert admin_client.post(f'/api/v1/admin/shipments/{dispatched.json()["id"]}/status',
+                             json={'status': 'delivered'}).status_code == 200
+    assert admin_client.get('/api/v1/admin/overview').json()['gross_revenue_minor'] >= 320000
 
 
 def test_admin_supplier_crud_and_variant_cost_assignment(admin_client, db_session):
@@ -332,4 +347,9 @@ def test_admin_supplier_crud_and_variant_cost_assignment(admin_client, db_sessio
     assert assign_data["variant_id"] == var_id
     assert assign_data["supplier_cost_minor"] == 175000
     assert assign_data["active"] is True
+    persisted = admin_client.get('/api/v1/admin/catalog/variants')
+    assert persisted.status_code == 200
+    mapped = next(item for item in persisted.json() if item['id'] == var_id)
+    assert mapped['active_supplier_id'] == sup_id
+    assert mapped['supplier_cost_minor'] == 175000
 

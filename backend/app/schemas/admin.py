@@ -25,6 +25,8 @@ class InventoryMetricResponse(BaseModel):
     """
 
     supplier_variant_id: uuid.UUID
+    supplier_id: uuid.UUID
+    supplier_name: str
     variant_id: int
     product_title: str
     sku: str
@@ -96,6 +98,17 @@ class SupplierVariantAssignRequest(BaseModel):
     variant_id: int = Field(ge=1, description="Catalog variant ID")
     supplier_cost_minor: int = Field(ge=0, description="Wholesale cost in PKR minor units (paisas)")
     active: bool = Field(default=True, description="Whether this is the primary active supplying vendor")
+
+
+class CatalogVariantAdminSchema(BaseModel):
+    id: int
+    product_title: str
+    sku: str
+    size: Optional[str] = None
+    color: Optional[str] = None
+    is_active: bool
+    active_supplier_id: Optional[uuid.UUID] = None
+    supplier_cost_minor: Optional[int] = None
 
 
 class SupplierVariantResponseSchema(BaseModel):

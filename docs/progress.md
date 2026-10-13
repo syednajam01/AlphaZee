@@ -2,6 +2,11 @@
 
 Updated: 2026-10-09. Owner: Syed Najam.
 
+Historical milestone log through 2026-10-09. The current verification status and
+release decision are in [the repair verification report](../.context/repair_verification_report.md).
+The older test counts and launch-blocker language below describe their dated
+milestones, not current launch readiness.
+
 ---
 
 ## 1. Completed Work
@@ -498,10 +503,26 @@ Updated: 2026-10-09. Owner: Syed Najam.
 
 ## 3. Current Scope & Safety Confirmation
 
-- **All 7 Launch Blockers Resolved**: The core foundation is completely hardened and verified end-to-end.
-- **Application Database Safety**: `alphazee_dev` remains completely untouched. Zero schema modifications or migrations required for Phase G.
-- **Disposable PostgreSQL Verification**: Verified end-to-end against disposable PostgreSQL test databases (`alphazee_test` / `alphazee_migration_test`).
-- **Storefront Checkout Preview**: Storefront checkout prototype preview remains intact until business go-ahead to launch real live checkout.
+- **Historical scope**: These 2026-10-09 checks preceded the later G/F/L2 implementation and Phase V verification; they did not include browser journeys or prove launch readiness.
+- **Current development database**: Migrations through `c94e31f7d562` have since been applied to development. Phase V's rollback/re-upgrade ran only on a disposable `_test` database.
+- **Checkout**: Public order submission remains disabled by the server-side gate. The current decision and remaining checks are recorded below.
+
+## 4. Current verification — 2026-10-13
+
+Phase V terminal checks passed: 209 backend tests (database-backed tests use
+isolated PostgreSQL), 83 frontend
+Node tests, frontend production build, real separate-session courier settlement
+contention, and disposable G/F migration upgrade/downgrade/re-upgrade with a
+historical short-payout fixture. The local Docker development stack is healthy;
+terminal HTTP checks confirmed both web-proxied and direct checkout capability
+are disabled, anonymous owner routes return 401, and public order creation
+returns 503. See the linked report and JSON evidence for commands and limits.
+
+No browser was used at the owner's request. Desktop/mobile behavior, Console and
+Network traces, visual interaction, reload persistence, and complete browser
+journeys remain unverified. Real production domain, credentials, bank details,
+support contacts and recovery-channel configuration are still required. The
+application is not certified for public checkout or production launch.
 
 
 

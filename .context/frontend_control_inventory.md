@@ -1,6 +1,6 @@
 # Frontend control inventory — Phase L1
 
-Updated 2026-10-13. Verification is **terminal only**, as explicitly requested by the owner. No browser was launched and no browser result is claimed for any row.
+Updated 2026-10-13 through Phase L2. Verification is **terminal only**, as explicitly requested by the owner. No browser was launched and no browser result is claimed for any row.
 
 Evidence labels: **DOM** = actual component construction/events exercised against the repository's Node DOM fixture, with mocked fetch; **unit** = existing unit/API-client tests; **HTTP** = live terminal requests to Vite/FastAPI; **source** = inspected implementation only. These do not establish visual layout, pointer hit-testing, touch behavior or complete persisted commerce journeys.
 
@@ -56,12 +56,12 @@ Evidence labels: **DOM** = actual component construction/events exercised agains
 
 | Location / selector | Intended action and wiring | Endpoint | Current classification / evidence | Persistence expectation / next phase |
 | --- | --- | --- | --- | --- |
-| Tracking `#tracking-search-form`, `#btn-search-order` | Lookup entered order/phone | GET `/orders/{number}` | Existing handler; API-client unit/source | Secure access replacement in Phase G; real lookup not exercised |
+| Tracking `#tracking-search-form`, `#btn-search-order` | Access an order with its private code/session | GET `/orders/{number}` and code exchange | Phase G order-scoped access; backend security tests; browser journey unverified | Order-scoped session |
 | Tracking `#tracking-close-btn`, backdrop | Dismiss tracking | None | Repaired; DOM | Current form inputs retained |
 | Tracking courier link | Open supplied tracking URL | External courier | Existing conditional link; source only | None |
 | Tracking `#btn-toggle-return-form` | Show/hide return request panel | None | Existing handler; source | Current page only |
-| Tracking return type/line/reason/notes + submit | Request return | POST `/returns/request` | Existing handler, incomplete secure ownership/exchange selection; unit/source | Phase G; no customer writes exercised |
-| Tracking payment-proof form | Show sent bank snapshot/deadline and submit proof after handoff | POST `/orders/{number}/receipt` | Phase C gated by handoff; review state visible; customer write covered by backend tests | Phase G access credential still pending |
+| Tracking return type/line/reason/notes + submit | Request return or size exchange | POST `/returns/request` | Phase G access and replacement allocation backed by API tests; browser journey unverified | Return/replacement on server |
+| Tracking payment-proof form | Show sent bank snapshot/deadline and submit proof after handoff | POST `/orders/{number}/receipt` | Gated by handoff and Phase G order-scoped session; backend tests | Receipt on server |
 | Footer `a[href="#admin"]` | Open owner console and restore session | GET `/auth/session`, then active admin tab | Shell/session DOM tests; anonymous HTTP access 401 | PostgreSQL session survives API restart |
 | Owner `#admin-auth-form` | Username/password sign-in | POST `/auth/login` | Implemented Phase A; inline errors and password clearing tested in DOM; real HTTP login passed | HttpOnly cookie; no shared key in storage |
 | Owner `#btn-admin-logout` | Revoke session and return to login | POST `/auth/logout` with CSRF token | Implemented Phase A; successful/failed logout DOM tests; real HTTP revocation passed | Stolen/replayed cookie rejected after logout |
@@ -73,21 +73,21 @@ Evidence labels: **DOM** = actual component construction/events exercised agains
 | Order `.btn-confirm-supplier` | Record supplier acceptance only with complete allocations | POST `/admin/orders/{id}/confirm-supplier` | Phase C allocation guard tested | Supplier audit on server |
 | Order `.btn-prepare-instructions` | Preview bank account, then explicitly record successful customer handoff | GET `/admin/orders/{id}/payment-instructions-preview`; POST `/instructions-sent` | Phase C owner form and backend integration tested; no browser exercise | Handoff snapshot and UTC deadline on server |
 | Order `#btn-review-expired-orders`, `.btn-resolve-payment` | Flag expired orders and decide after checking funds | POST `/admin/orders/review-expired`; POST `/orders/{id}/payment-review` | Phase C preserved holds and explicit release/verify tested | Review audit on server |
-| Order `.btn-dispatch-order` | Open dispatch details form | None until submit | Existing opener; source | Fulfillment integration Phase D/L2 |
-| Dispatch `#admin-dispatch-form`, `#btn-submit-dispatch` | Book/dispatch shipment | API client exists, submit integration unfinished | Now explicitly disabled; native submit prevented | Phase D/L2; no false success |
+| Order `.btn-dispatch-order` | Open dispatch details form | None until submit | Implemented; owner DOM mutation test | Selected order retained in form |
+| Dispatch `#admin-dispatch-form`, `#btn-submit-dispatch` | Book/dispatch shipment | POST `/admin/orders/{id}/dispatch` | Implemented with validation, one pending submit, failure retry and refreshed order; DOM test plus backend API lifecycle | Shipment/tracking on server |
 | Dispatch `#btn-cancel-dispatch` | Dismiss nested form | None | Repaired; DOM | No mutation |
-| Remittance form / `#btn-submit-remit` | Record courier settlement | API client exists, submit integration unfinished | Now explicitly disabled; no currently wired opener; native submit prevented | Phase F/L2 |
+| Remittance form / `#btn-submit-remit` | Record courier settlement | POST `/admin/shipments/{id}/remittance` | Implemented in Phase F; DOM shell and backend reconciliation tests | Append-only settlement entries on server |
 | Remittance `#btn-cancel-remit` | Dismiss nested form | None | Repaired; DOM | No mutation |
-| Order `.btn-cancel-order` | Cancel eligible order | POST `/admin/orders/{id}/cancel` | Existing handler; source/unit | Phase D lifecycle verification required |
-| Order `.btn-rto-order`, `.btn-rto-receive`, `.btn-rto-inspect` | Initiate/receive/inspect RTO | POST order RTO endpoints | Existing handlers; corrected quantity lifecycle unfinished | Phase D/E; not exercised against development |
-| Orders `#btn-purge-expired-orders` | Existing automatic expiry cancellation | POST `/admin/orders/cancel-expired` | Existing handler conflicts with required review behavior | Replace in Phase C; not executed |
-| Inventory tab | Display physical/held/available figures | GET `/admin/inventory/summary` | Read-only implemented; adjustment UI absent | Stock adjustment interface Phase L2 |
-| Coupons `#new-coupon-form`, `.btn-del-coupon` | Create/delete coupon | POST/DELETE `/admin/coupons` | Existing handlers; unit/source | Database writes not exercised |
-| Suppliers `#new-supplier-form` | Create supplier | POST `/admin/suppliers` | Existing handler; unit/source | Database writes not exercised |
-| Supplier-variant cost mapping | Assign supplier to variant | API client exists | UI unfinished; no live visible mapping control | Phase L2 |
-| Returns `.btn-approve-ret`, `.btn-reject-ret`, `.btn-complete-ret` | Approve/reject/complete return | POST `/admin/returns/{id}/...` | Existing handlers; corrected inspected quantities/refund/exchange flow unfinished | Phase D/E/G/L2 |
-| Delivery/status update | Change allocated shipment status | API client exists | Missing complete owner interaction | Phase D/L2 |
-| Analytics | Read reports | GET profit-loss and marketing endpoints | Display implemented; accounting corrections pending | Phase F; not certified financial reports |
+| Order `.btn-cancel-order` | Cancel eligible order | POST `/admin/orders/{id}/cancel` | Backend lifecycle tests and owner handler; browser journey unverified | Cancellation and released holds on server |
+| Order `.btn-rto-order`, `.btn-rto-receive`, `.btn-rto-inspect` | Initiate/receive/inspect RTO | POST order RTO endpoints | Phase D/E quantity and stock tests; owner handlers; browser journey unverified | Inspection/stock records on server |
+| Orders `#btn-review-expired-orders` | Explicitly flag expired bank payments for review | POST `/admin/orders/review-expired` | Phase C review API; no automatic mutation on tab read | Review state on server |
+| Inventory tab | Display supplier/variant physical/held/available figures and adjust stock | GET `/admin/inventory/summary`; POST `/admin/inventory/adjust` | Implemented; optimistic version and held-stock guards; DOM and backend API tests | Stock event, balance and version on server |
+| Coupons `#new-coupon-form`, `.btn-del-coupon` | Create/delete coupon | POST/DELETE `/admin/coupons` | Existing handlers and backend API tests; browser journey unverified | Server database write |
+| Suppliers `#new-supplier-form` | Create supplier | POST `/admin/suppliers` | Existing handler and backend API tests; browser journey unverified | Server database write |
+| Supplier-variant cost mapping | Assign supplier and wholesale cost to catalog variant | GET `/admin/catalog/variants`; POST `/admin/suppliers/{id}/variants` | Implemented; owner catalog includes unmapped variants; DOM and backend read tests | Supplier mapping/cost on server |
+| Returns `.btn-approve-ret`, `.btn-reject-ret`, `.btn-complete-ret`, `.btn-record-refund` | Approve/reject/complete return, then record actual refund payment | POST `/admin/returns/{id}/...` | Phase D/G/F backend tests and owner handlers; browser journey unverified | Return, replacement and refund evidence on server |
+| Delivery/status update | Set in-transit, out-for-delivery or delivered status | POST `/admin/shipments/{id}/status` | Implemented; delivery DOM and backend lifecycle tests | Shipment status and allocation on server |
+| Analytics | Read operational sales/cash reconciliation and marketing reports | GET profit-loss and marketing endpoints | Phase F accounting fixtures; terminal-tested only; operational estimate, not a tax export | Current database snapshot |
 
 `AdminPreview.js` is not imported by the running app and is not a second live console. Its controls are excluded from the live register.
 
@@ -96,4 +96,4 @@ Evidence labels: **DOM** = actual component construction/events exercised agains
 - No browser Console, visual viewport, pointer hit-test, touch or layout evidence was collected, per the owner's instruction.
 - DOM fixtures exercise event wiring and state, not browser rendering. The hidden-root fix is supported by explicit `hidden`/`inert` states plus CSS `display:none !important` for closed roots, but the owner's exact browser symptom has not been independently reproduced visually.
 - Live catalog responses are empty. Product recovery tests use in-memory SAMPLE / TEST fixtures, not fabricated development catalog entries.
-- No owner mutations or customer orders were submitted successfully during L1. Database persistence for those operations remains assigned to the later integration phases.
+- During Phase V, PostgreSQL-backed API tests exercised owner and customer mutations in isolated `_test` databases. The development-stack HTTP smoke checks performed no successful owner mutations or customer order submissions; public checkout remained disabled. Browser persistence remains unverified.

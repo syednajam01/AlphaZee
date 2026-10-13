@@ -186,6 +186,7 @@ def test_verified_bank_and_cod_collected_included_in_revenue(
     assert data["cogs_minor"] == 0
     assert data['bank_customer_payments_minor'] == bank_order.total_minor
     assert data['business_cash_received_minor'] == bank_order.total_minor
+    assert client.get('/api/v1/admin/overview').json()['gross_revenue_minor'] == 0
 
     # 2. Place COD order, confirm supplier, dispatch, and mark delivered
     cod_order = place_order(

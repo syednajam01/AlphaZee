@@ -1,0 +1,16 @@
+{
+  "checked_at_utc": "2026-10-13T18:42:48.025375+00:00",
+  "database": "alphazee_phase_v_7bcc4ac33c_test",
+  "database_kind": "unique_disposable_test",
+  "prior_revision": "d61f4b8c2a90",
+  "head_revision": "c94e31f7d562",
+  "upgrade_downgrade_reupgrade": "passed",
+  "legacy_short_payout": "partial",
+  "payout_receipt_imported_once": true,
+  "refund_cash_not_invented": true,
+  "append_only_trigger_rejected_update": true,
+  "alembic_check": "passed",
+  "development_database_modified": false,
+  "database_retained_for_inspection": true,
+  "browser_used": false
+}

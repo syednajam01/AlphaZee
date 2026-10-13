@@ -452,6 +452,10 @@ export async function fetchAdminSuppliers() {
   return request('/admin/suppliers');
 }
 
+export async function fetchAdminCatalogVariants() {
+  return request('/admin/catalog/variants');
+}
+
 /**
  * Register a new supplier.
  * @param {Object} supplierData { name, slug, status, notes }
