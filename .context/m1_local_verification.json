@@ -1,0 +1,30 @@
+{
+  "phase": "M1",
+  "normal_http": {
+    "web_ready": 200,
+    "web_capabilities": {
+      "checkout_enabled": false,
+      "test_mode": false,
+      "payment_methods": [
+        "cod"
+      ]
+    },
+    "web/admin/overview": 401,
+    "web/admin/catalog/variants": 401,
+    "web_order_post": 503,
+    "api_ready": 200,
+    "api_capabilities": {
+      "checkout_enabled": false,
+      "test_mode": false,
+      "payment_methods": [
+        "cod"
+      ]
+    },
+    "api/admin/overview": 401,
+    "api/admin/catalog/variants": 401,
+    "api_order_post": 503
+  },
+  "development_rows_schema_and_configuration_match_m0": true,
+  "normal_web_port": 13000,
+  "normal_api_port": 18000
+}

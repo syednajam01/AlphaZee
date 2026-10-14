@@ -1,6 +1,6 @@
 # Frontend control inventory — Phase L1
 
-Updated 2026-10-13 through Phase L2. Verification is **terminal only**, as explicitly requested by the owner. No browser was launched and no browser result is claimed for any row.
+Updated 2026-10-14 through M1. Earlier commerce verification was terminal only. The updated owner-dashboard milestone explicitly requests browser verification; 13 isolated Chrome checks and desktop/mobile screenshots now cover the M1 dashboard/session/navigation subset. Complete catalog/commerce browser journeys remain pending. See `m1_dashboard_runbook.md`.
 
 Evidence labels: **DOM** = actual component construction/events exercised against the repository's Node DOM fixture, with mocked fetch; **unit** = existing unit/API-client tests; **HTTP** = live terminal requests to Vite/FastAPI; **source** = inspected implementation only. These do not establish visual layout, pointer hit-testing, touch behavior or complete persisted commerce journeys.
 
@@ -62,13 +62,13 @@ Evidence labels: **DOM** = actual component construction/events exercised agains
 | Tracking `#btn-toggle-return-form` | Show/hide return request panel | None | Existing handler; source | Current page only |
 | Tracking return type/line/reason/notes + submit | Request return or size exchange | POST `/returns/request` | Phase G access and replacement allocation backed by API tests; browser journey unverified | Return/replacement on server |
 | Tracking payment-proof form | Show sent bank snapshot/deadline and submit proof after handoff | POST `/orders/{number}/receipt` | Gated by handoff and Phase G order-scoped session; backend tests | Receipt on server |
-| Footer `a[href="#admin"]` | Open owner console and restore session | GET `/auth/session`, then active admin tab | Shell/session DOM tests; anonymous HTTP access 401 | PostgreSQL session survives API restart |
+| Footer `a[href="/admin"]` and direct `/admin` | Open full-page dashboard, restore owner session or show login | GET `/auth/session`, then active admin section | M1 isolated Chrome login/refresh/navigation; anonymous HTTP 401 | PostgreSQL session; selected section in URL |
 | Owner `#admin-auth-form` | Username/password sign-in | POST `/auth/login` | Implemented Phase A; inline errors and password clearing tested in DOM; real HTTP login passed | HttpOnly cookie; no shared key in storage |
 | Owner `#btn-admin-logout` | Revoke session and return to login | POST `/auth/logout` with CSRF token | Implemented Phase A; successful/failed logout DOM tests; real HTTP revocation passed | Stolen/replayed cookie rejected after logout |
 | Owner `#btn-toggle-admin-sidebar` | Collapse/expand sidebar | None | Existing handler; source | Current page only |
-| Owner `.admin-tab-btn` | Switch overview/orders/inventory/coupons/returns/suppliers/analytics | GET matching `/admin/*` endpoint | Existing handlers; source | Read-only tab load; not exercised with real credentials |
+| Owner `.admin-tab-btn` | Navigate bookmarkable dashboard sections; Products/Collections/Media explain pending authoring | GET existing operational `/admin/*` endpoints | M1 Chrome and Node route tests; old operational services reused | Read-only section load; route survives refresh |
 | Owner `#btn-refresh-admin-tab` | Retry/reload active tab | GET matching endpoint | Existing handler; source | Reads latest server state |
-| Owner `#admin-close-btn`, backdrop | Close console and any nested forms | None | Repaired; DOM | No server mutation |
+| Dashboard Return to store | Navigate to `/`; warn on unsaved input | None | M1 page route; modal close control removed from live storefront | No server mutation |
 | Order `.btn-verify-payment` | Verify received funds outside expired review | POST `/admin/orders/{id}/verify-payment` | Phase C lock/deadline guard and owner identity tested | Payment audit on server |
 | Order `.btn-confirm-supplier` | Record supplier acceptance only with complete allocations | POST `/admin/orders/{id}/confirm-supplier` | Phase C allocation guard tested | Supplier audit on server |
 | Order `.btn-prepare-instructions` | Preview bank account, then explicitly record successful customer handoff | GET `/admin/orders/{id}/payment-instructions-preview`; POST `/instructions-sent` | Phase C owner form and backend integration tested; no browser exercise | Handoff snapshot and UTC deadline on server |
@@ -93,7 +93,7 @@ Evidence labels: **DOM** = actual component construction/events exercised agains
 
 ## Remaining verification
 
-- No browser Console, visual viewport, pointer hit-test, touch or layout evidence was collected, per the owner's instruction.
+- Earlier commerce phases collected no browser evidence. M1 adds actual Chrome pointer clicks, dashboard session/navigation checks and inspected desktop/mobile screenshots; full product/media/commerce browser evidence remains pending.
 - DOM fixtures exercise event wiring and state, not browser rendering. The hidden-root fix is supported by explicit `hidden`/`inert` states plus CSS `display:none !important` for closed roots, but the owner's exact browser symptom has not been independently reproduced visually.
 - Live catalog responses are empty. Product recovery tests use in-memory SAMPLE / TEST fixtures, not fabricated development catalog entries.
 - During Phase V, PostgreSQL-backed API tests exercised owner and customer mutations in isolated `_test` databases. The development-stack HTTP smoke checks performed no successful owner mutations or customer order submissions; public checkout remained disabled. Browser persistence remains unverified.

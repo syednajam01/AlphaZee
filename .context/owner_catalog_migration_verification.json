@@ -1,0 +1,15 @@
+{
+  "milestone": "owner_dashboard_catalog_media",
+  "phase": "M0",
+  "status": "not_applicable_no_schema_changes",
+  "new_migrations": [],
+  "development_downgraded": false,
+  "next_required_phase": "M2",
+  "required_checks": [
+    "upgrade disposable historical fixture database",
+    "inspect lifecycle, draft nullability and legacy media backfills",
+    "verify historical order, stock and finance preservation",
+    "downgrade reversible new migrations only in isolated target",
+    "re-upgrade and compare Alembic schema"
+  ]
+}

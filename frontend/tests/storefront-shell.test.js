@@ -27,7 +27,7 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
   globalThis.fetch = async () => { throw new Error('SAMPLE offline API'); };
   initApp();
   await new Promise(resolve => setTimeout(resolve, 10));
-  for (const id of ['product-modal', 'checkout-modal', 'tracking-modal', 'admin-modal', 'cart-drawer', 'mobile-nav-drawer']) {
+  for (const id of ['product-modal', 'checkout-modal', 'tracking-modal', 'cart-drawer', 'mobile-nav-drawer']) {
     const root = document.getElementById(id);
     assert.ok(root, `${id} must mount`);
     assert.equal(root.hidden, true, `${id} must be removed from hit testing when closed`);
@@ -48,20 +48,8 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
   document.getElementById('nav-track-order').click();
   assert.equal(document.getElementById('tracking-modal').hidden, false);
   document.getElementById('tracking-close-btn').click();
-  document.querySelector('a[href="#admin"]').click();
-  assert.equal(document.getElementById('admin-modal').hidden, false);
-  document.getElementById('admin-close-btn').click();
-  assert.equal(document.body.style.overflow, '');
-  for (const [panelId, cancelId, submitId] of [
-    ['admin-dispatch-modal', 'btn-cancel-dispatch', 'btn-submit-dispatch'],
-    ['admin-remittance-modal', 'btn-cancel-remit', 'btn-submit-remit'],
-  ]) {
-    const panel = document.getElementById(panelId);
-    panel.style.display = 'flex';
-    document.getElementById(cancelId).click();
-    assert.equal(panel.style.display, 'none');
-    assert.equal(document.getElementById(submitId).disabled, false);
-  }
+  assert.ok(document.querySelector('a[href="/admin"]'));
+  assert.equal(document.getElementById('admin-modal'), null);
 
   // Every tracking trigger, including mobile/footer, is wired identically.
   const trackingLinks = document.querySelectorAll('a[href="#track"]');

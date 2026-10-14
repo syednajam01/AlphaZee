@@ -60,7 +60,7 @@ export const storeConfig = {
     legal: [
       { label: 'Privacy Policy', href: null },
       { label: 'Terms of Service', href: null },
-      { label: 'Admin Console (Preview)', href: '#admin' },
+      { label: 'Owner Console', href: '/admin' },
     ]
   }
 };

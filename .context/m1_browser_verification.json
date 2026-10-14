@@ -1,0 +1,29 @@
+{
+  "checked_at_utc": "2026-10-14T16:29:57.850576+00:00",
+  "phase": "M1",
+  "database": "alphazee_m1_browser_c0d22289e0_test",
+  "sample_owner_only": true,
+  "source_database_modified": false,
+  "checkout_enabled": false,
+  "browser": "headless Chrome via CDP",
+  "checks": [
+    "direct_login",
+    "private_navigation_hidden",
+    "login_orders",
+    "products_route_placeholder",
+    "refresh_restores_session_and_section",
+    "inventory_route",
+    "back_navigation",
+    "forward_navigation",
+    "mobile_no_document_overflow",
+    "logout_login_screen",
+    "logout_server_revocation",
+    "second_login",
+    "expired_session_login_screen"
+  ],
+  "runtime_network_errors": [],
+  "screenshots": ".local\\m1-browser\\db397b757c",
+  "external_fonts_blocked_to_verify_local_startup": true,
+  "passed": true,
+  "database_retained": true
+}

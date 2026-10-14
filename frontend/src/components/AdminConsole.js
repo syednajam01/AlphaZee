@@ -52,14 +52,15 @@ import {
 import { escapeHtml } from '../utils/dom.js';
 import { formatPkr, pkrToMinor } from '../utils/money.js';
 
-export function createAdminConsoleModal() {
+export function createAdminConsoleModal({ page = false, initialTab = 'overview', onNavigate = () => {} } = {}) {
   const modal = document.createElement('div');
-  modal.className = 'modal-container';
+  modal.className = page ? 'admin-page' : 'modal-container';
   modal.id = 'admin-modal';
-  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('role', page ? 'region' : 'dialog');
   modal.setAttribute('aria-label', 'AlphaZee Store Management Console');
 
-  let activeTab = 'overview';
+  let activeTab = initialTab;
+  let dirty = false;
   let authenticated = false;
   let currentRemitOutstandingMinor = 0;
   let authGeneration = 0;
@@ -89,7 +90,7 @@ export function createAdminConsoleModal() {
         </div>
 
         <!-- Sidebar Navigation -->
-        <nav style="flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px;">
+        <nav aria-label="Owner sections" style="flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px;">
           <button type="button" class="admin-tab-btn" data-tab="overview" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: rgba(20, 92, 68, 0.4); color: #FFFFFF; border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -257,6 +258,34 @@ export function createAdminConsoleModal() {
     </div>
   `;
 
+  if (page) {
+    const nav = modal.querySelector('nav');
+    const labels = [['overview', 'Overview'], ['products', 'Products'], ['collections', 'Collections'],
+      ['media', 'Media'], ['inventory', 'Inventory'], ['suppliers', 'Suppliers'],
+      ['orders', 'Orders and payments'], ['returns', 'Returns and exchanges'],
+      ['coupons', 'Coupons'], ['analytics', 'Reports']];
+    const icons = new Map([...nav.querySelectorAll('.admin-tab-btn')].map(button =>
+      [button.getAttribute('data-tab'), button.querySelector('svg')?.outerHTML || '']));
+    nav.innerHTML = labels.map(([tab, label]) => `<button type="button" class="admin-tab-btn" data-tab="${tab}">${icons.get(tab) || '<span aria-hidden="true">·</span>'}<span class="admin-nav-label">${label}</span></button>`).join('');
+    const returnLink = document.createElement('a');
+    returnLink.href = '/'; returnLink.textContent = 'Return to store';
+    returnLink.className = 'admin-return-link';
+    modal.querySelector('header').appendChild(returnLink);
+    modal.querySelector('.drawer-backdrop').hidden = true;
+    modal.querySelector('#admin-close-btn').hidden = true;
+    modal.querySelector('[data-tab="orders"] .admin-nav-label').textContent = 'Orders and payments';
+    modal.querySelector('[data-tab="returns"] .admin-nav-label').textContent = 'Returns and exchanges';
+    modal.querySelector('[data-tab="analytics"] .admin-nav-label').textContent = 'Reports';
+    returnLink.addEventListener('click', event => { if (!canLeave()) event.preventDefault(); });
+    for (const type of ['input', 'change']) modal.addEventListener(type, event => {
+      if (authenticated && event.target?.closest?.('form')) dirty = true;
+    });
+  }
+
+  function canLeave() {
+    return !page || !dirty || window.confirm('Discard your unsaved changes?');
+  }
+
   // Mount Logos in Sidebar
   const expandedLogoSlot = modal.querySelector('#admin-expanded-logo-slot');
   const collapsedLogoSlot = modal.querySelector('#admin-collapsed-logo-slot');
@@ -289,10 +318,36 @@ export function createAdminConsoleModal() {
   const contentArea = modal.querySelector('#admin-tab-content');
   const viewTitle = modal.querySelector('#admin-view-title');
 
+  function updateNavigation() {
+    const titles = { overview: 'Store overview', products: 'Products', collections: 'Collections',
+      media: 'Media', orders: 'Orders and payments', inventory: 'Inventory and stock',
+      coupons: 'Coupons', returns: 'Returns and exchanges', suppliers: 'Suppliers', analytics: 'Reports' };
+    viewTitle.textContent = titles[activeTab] || 'Section not found';
+    tabBtns.forEach(button => {
+      const selected = button.getAttribute('data-tab') === activeTab;
+      button.setAttribute('aria-current', selected ? 'page' : 'false');
+      button.setAttribute('title', titles[button.getAttribute('data-tab')] || '');
+      button.style.background = selected ? 'rgba(20, 92, 68, 0.4)' : 'transparent';
+      button.style.color = selected ? '#FFFFFF' : 'rgba(255, 255, 255, 0.7)';
+    });
+  }
+
+  function selectTab(tab, { checkDirty = true } = {}) {
+    if (checkDirty && !canLeave()) return false;
+    activeTab = tab;
+    dirty = false;
+    closeDispatch(); closeRemittance();
+    updateNavigation();
+    loadActiveTabData();
+    return true;
+  }
+  updateNavigation();
+
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const tab = btn.getAttribute('data-tab');
       if (tab === activeTab) return;
+      if (page) { if (canLeave()) onNavigate(tab); return; }
       activeTab = tab;
 
       tabBtns.forEach(b => {
@@ -318,10 +373,11 @@ export function createAdminConsoleModal() {
   });
 
   modal.querySelector('#btn-refresh-admin-tab')?.addEventListener('click', () => {
-    loadActiveTabData();
+    if (canLeave()) loadActiveTabData();
   });
 
   modal.querySelector('#btn-admin-logout')?.addEventListener('click', async () => {
+    if (!canLeave()) return;
     const button = modal.querySelector('#btn-admin-logout');
     button.disabled = true;
     try {
@@ -343,7 +399,17 @@ export function createAdminConsoleModal() {
 
   function renderLogin(message = '') {
     authGeneration++;
+    viewGeneration++;
+    authenticated = false;
+    dirty = false;
+    closeDispatch(); closeRemittance();
+    modal.querySelector('#admin-dispatch-form').reset?.();
+    modal.querySelector('#admin-remittance-form').reset?.();
+    modal.querySelector('#remit-history').textContent = '';
+    modal.querySelector('#remit-summary').textContent = '';
     showSessionMessage(message);
+    if (page) sidebar.hidden = true;
+    modal.querySelector('#btn-refresh-admin-tab').hidden = true;
     modal.querySelector('#btn-admin-logout').hidden = true;
     contentArea.innerHTML = `
       <div style="max-width: 440px; margin: 40px auto; padding: 24px;">
@@ -372,6 +438,8 @@ export function createAdminConsoleModal() {
         passwordInput.value = '';
         if (generation !== authGeneration) return;
         authenticated = true;
+        if (page) sidebar.hidden = false;
+        modal.querySelector('#btn-refresh-admin-tab').hidden = false;
         showSessionMessage('');
         modal.querySelector('#btn-admin-logout').hidden = false;
         await loadActiveTabData();
@@ -382,7 +450,7 @@ export function createAdminConsoleModal() {
     });
   }
 
-  onOwnerSessionExpired(() => {
+  const unsubscribeSession = onOwnerSessionExpired(() => {
     authenticated = false;
     renderLogin('Your session has ended. Sign in again to continue.');
   });
@@ -392,6 +460,7 @@ export function createAdminConsoleModal() {
     if (!authenticated) { renderLogin(); return; }
     const generation = authGeneration;
     const view = ++viewGeneration;
+    dirty = false;
     contentArea.innerHTML = '<div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 40px 0;">Loading data...</div>';
 
     try {
@@ -409,6 +478,10 @@ export function createAdminConsoleModal() {
         await renderSuppliersTab(contentArea, view);
       } else if (activeTab === 'analytics') {
         await renderAnalyticsTab(contentArea, view);
+      } else if (['products', 'collections', 'media'].includes(activeTab)) {
+        contentArea.innerHTML = `<section class="admin-empty-state"><h3>${escapeHtml(activeTab[0].toUpperCase() + activeTab.slice(1))} management is coming next</h3><p>Catalog editing and uploads will be added in the next implementation phases. No catalog changes can be saved here yet.</p></section>`;
+      } else {
+        contentArea.innerHTML = '<section class="admin-empty-state"><h3>Section not found</h3><p>Choose a section from the owner navigation.</p></section>';
       }
       if (view !== viewGeneration) return;
       if (generation !== authGeneration && !authenticated) renderLogin('Sign in again to continue.');
@@ -611,6 +684,7 @@ export function createAdminConsoleModal() {
         modal.querySelector('#remit-history').textContent = shipment.settlement_entries.map(entry => `${entry.entry_type}: ${formatPkr(entry.amount_minor)} (${entry.reference})`).join(' | ') || 'No settlement entries yet.';
         modal.querySelector('#remit-error').style.display = 'none';
         modal.querySelector('#admin-remittance-modal').style.display = 'flex';
+        setPageBackgroundInert(true);
         modal.querySelector('#remit-amount-pkr').focus();
       } catch (error) { alert(error.message || 'Unable to load settlement'); }
       finally { b.disabled = false; }
@@ -877,6 +951,7 @@ export function createAdminConsoleModal() {
           modal.querySelector('#dispatch-error').style.display = 'none';
           idInput.value = orderId;
           modalEl.style.display = 'flex';
+          setPageBackgroundInert(true);
           modal.querySelector('#dispatch-courier-code').focus();
         }
       });
@@ -1557,32 +1632,44 @@ export function createAdminConsoleModal() {
   }
 
   async function open() {
-    overlay.open();
+    if (!page) overlay.open();
+    if (page) sidebar.hidden = true;
+    modal.querySelector('#btn-admin-logout').hidden = true;
+    modal.querySelector('#btn-refresh-admin-tab').hidden = true;
     const generation = ++authGeneration;
     contentArea.innerHTML = '<p role="status">Checking owner session...</p>';
     try {
       await fetchOwnerSession();
       if (generation !== authGeneration) return;
       authenticated = true;
+      if (page) sidebar.hidden = false;
+      modal.querySelector('#btn-refresh-admin-tab').hidden = false;
       modal.querySelector('#btn-admin-logout').hidden = false;
       showSessionMessage('');
       await loadActiveTabData();
     } catch (error) {
+      if (generation !== authGeneration) return;
       authenticated = false;
       renderLogin(error.status === 401 ? '' : 'Unable to reach the store. You can try signing in again.');
     }
   }
 
   function close() {
-    overlay.close();
+    authGeneration++; viewGeneration++;
+    if (!page) overlay.close();
   }
 
+  function setPageBackgroundInert(value) {
+    if (page) modal.querySelector('.modal-content').inert = value;
+  }
   const closeDispatch = () => {
     modal.querySelector('#admin-dispatch-modal').style.display = 'none';
+    if (modal.querySelector('#admin-remittance-modal').style.display !== 'flex') setPageBackgroundInert(false);
     dispatchOpener?.focus?.();
   };
   const closeRemittance = () => {
     modal.querySelector('#admin-remittance-modal').style.display = 'none';
+    if (modal.querySelector('#admin-dispatch-modal').style.display !== 'flex') setPageBackgroundInert(false);
     remitOpener?.focus?.();
   };
   modal.querySelector('#btn-cancel-dispatch').addEventListener('click', closeDispatch);
@@ -1612,7 +1699,7 @@ export function createAdminConsoleModal() {
         tracking_number: tracking, shipping_cost_minor: costMinor,
         tracking_url: trackingUrl || null,
       });
-      modal.querySelector('#admin-dispatch-modal').style.display = 'none';
+      closeDispatch();
       await loadActiveTabData();
     } catch (requestError) {
       error.textContent = requestError.message || 'Unable to dispatch this order.';
@@ -1661,7 +1748,7 @@ export function createAdminConsoleModal() {
         deductions, final_statement: form.querySelector('#remit-final-statement').checked,
       });
       form.reset();
-      modal.querySelector('#admin-remittance-modal').style.display = 'none';
+      closeRemittance();
       await loadActiveTabData();
     } catch (requestError) {
       error.textContent = requestError.message || 'Unable to record settlement.';
@@ -1672,7 +1759,7 @@ export function createAdminConsoleModal() {
     }
   });
 
-  const overlay = createOverlay({ element: modal, onEscape: () => {
+  const overlay = page ? null : createOverlay({ element: modal, onEscape: () => {
     if (modal.querySelector('#admin-dispatch-modal').style.display === 'flex') { closeDispatch(); return true; }
     if (modal.querySelector('#admin-remittance-modal').style.display === 'flex') { closeRemittance(); return true; }
     return false;
@@ -1684,9 +1771,47 @@ export function createAdminConsoleModal() {
   modal.querySelector('.drawer-backdrop').addEventListener('click', close);
   modal.querySelector('#admin-close-btn').addEventListener('click', close);
 
+  function pageKeyDown(event) {
+    const panel = ['#admin-dispatch-modal', '#admin-remittance-modal']
+      .map(selector => modal.querySelector(selector)).find(node => node.style.display === 'flex');
+    if (!panel) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (canLeave()) { closeDispatch(); closeRemittance(); dirty = false; }
+    } else if (event.key === 'Tab') {
+      const nodes = [...panel.querySelectorAll('button, input, select, textarea')]
+        .filter(node => !node.disabled && node.type !== 'hidden');
+      if (event.shiftKey && (document.activeElement === nodes[0] || !panel.contains(document.activeElement))) {
+        event.preventDefault(); nodes.at(-1)?.focus();
+      } else if (!event.shiftKey && (document.activeElement === nodes.at(-1) || !panel.contains(document.activeElement))) {
+        event.preventDefault(); nodes[0]?.focus();
+      }
+    }
+  }
+  const beforeUnload = event => {
+    if (dirty) { event.preventDefault(); event.returnValue = ''; }
+  };
+  if (page) {
+    for (const selector of ['#admin-dispatch-modal', '#admin-remittance-modal']) {
+      const panel = modal.querySelector(selector);
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-modal', 'true');
+      panel.setAttribute('aria-label', selector.includes('dispatch') ? 'Dispatch order' : 'COD settlement');
+    }
+    document.addEventListener('keydown', pageKeyDown);
+    window.addEventListener('beforeunload', beforeUnload);
+  }
+
   return {
     element: modal,
     open,
     close,
+    selectTab,
+    canLeave,
+    destroy() {
+      close(); unsubscribeSession();
+      document.removeEventListener('keydown', pageKeyDown);
+      if (page) window.removeEventListener('beforeunload', beforeUnload);
+    },
   };
 }

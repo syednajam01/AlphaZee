@@ -9,7 +9,6 @@ import { createCartDrawer } from './components/CartDrawer.js';
 import { createProductModal } from './components/ProductModal.js';
 import { createMobileNavDrawer } from './components/MobileNavDrawer.js';
 import { createCheckoutView } from './components/CheckoutView.js';
-import { createAdminConsoleModal } from './components/AdminConsole.js';
 import { createOrderTrackingModal } from './components/OrderTrackingModal.js';
 
 export function initApp() {
@@ -22,7 +21,6 @@ export function initApp() {
 
   // 1. Create Overlays & Modals
   const checkoutView = createCheckoutView();
-  const adminConsole = createAdminConsoleModal();
   const orderTracking = createOrderTrackingModal();
   const cartDrawer = createCartDrawer(() => {
     checkoutView.open();
@@ -82,11 +80,6 @@ export function initApp() {
   app.appendChild(main);
   app.appendChild(footer);
 
-  // Connect Admin trigger in footer
-  footer.querySelector('a[href="#admin"]')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    adminConsole.open();
-  });
 
   // Append overlay dialogs
   app.appendChild(cartDrawer.backdrop);
@@ -96,7 +89,6 @@ export function initApp() {
   app.appendChild(productModal.element);
   app.appendChild(checkoutView.element);
   app.appendChild(orderTracking.element);
-  app.appendChild(adminConsole.element);
 
   // Header, footer and mobile links all open the same tracking flow.
   app.querySelectorAll('a[href="#track"]').forEach(link => {

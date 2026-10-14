@@ -27,6 +27,10 @@ export function createMockElement(tagName) {
     },
 
     setAttribute(name, val) {
+      if (name.startsWith('data-')) {
+        const key = name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        this.dataset[key] = String(val);
+      }
       if (name === 'disabled') { this.disabled = true; return; }
       if (name === 'style') {
         if (typeof val === 'string') {

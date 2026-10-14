@@ -12,6 +12,7 @@ frontend/dist/
 .env.production
 .env.docker.local
 .env.browser-test
+.local/
 .DS_Store
 Thumbs.db
 *.log

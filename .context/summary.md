@@ -1,6 +1,6 @@
 # AlphaZee — short operating guide
 
-Updated 2026-10-13 after checking the application code, Compose files, flow runbooks, control register and verification evidence. Terminal HTTP recheck: database connected, catalog empty, public checkout disabled, payment capability COD only. No browser was used.
+Updated 2026-10-14 through M1. Normal API checks: database connected, catalog empty, public checkout disabled, COD capability only. Isolated Chrome verified the direct owner dashboard/session/navigation at desktop/mobile sizes; complete commerce browser journeys remain pending.
 
 ## 1. What the app is
 
@@ -21,7 +21,7 @@ If that environment file is missing, copy `.env.docker.local.example` to `.env.d
 
 Startup order: **PostgreSQL healthy → migrations to head → API healthy → Vite frontend**. Source changes reload locally. In the page, `main.js` loads `app.js`, builds sections/dialogs, fetches capabilities/catalog and restores saved cart state. Startup/API failures show recovery messages.
 
-Create your owner credentials interactively, then use the footer's Owner/Admin Console link:
+Create your owner credentials interactively, then open **http://localhost:13000/admin** (also linked from the footer):
 
 ```powershell
 docker compose --env-file .env.docker.local exec api python scripts/provision_owner.py YOUR_USERNAME
@@ -40,7 +40,7 @@ There is no default login. Add `--reset-password` to reset that owner and revoke
 
 ## 4. Owner and fulfillment flow
 
-Console tabs: **Overview, Orders, Inventory, Coupons, Returns, Suppliers, Analytics**. Owners can create suppliers, map catalog variants to supplier wholesale costs, adjust stock with a reason/version check, manage coupons, refresh reports and operate orders.
+The direct dashboard has **Overview, Products, Collections, Media, Inventory, Suppliers, Orders and payments, Returns and exchanges, Coupons, Reports**. Products/Collections/Media are explicit placeholders until M2–M4. Existing operations reuse the same backend: supplier creation/mapping, audited stock, coupons, orders, returns and reports. Section URLs support refresh/back/forward; logout/expiry returns to login.
 
 **Order placed → supplier confirms allocations → dispatch with courier/tracking/cost → in transit/out for delivery → delivered.** Bank orders also require verified funds before dispatch. Courier booking, tracking updates and money verification are manual owner operations; there is no automatic courier or payment-gateway integration.
 
@@ -66,6 +66,6 @@ Production uses `compose.prod.yml`: private DB/API, automatic migrations, static
 
 Completed: checkout containment (0), startup/dialog/button repairs (L1), owner authentication (A), retry/concurrency safety (B), bank/supplier review (C), stock/shipment/inspection corrections (D/E), Docker packaging, secure customer access/exchanges (G), settlement/refund accounting (F), remaining owner frontend wiring (L2), and terminal verification (V). Development migration head: `c94e31f7d562`.
 
-Latest recorded verification: **209 backend tests; 83 frontend tests; frontend and production Docker builds; isolated migration upgrade/downgrade/re-upgrade; real PostgreSQL concurrency; local HTTP checks passed**. These suites were not rerun for this documentation-only update. See [verification report](repair_verification_report.md) and [control inventory](frontend_control_inventory.md).
+Earlier full verification: **209 backend tests**, migrations and real PostgreSQL concurrency passed. M1: **87 frontend tests, 25 focused backend auth/session tests, builds and 13 isolated Chrome checks passed**; development fingerprints stayed unchanged. See [M1 guide](m1_dashboard_runbook.md), [earlier verification](repair_verification_report.md) and [control inventory](frontend_control_inventory.md).
 
-Still needed: real catalog/business setup, valid bank details, support contact, approved privacy/terms, verified recovery channel, production DNS/TLS/credentials, assessment of two reported npm advisories, and browser desktop/mobile/persistence acceptance. Support/legal placeholders remain unavailable. No public production deployment or browser acceptance has been completed; public checkout stays closed.
+Still needed: catalog/media authoring (M2–M4), real catalog/business setup, valid bank details, support/legal/recovery configuration, production DNS/TLS/credentials, assessment of two reported npm advisories, and complete catalog/commerce browser acceptance. No public production deployment has been completed; public checkout stays closed.
