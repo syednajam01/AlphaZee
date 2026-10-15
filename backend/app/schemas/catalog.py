@@ -98,6 +98,22 @@ class CollectionListResponse(BaseModel):
 # ── Product (list item) ────────────────────────────────────────────────────────
 
 
+class PublicMediaSchema(BaseModel):
+    """Explicit customer metadata; never includes filenames, storage keys or owners."""
+    id: str
+    role: str
+    variant_id: Optional[int] = None
+    display_order: int
+    alt_text: str
+    kind: str
+    content_type: str
+    url: str
+    width: int
+    height: int
+    duration_ms: Optional[int] = None
+    poster_url: Optional[str] = None
+
+
 class ProductSummarySchema(BaseModel):
     """
     Condensed product representation used in listing responses.
@@ -116,6 +132,8 @@ class ProductSummarySchema(BaseModel):
     image_url: Optional[str] = None
     badge: Optional[str] = None
     is_hero: bool
+    image_alt: str = ''
+    availability: str = 'unknown'
 
     # Lowest active variant price (for card display)
     min_price: Optional[CurrencyAmount] = Field(
@@ -164,6 +182,8 @@ class HeroProductSchema(BaseModel):
     image_url: Optional[str] = None
     badge: Optional[str] = None
     is_hero: bool = True
+    image_alt: str = ''
+    availability: str = 'unknown'
     hero_order: Optional[int] = None
     hero_benefit: Optional[str] = None
     hero_image_url: Optional[str] = None
@@ -199,3 +219,4 @@ class ProductDetailSchema(BaseModel):
     is_hero: bool
     hero: Optional[HeroMetaSchema] = None
     variants: list[VariantSchema]
+    media: list[PublicMediaSchema] = Field(default_factory=list)

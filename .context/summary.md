@@ -1,12 +1,12 @@
 # AlphaZee — short operating guide
 
-Updated 2026-10-14 through M2. Catalog lifecycle APIs now support drafts, versioned edits and archival; upload/editor screens remain M3/M4 work. The stale Docker Vite `/admin` module was fixed with polling/restart. Normal catalog is empty and public checkout stays disabled; isolated browser and database verification are recorded in [M2 guide](m2_catalog_runbook.md).
+Updated 2026-10-15 through M8. `/admin` supports catalog/media/supplier/stock authoring and order/payment/return operations. The storefront shows managed media and stable-ID carts. The `syed123` development account persists. **Checkout is open in the isolated lab at http://127.0.0.1:13001**; normal/public checkout remains closed, as selected. See [checkout lab guide](m8_checkout_lab_runbook.md), [operations](m7_operations_runbook.md), [storefront](m6_storefront_runbook.md) and [backup](m3_media_runbook.md). M9 is next.
 
 ## 1. What the app is
 
 AlphaZee is a Pakistan apparel/essentials store with supplier-based fulfillment and an owner console. The frontend uses Vite, vanilla JavaScript and CSS; FastAPI/Python handles `/api/v1`; PostgreSQL stores commerce data; SQLAlchemy/Alembic manage models and migrations. Prices use integer paisas internally (100 = PKR 1).
 
-The main flows are implemented, but the site is **not open for public orders**. Currently there are no products or collections in development. Owner APIs can save incomplete drafts, variants and collections; the full editing screen and managed uploads are still pending. New publication requires validated media from M3. `backend/seed.py` is an optional sample tool, not the intended real-catalog workflow.
+The main flows are implemented, but the site is **not open for public orders**. Currently there are no products or collections in development. The owner creates collections/drafts/variants, uploads validated media and publishes through the dashboard. Product fields and media save atomically. Beside each saved variant, load supplier/stock, register or choose a supplier, save exact wholesale PKR cost, then receive stock with a reason/reference/note. `backend/seed.py` is an optional sample tool, not the intended real-catalog workflow.
 
 ## 2. Start, access and stop
 
@@ -19,6 +19,8 @@ docker compose --env-file .env.docker.local ps
 
 If that environment file is missing, copy `.env.docker.local.example` to `.env.docker.local` first. Website: **http://localhost:13000**. API/docs: **http://localhost:18000/docs**. PostgreSQL: loopback **5433**. Without the environment override, Compose defaults to website 3000/API 8000; use one configuration consistently.
 
+For open SAMPLE checkout, run `docker compose -f compose.checkout-lab.yml up --build --wait -d`. Lab website/admin: **http://127.0.0.1:13001** and `/admin`; API 18001, DB 5434. Create your separate persistent lab login with `docker compose -f compose.checkout-lab.yml exec api python scripts/provision_owner.py YOUR_LAB_USERNAME`. The lab has independent DB/media volumes and three distinct session-cookie names. COD and bank verification are simulated; no real money transfer. Use the [M8 guide](m8_checkout_lab_runbook.md) to explicitly export selected catalog/media read-only, dry-run/import as drafts, choose test stock and publish in the lab. No customer/order/session data or source reservations are copied. Same-bundle reruns preserve existing lab edits/stock.
+
 Startup order: **PostgreSQL healthy → migrations to head → API healthy → Vite frontend**. Source changes reload locally. In the page, `main.js` loads `app.js`, builds sections/dialogs, fetches capabilities/catalog and restores saved cart state. Startup/API failures show recovery messages.
 
 Create your owner credentials interactively, then open **http://localhost:13000/admin** (also linked from the footer):
@@ -27,12 +29,12 @@ Create your owner credentials interactively, then open **http://localhost:13000/
 docker compose --env-file .env.docker.local exec api python scripts/provision_owner.py YOUR_USERNAME
 ```
 
-There is no default login. Add `--reset-password` to reset that owner and revoke sessions. Diagnose with `docker compose --env-file .env.docker.local logs --tail=100 migrate api web`; readiness is `/api/v1/ready`. Stop with `docker compose --env-file .env.docker.local down`; database data stays in its volume. `down -v` removes volumes and must not be used to preserve data.
+Your requested `syed123` account is already provisioned in the persistent development database. Its password is hashed; it is not saved in source or this guide. Sessions expire after eight hours, so signing in again may be needed. Other accounts have no default login. Add `--reset-password` to reset an owner and revoke sessions. Diagnose with `docker compose --env-file .env.docker.local logs --tail=100 migrate api web`; readiness is `/api/v1/ready`. Stop with `docker compose --env-file .env.docker.local down`; database data stays in its volume. `down -v` removes volumes and must not be used to preserve data.
 
 ## 3. Customer journey
 
-- **Browse:** hero carousel, collections/filter tabs, paginated products, detail dialog, size/color selection, navigation, mobile menu and FAQs. Catalog comes from the API; loading, empty, unavailable and retry states are handled.
-- **Cart:** add variants, adjust quantities, remove items and see PKR totals. Local storage retains the cart; opening it rechecks live price/availability. Offline or unavailable items cannot proceed. Dialogs support close/backdrop/Escape and focus handling.
+- **Browse:** managed hero, collection covers, paginated cards and fresh product details with description/material/care/sizing. Ordered images/videos include alt text, posters, controls and variant associations. Videos wait for selection/play and pause on close/change. Missing images use the neutral placeholder; empty/error/retry states are real. Existing navigation, mobile menu and FAQs remain.
+- **Cart:** add exact variants, adjust quantities/remove items and see PKR totals and managed images in cart/checkout. Storage retains items; stable product/variant IDs recover from slug changes and refresh prices/details/images. Inactive, archived, unpublished, sold-out or unverified items cannot proceed. Owner changes, tab return and refresh update the catalog. Dialogs retain keyboard/focus/close handling.
 - **Checkout:** customer/address details, COD or configured bank transfer, coupon validation and confirmation are implemented. Server-calculated prices, stock holds and coupon usage commit together. A stored attempt key/payload lets a lost-response retry recover the same order without duplicate stock or coupon use. Cart changes invalidate an applied coupon.
 - **Current restriction:** normal development and production reject order creation with 503. Checkout is permitted only with `APP_ENV=test`, `TEST_CHECKOUT_ENABLED=true` and a loopback PostgreSQL database ending `_test`. Production launch needs a deliberate gate change; the test flag is not a production switch.
 - **Track/access:** confirmation provides a private code once; save it. Order number plus code establishes an order-scoped HttpOnly session for tracking, payment proof and returns. Phone/order number alone cannot unlock an order. Codes expire after 180 days; sessions after 30 days. Owner-verified recovery issues a new code; revocation invalidates access.
@@ -40,13 +42,13 @@ There is no default login. Add `--reset-password` to reset that owner and revoke
 
 ## 4. Owner and fulfillment flow
 
-The direct dashboard has **Overview, Products, Collections, Media, Inventory, Suppliers, Orders and payments, Returns and exchanges, Coupons, Reports**. Products/Collections/Media are explicit placeholders until M2–M4. Existing operations reuse the same backend: supplier creation/mapping, audited stock, coupons, orders, returns and reports. Section URLs support refresh/back/forward; logout/expiry returns to login.
+The direct dashboard has **Overview, Products, Collections, Media, Inventory, Suppliers, Orders and payments, Returns and exchanges, Coupons, Reports**. Products supports search/filter/pagination, draft editing and lifecycle actions; Collections supports covers/activation/order; Media supports multiple uploads, preview/progress/retry/cancel, poster assignment and guarded deletion. The product editor supports exact PKR variant prices, alt text, variant media and keyboard gallery ordering. Failed saves preserve input; stale edits require review/reload. Existing operations reuse the same backend: supplier creation/mapping, audited stock, coupons, orders, returns and reports. Section URLs support refresh/back/forward; logout/expiry returns to login.
 
 **Order placed → supplier confirms allocations → dispatch with courier/tracking/cost → in transit/out for delivery → delivered.** Bank orders also require verified funds before dispatch. Courier booking, tracking updates and money verification are manual owner operations; there is no automatic courier or payment-gateway integration.
 
 For bank transfer, supply valid bank configuration first. After supplier acceptance, preview instructions, send them through the customer channel, then record that handoff. This saves the account snapshot and starts a four-hour deadline. Customer proof is a URL/reference, not automatic bank verification. **Check Expired Bank Transfers** explicitly flags overdue payments; merely opening Orders does not. Review cleared/pending funds, then verify receipt or cancel/release with an audit note. Expiry alone never releases stock.
 
-Stock rules: placing an order holds availability; confirmation preserves the hold; dispatch deducts physical stock once and releases the hold; delivery deducts nothing further. Eligible pre-dispatch cancellation releases holds. Concurrent buyers, retries and adjustments cannot oversell reserved stock. Historical shipments needing reconciliation require explicit owner decisions.
+Stock rules: placing an order holds availability; confirmation preserves it; dispatch deducts physical stock once and releases the hold; delivery deducts nothing further. Eligible pre-dispatch cancellation releases holds. Variant/Inventory disclosures show physical, reserved, available and paginated quantities linked to private orders; unreconciled legacy holds remain reserved. Supplier switches preserve the previous supplier's stock/holds and order cost snapshots. Audited adjustments use expected versions and cannot cut below holds. Public availability also requires active supplier/mapping, cost and positive available stock; private costs and holds stay hidden. Checkout locks remain authoritative.
 
 ## 5. Returns, exchanges and money
 
@@ -64,8 +66,10 @@ Production uses `compose.prod.yml`: private DB/API, automatic migrations, static
 
 ## 7. Completed work and remaining limits
 
-Completed: earlier commerce repairs (0/L1/A/B/C/D/E/G/F/L2/V), Docker packaging, M0 backup/contracts, M1 direct dashboard and M2 catalog lifecycle/APIs. Development migration head: `e15a9c2b7046`.
+Completed: earlier commerce repairs (0/L1/A/B/C/D/E/G/F/L2/V), Docker packaging and M0–M8: backup/contracts, dashboard, catalog lifecycle, durable media, authoring, supplier/stock, storefront/cart, operations/reports and independent checkout lab/selected-catalog copying. Migration head: `f27b6d91c083` (M5–M8 need no migration). Media persists in each project’s `catalog_media` volume; back up database and files together.
 
-M2 verification: **218 backend tests, final 17 focused catalog tests, 88 frontend tests, builds, real edit-version contention and isolated migration/backup checks passed**. Browser checks include the actual `/admin` login and isolated draft/publication guard. See [M2 guide](m2_catalog_runbook.md) and [earlier verification](repair_verification_report.md).
+M8 verification: **260 backend tests, 107 frontend tests, development/production builds and 98 lab Chrome checks passed**, with no unexpected JavaScript errors. Development still has no sample catalog/orders, the owner remains enabled and its checkout closed. Evidence is in `owner_catalog_phase_status.json`, the M8 browser/runtime reports and phase guides.
 
-Still needed: media uploads and authoring screens (M3/M4), supplier/stock detail integration, real catalog/business setup, valid bank/support/legal/recovery configuration, isolated checkout lab and complete commerce browser acceptance. No public production deployment has been completed; public checkout stays closed.
+M7 adds order search/status/pagination and evidence, explicit cleared-funds review, replacement shipment status/settlement, return/refund history and one-time access recovery. Exact PKR inputs preserve paisas. Overview/Reports distinguish delivered sales, cash after refunds, courier-held COD, refund outstanding and estimated contribution. Successful empty API responses now refresh correctly. Verification details are in the phase register and M7 guide.
+
+Still needed (M9): final milestone acceptance/handoff, including the purchased-product archive/history journey and broader mobile checkout review. Your real catalog/business setup and valid bank/support/legal/recovery configuration remain owner setup tasks. No public production deployment has been completed; public checkout stays closed.

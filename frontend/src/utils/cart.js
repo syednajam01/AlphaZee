@@ -1,5 +1,6 @@
 import { formatPkr, extractPriceMinor } from './money.js';
-import { fetchProductBySlug } from './api.js';
+import { fetchProductBySlug, fetchProductById } from './api.js';
+import { variantImage } from './productMedia.js';
 
 const STORAGE_KEY = 'alphazee_cart_v2';
 const LEGACY_STORAGE_KEY = 'alphazee_cart_v1';
@@ -199,9 +200,7 @@ class CartStore {
       const newQty = Math.min(this.items[existingIndex].quantity + valid.quantity, MAX_QUANTITY_PER_ITEM);
       this.items[existingIndex].quantity = newQty;
       // Update price/availability if newer data provided
-      this.items[existingIndex].price_minor = valid.price_minor;
-      this.items[existingIndex].is_available = valid.is_available;
-      this.items[existingIndex].availability = valid.availability;
+      this.items[existingIndex] = { ...valid, quantity: newQty };
     } else {
       this.items.push(valid);
     }
@@ -252,30 +251,31 @@ class CartStore {
     this.notify();
 
     try {
-      // 1. Items without a slug cannot be verified against the catalog — mark unverified immediately
+      // Items with neither stable identity nor a legacy slug cannot be verified.
       for (const item of this.items) {
-        if (!item.slug || typeof item.slug !== 'string' || !item.slug.trim()) {
+        if (!item.product_id && (!item.slug || typeof item.slug !== 'string' || !item.slug.trim())) {
           item.is_available = false;
           item.availability = 'unverified';
         }
       }
 
-      // 2. Find all distinct valid product slugs to check
-      const slugsToCheck = [
-        ...new Set(
-          this.items
-            .map((i) => i.slug)
-            .filter((s) => typeof s === 'string' && s.trim())
-        ),
-      ];
+      // One fresh lookup per product; stable IDs also survive slug changes.
+      const targets = new Map();
+      const checked = new Set();
+      for (const item of this.items) {
+        const key = item.product_id ? `id:${item.product_id}` : `slug:${item.slug}`;
+        if (item.product_id || item.slug?.trim()) targets.set(key, {id:item.product_id, slug:item.slug});
+      }
 
-      for (const slug of slugsToCheck) {
+      for (const target of targets.values()) {
+        const matches = item => target.id ? item.product_id === target.id : !item.product_id && item.slug === target.slug;
+        this.items.filter(matches).forEach(item => checked.add(item));
         try {
-          const product = await fetchProductBySlug(slug);
-          if (!product || !Array.isArray(product.variants)) {
+          const product = target.id ? await fetchProductById(target.id) : await fetchProductBySlug(target.slug);
+          if (!product || !Array.isArray(product.variants) || (target.id && product.id && product.id !== target.id)) {
             // Malformed product payload: mark matching items unverified
             for (const item of this.items) {
-              if (item.slug === slug) {
+              if (matches(item)) {
                 item.is_available = false;
                 item.availability = 'unverified';
               }
@@ -284,12 +284,19 @@ class CartStore {
           }
 
           for (const item of this.items) {
-            if (item.slug === slug) {
+            if (matches(item)) {
               const liveVariant = product.variants.find(
                 (v) => String(v.id) === String(item.variant_id)
               );
 
               if (liveVariant) {
+                item.slug = product.slug || item.slug;
+                item.product_id = product.id || item.product_id;
+                item.title = product.title || item.title;
+                item.sku = liveVariant.sku ?? item.sku;
+                item.size = liveVariant.size === undefined ? item.size : liveVariant.size;
+                item.color = liveVariant.color === undefined ? item.color : liveVariant.color;
+                item.image_url = variantImage(product, liveVariant.id) || '';
                 const liveMinor = extractPriceMinor(liveVariant.price ?? liveVariant.price_minor);
                 const hasValidPrice = liveMinor !== null;
                 if (hasValidPrice) {
@@ -309,7 +316,7 @@ class CartStore {
           // If product is 404 (deactivated or deleted), mark all items for this product as unavailable
           if (err && (err.status === 404 || err.message?.includes('404'))) {
             for (const item of this.items) {
-              if (item.slug === slug) {
+              if (matches(item)) {
                 item.is_available = false;
                 item.availability = 'unavailable';
               }
@@ -317,7 +324,7 @@ class CartStore {
           } else {
             // Network failure or offline: preserve item in cart but mark availability as unverified
             for (const item of this.items) {
-              if (item.slug === slug) {
+              if (matches(item)) {
                 item.is_available = false;
                 item.availability = 'unverified';
               }
@@ -326,6 +333,9 @@ class CartStore {
         }
       }
 
+      for (const item of this.items) {
+        if (!checked.has(item)) { item.is_available = false; item.availability = 'unverified'; }
+      }
       this.save();
     } finally {
       this.isReconciling = false;

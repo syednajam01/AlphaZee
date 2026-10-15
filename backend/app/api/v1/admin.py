@@ -14,7 +14,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -224,7 +224,7 @@ def adjust_inventory_endpoint(
             new_on_hand=new_on_hand,
             reason=payload.reason,
             expected_version=payload.expected_version,
-            notes=payload.reference_id,
+            notes=' | '.join(value for value in (payload.reference_id, payload.notes) if value) or None,
         )
         db.commit()
     except StaleInventoryError as err:
@@ -269,11 +269,18 @@ def adjust_inventory_endpoint(
 )
 def list_admin_orders(
     order_status: Optional[str] = Query(None, description="Filter by status: placed, confirmed, delivered, cancelled"),
+    order_id: Optional[uuid.UUID] = Query(None),
+    q: Optional[str] = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> AdminOrderListResponse:
     base_stmt = select(Order)
+    if order_id: base_stmt = base_stmt.where(Order.id == order_id)
+    if q and q.strip():
+        term = '%' + q.strip().replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+        base_stmt = base_stmt.where(or_(Order.order_number.ilike(term, escape='\\'),
+                                       Order.customer_phone.ilike(term, escape='\\')))
     if order_status:
         base_stmt = base_stmt.where(Order.order_status == order_status.strip().lower())
 
@@ -281,7 +288,7 @@ def list_admin_orders(
     total = db.scalar(count_stmt) or 0
 
     stmt = (
-        base_stmt.order_by(Order.placed_at.desc())
+        base_stmt.order_by(Order.placed_at.desc(), Order.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
@@ -563,7 +570,8 @@ def inspect_rto_endpoint(
 def get_admin_overview(db: Session = Depends(get_db)) -> AdminOverviewMetricsResponse:
     # A bank prepayment is cash, not a delivered sale. Keep the legacy field name
     # for API compatibility while showing the delivered-sales definition.
-    gross_rev_minor = get_financial_summary(db)['delivered_sales_minor']
+    financial = get_financial_summary(db)
+    gross_rev_minor = financial['delivered_sales_minor']
 
     # 2. Orders breakdown
     total_orders = db.scalar(select(func.count(Order.id))) or 0
@@ -596,6 +604,10 @@ def get_admin_overview(db: Session = Depends(get_db)) -> AdminOverviewMetricsRes
         delivered_orders=delivered_orders,
         total_skus=total_skus,
         low_stock_skus=low_stock_count,
+        cash_received_minor=financial['business_cash_received_minor'],
+        courier_held_cod_minor=financial['courier_held_cod_minor'],
+        refund_outstanding_minor=financial['refund_outstanding_minor'],
+        estimated_contribution_minor=financial['gross_profit_minor'],
     )
 
 
@@ -696,14 +708,16 @@ def assign_supplier_variant_endpoint(
             detail=f"Supplier {supplier_id} not found.",
         )
 
-    variant = db.get(Variant, payload.variant_id)
+    variant = db.scalar(select(Variant).where(Variant.id == payload.variant_id).with_for_update().execution_options(populate_existing=True))
     if not variant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Variant {payload.variant_id} not found in catalog.",
         )
 
-    # If setting as active, deactivate other supplier variants for this variant_id
+    if payload.active and supplier.status != 'active':
+        raise HTTPException(422, 'Choose an active supplier before enabling its mapping')
+    # The variant lock serializes assignment with checkout and other assignments.
     if payload.active:
         stmt = (
             select(SupplierVariant)
@@ -716,6 +730,7 @@ def assign_supplier_variant_endpoint(
         for sv in existing_actives:
             if sv.supplier_id != supplier_id:
                 sv.active = False
+        db.flush()  # Release the partial unique active-mapping index before insert.
 
     # Check if a link already exists between this supplier and variant
     existing_sv = db.scalars(
@@ -739,13 +754,19 @@ def assign_supplier_variant_endpoint(
         db.add(target_sv)
         db.flush()
 
-        # Ensure an inventory balance exists
-        bal = db.get(InventoryBalance, target_sv.id)
-        if not bal:
-            bal = InventoryBalance(supplier_variant_id=target_sv.id, on_hand=0, version=1)
-            db.add(bal)
+    # A retained legacy link may not yet have a balance. Creating an empty
+    # balance never moves stock or reservations from another supplier.
+    bal = db.get(InventoryBalance, target_sv.id)
+    if not bal:
+        bal = InventoryBalance(supplier_variant_id=target_sv.id, on_hand=0, version=1)
+        db.add(bal)
 
-    db.commit()
+    try:
+        db.flush()
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, 'Supplier mapping changed concurrently; reload and retry') from None
     db.refresh(target_sv)
 
     return SupplierVariantResponseSchema(

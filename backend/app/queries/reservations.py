@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import select, or_
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.inventory import (
@@ -28,6 +28,7 @@ from app.models.inventory import (
     SupplierVariant,
 )
 from app.queries.inventory import adjust_inventory
+from app.queries.stock_rules import holding_predicate
 
 
 def _utcnow() -> datetime:
@@ -73,8 +74,7 @@ def get_inventory_summary(
         select(StockReservation)
         .where(
             StockReservation.supplier_variant_id == supplier_variant_id,
-            or_(StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
-                StockReservation.legacy_stock_hold.is_(True)),
+            holding_predicate(),
         )
         .order_by(StockReservation.created_at.asc())
     )
@@ -152,8 +152,7 @@ def create_stock_reservation(
         select(StockReservation.quantity)
         .where(
             StockReservation.supplier_variant_id == supplier_variant_id,
-            or_(StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
-                StockReservation.legacy_stock_hold.is_(True)),
+            holding_predicate(),
         )
     )
     held = sum(db.scalars(held_stmt).all())

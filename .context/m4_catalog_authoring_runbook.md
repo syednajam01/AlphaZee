@@ -1,6 +1,6 @@
 # M4 product, collection and media authoring
 
-Implemented 2026-10-15 on the existing vanilla JavaScript dashboard. Open **http://localhost:13000/admin** and sign in with your provisioned account. Products, Collections and Media now have working authoring screens. M5 and later phases remain pending; implementation stops after M4 at the owner's request.
+Implemented 2026-10-15 on the existing vanilla JavaScript dashboard. Open **http://localhost:13000/admin** and sign in with your provisioned account. Products, Collections and Media have working authoring screens. This records M4's scope; subsequently authorized M5 is complete in [the supplier/stock guide](m5_supplier_stock_runbook.md). M6 onward remains pending.
 
 ## First product
 

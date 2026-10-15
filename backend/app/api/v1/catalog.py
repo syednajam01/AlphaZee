@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -26,6 +26,7 @@ from app.queries.catalog import (
     get_hero_products,
     get_min_price_minor,
     get_product_by_slug,
+    get_product_by_id,
 )
 from app.schemas.catalog import (
     CollectionListResponse,
@@ -39,13 +40,26 @@ from app.schemas.catalog import (
     VariantSchema,
 )
 
-router = APIRouter(tags=["catalog"])
+from app.queries.public_media import product_media, primary_alt, storefront_urls
+from app.queries.catalog_stock import public_availability
+
+
+def uncached_catalog(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+
+
+router = APIRouter(tags=["catalog"], dependencies=[Depends(uncached_catalog)])
+
+
+def purchase_state(product, availability):
+    states = [availability.get(v.id, 'unknown') for v in product.variants if v.is_active]
+    return 'available' if 'available' in states else ('unknown' if 'unknown' in states else 'unavailable')
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def _build_product_summary(product) -> ProductSummarySchema:
+def _build_product_summary(product, availability=None) -> ProductSummarySchema:
     min_minor = get_min_price_minor(product)
     return ProductSummarySchema(
         id=product.id,
@@ -53,14 +67,16 @@ def _build_product_summary(product) -> ProductSummarySchema:
         title=product.title,
         description=product.description,
         collection_id=product.collection_id,
-        image_url=product.image_url,
+        image_url=storefront_urls(product)['image_url'],
         badge=product.badge,
         is_hero=product.is_hero,
         min_price=CurrencyAmount.from_minor(min_minor) if min_minor is not None else None,
+        image_alt=primary_alt(product),
+        availability=purchase_state(product, availability or {}),
     )
 
 
-def _build_hero_product(product) -> HeroProductSchema:
+def _build_hero_product(product, availability=None) -> HeroProductSchema:
     min_minor = get_min_price_minor(product)
     return HeroProductSchema(
         id=product.id,
@@ -68,30 +84,36 @@ def _build_hero_product(product) -> HeroProductSchema:
         title=product.title,
         description=product.description,
         collection_id=product.collection_id,
-        image_url=product.image_url,
+        image_url=storefront_urls(product)['image_url'],
         badge=product.badge,
         is_hero=product.is_hero,
         hero_order=product.hero_order,
         hero_benefit=product.hero_benefit,
-        hero_image_url=product.hero_image_url,
-        hero_poster_url=product.hero_poster_url,
-        hero_video_url=product.hero_video_url,
+        hero_image_url=storefront_urls(product)['hero_image_url'],
+        hero_poster_url=storefront_urls(product)['hero_poster_url'],
+        hero_video_url=storefront_urls(product)['hero_video_url'],
         min_price=CurrencyAmount.from_minor(min_minor) if min_minor is not None else None,
+        image_alt=primary_alt(product),
+        availability=purchase_state(product, availability or {}),
     )
 
 
-def _build_product_detail(product) -> ProductDetailSchema:
+def _build_product_detail(product, db=None) -> ProductDetailSchema:
     hero = None
     if product.is_hero:
         hero = HeroMetaSchema(
             order=product.hero_order,
             benefit=product.hero_benefit,
-            image_url=product.hero_image_url,
-            poster_url=product.hero_poster_url,
-            video_url=product.hero_video_url,
+            image_url=storefront_urls(product)['hero_image_url'],
+            poster_url=storefront_urls(product)['hero_poster_url'],
+            video_url=storefront_urls(product)['hero_video_url'],
         )
 
-    variants = [VariantSchema.from_orm_model(v) for v in product.variants]
+    variants = [VariantSchema.from_orm_model(v) for v in sorted(product.variants, key=lambda row: row.id) if v.is_active]
+    if db is not None:
+        from app.queries.catalog_stock import public_availability
+        availability = public_availability(db, product.variants)
+        for variant in variants: variant.availability = availability[variant.id]
 
     return ProductDetailSchema(
         id=product.id,
@@ -99,7 +121,7 @@ def _build_product_detail(product) -> ProductDetailSchema:
         title=product.title,
         description=product.description,
         collection_id=product.collection_id,
-        image_url=product.image_url,
+        image_url=storefront_urls(product)['image_url'],
         badge=product.badge,
         is_hero=product.is_hero,
         hero=hero,
@@ -108,6 +130,7 @@ def _build_product_detail(product) -> ProductDetailSchema:
         care=product.care,
         sizing=product.sizing,
         variants=variants,
+        media=product_media(product),
     )
 
 
@@ -172,8 +195,9 @@ def list_products(
     products, total = get_active_products(
         db, collection_id=collection_id, page=page, page_size=page_size
     )
+    availability = public_availability(db, [v for p in products for v in p.variants if v.is_active])
     return ProductListResponse(
-        products=[_build_product_summary(p) for p in products],
+        products=[_build_product_summary(p, availability) for p in products],
         total=total,
         page=page,
         page_size=page_size,
@@ -193,7 +217,16 @@ def list_products(
 )
 def list_hero_products(db: Session = Depends(get_db)) -> list[HeroProductSchema]:
     products = get_hero_products(db)
-    return [_build_hero_product(p) for p in products]
+    availability = public_availability(db, [v for p in products for v in p.variants if v.is_active])
+    return [_build_hero_product(p, availability) for p in products]
+
+
+@router.get('/catalog/products/{product_id}', response_model=ProductDetailSchema)
+def product_by_identity(product_id: str, db: Session = Depends(get_db)):
+    product = get_product_by_id(db, product_id)
+    if product is None:
+        raise HTTPException(404, 'Product not found')
+    return _build_product_detail(product, db)
 
 
 @router.get(
@@ -213,4 +246,4 @@ def get_product(slug: str, db: Session = Depends(get_db)) -> ProductDetailSchema
     product = get_product_by_slug(db, slug)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
-    return _build_product_detail(product)
+    return _build_product_detail(product, db)

@@ -19,6 +19,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.catalog import Collection, Product, Variant
+from app.models.media import ProductMedia, MediaAsset
+
+
+def public_loads():
+    return (selectinload(Product.variants.and_(Variant.is_active.is_(True))),
+            selectinload(Product.media_links).selectinload(ProductMedia.asset).selectinload(MediaAsset.poster))
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -77,7 +83,7 @@ def get_active_products(
     data_stmt = (
         base_stmt
         .options(
-            selectinload(Product.variants.and_(Variant.is_active.is_(True)))
+            *public_loads()
         )
         .order_by(Product.created_at.desc(), Product.id.asc())
         .limit(page_size)
@@ -89,6 +95,14 @@ def get_active_products(
 
 
 def get_product_by_slug(db: Session, slug: str) -> Product | None:
+    return get_public_product(db, Product.slug == slug)
+
+
+def get_product_by_id(db: Session, product_id: str) -> Product | None:
+    return get_public_product(db, Product.id == product_id)
+
+
+def get_public_product(db: Session, identity) -> Product | None:
     """
     Return a single active product by slug with active variants eager-loaded.
 
@@ -99,13 +113,13 @@ def get_product_by_slug(db: Session, slug: str) -> Product | None:
         select(Product)
         .join(Collection, Product.collection_id == Collection.id)
         .where(
-            Product.slug == slug,
+            identity,
             Product.is_active.is_(True),
             Product.status == 'published',
             Collection.is_active.is_(True),
         )
         .options(
-            selectinload(Product.variants.and_(Variant.is_active.is_(True)))
+            *public_loads()
         )
     )
     return db.scalars(stmt).first()
@@ -129,7 +143,7 @@ def get_hero_products(db: Session) -> list[Product]:
             Collection.is_active.is_(True),
         )
         .options(
-            selectinload(Product.variants.and_(Variant.is_active.is_(True)))
+            *public_loads()
         )
         .order_by(Product.hero_order.asc().nullslast(), Product.id.asc())
     )

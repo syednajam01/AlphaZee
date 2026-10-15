@@ -1,0 +1,8 @@
+# M7 acceptance only; combine with compose.media-check.yml. Never use with development.
+services:
+  api:
+    environment:
+      BANK_NAME: Standard Chartered Bank
+      BANK_ACCOUNT_TITLE: Isolated M7 Simulation Only
+      BANK_ACCOUNT_NUMBER: '0000001123456702'
+      BANK_IBAN: PK36SCBL0000001123456702

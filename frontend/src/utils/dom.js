@@ -88,6 +88,10 @@ export function createSafeImageElement({
   fallback = PLACEHOLDER_IMAGE_URL,
 } = {}) {
   const img = document.createElement('img');
+  let replaced = false;
+  img.addEventListener?.('error', () => {
+    if (!replaced && fallback) { replaced = true; img.src = sanitizeMediaUrl(fallback); }
+  });
   const safeSrc = sanitizeMediaUrl(src, fallback);
   if (safeSrc) {
     img.src = safeSrc;

@@ -26,6 +26,7 @@ from app.api.v1 import orders as orders_router
 from app.api.v1 import returns as returns_router
 from app.api.v1 import owner_catalog as owner_catalog_router
 from app.api.v1 import media as media_router
+from app.api.v1 import owner_stock as owner_stock_router
 from app.config import settings
 
 # ── Application instance ──────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ app.include_router(auth_router.router, prefix="/api/v1")
 app.include_router(owner_catalog_router.router, prefix="/api/v1")
 app.include_router(media_router.router, prefix='/api/v1')
 app.include_router(media_router.public_router, prefix='/api/v1')
+app.include_router(owner_stock_router.router, prefix='/api/v1')
 app.add_middleware(media_router.LimitedUploadMiddleware)
 
 

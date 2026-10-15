@@ -1,4 +1,5 @@
 import { capabilities } from './utils/capabilities.js';
+import { cart } from './utils/cart.js';
 import { captureLandingUtmParams } from './utils/utm.js';
 import { createHeader } from './components/Header.js';
 import { createHero } from './components/Hero.js';
@@ -98,6 +99,31 @@ export function initApp() {
       orderTracking.open();
     });
   });
+
+  // Other owner tabs announce accepted catalog changes. Focus/page restoration
+  // also refetches so browser history and changes from another device recover.
+  let refreshTimer;
+  const refresh = () => {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      if (document.visibilityState === 'hidden') return;
+      hero.reload(); collections.reload(); featuredProducts.reload();
+      productModal.refresh(); cart.reconcileWithApi();
+    }, 100);
+  };
+  const storage = event => { if (event.key === 'alphazee_catalog_changed') refresh(); };
+  const visible = () => { if (document.visibilityState !== 'hidden') refresh(); };
+  window.addEventListener?.('storage', storage);
+  window.addEventListener?.('focus', refresh);
+  window.addEventListener?.('pageshow', refresh);
+  window.addEventListener?.('alphazee:catalog-change', refresh);
+  document.addEventListener?.('visibilitychange', visible);
+  return { destroy() {
+    clearTimeout(refreshTimer); hero.destroy(); productModal.close();
+    window.removeEventListener?.('storage', storage); window.removeEventListener?.('focus', refresh);
+    window.removeEventListener?.('pageshow', refresh); window.removeEventListener?.('alphazee:catalog-change', refresh);
+    document.removeEventListener?.('visibilitychange', visible);
+  } };
 }
 
 

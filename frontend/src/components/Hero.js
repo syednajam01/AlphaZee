@@ -11,16 +11,18 @@ export function createHero(onProductClick) {
   let heroItems = [];
   let autoAdvanceInterval = null;
   let isPlaying = true;
+  let generation = 0, alive = true;
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const saveData = navigator.connection && navigator.connection.saveData;
 
-  function renderFallback() {
+  function renderFallback(message = 'No featured products yet. Browse the catalog below.') {
     section.innerHTML = `
       <div class="hero-bg-container">
         <div class="hero-bg-media is-active" style="background: radial-gradient(circle at 70% 30%, #1A2621 0%, #0D1310 100%); width: 100%; height: 100%;"></div>
       </div>
       <div class="hero-overlay"></div>
       <div class="hero-motif" aria-hidden="true">AZ</div>
+      <div class="hero-catalog-status" role="status">${escapeHtml(message)}<button type="button" class="btn btn-secondary" data-hero-retry>Refresh featured products</button></div>
       <div class="container hero-content-wrapper" style="position: relative; z-index: 2; padding-top: var(--space-16); padding-bottom: var(--space-16);">
         <div style="max-width: 640px;">
           <span class="badge badge-accent hero-badge" style="margin-bottom: 16px;">Authentic Streetwear</span>
@@ -36,6 +38,7 @@ export function createHero(onProductClick) {
         </div>
       </div>
     `;
+    section.querySelector('[data-hero-retry]')?.addEventListener('click', loadHero);
   }
 
   function renderCarousel() {
@@ -51,7 +54,7 @@ export function createHero(onProductClick) {
     bgContainer.className = 'hero-bg-container';
 
     heroItems.forEach((item, index) => {
-      const posterUrl = sanitizeMediaUrl(item.hero_poster_url || item.image_url, '');
+      const posterUrl = sanitizeMediaUrl(item.hero_video_url ? (item.hero_poster_url || item.hero_image_url || item.image_url) : (item.hero_image_url || item.hero_poster_url || item.image_url), '');
       const videoUrl = sanitizeMediaUrl(item.hero_video_url, '');
 
       if (videoUrl && !prefersReducedMotion && !saveData) {
@@ -61,6 +64,7 @@ export function createHero(onProductClick) {
         video.muted = true;
         video.loop = true;
         video.playsInline = true;
+        video.preload = 'none';
         video.setAttribute('aria-hidden', 'true');
         video.dataset.videoSrc = videoUrl;
         if (index === 0) {
@@ -72,7 +76,8 @@ export function createHero(onProductClick) {
         const img = document.createElement('img');
         img.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
         img.src = posterUrl;
-        img.alt = item.title || 'AlphaZee featured piece';
+        img.alt = item.image_alt || item.title || 'AlphaZee featured piece';
+        img.loading = index === 0 ? 'eager' : 'lazy';
         img.dataset.slideIndex = index;
         bgContainer.appendChild(img);
       } else {
@@ -210,21 +215,32 @@ export function createHero(onProductClick) {
 
   // Load from API
   async function loadHero() {
+    const request = ++generation;
     try {
       const items = await fetchHeroProducts();
+      if (!alive || request !== generation) return;
+      if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+      section.querySelectorAll('video').forEach(video => video.pause?.());
+      currentSlide = 0;
       heroItems = Array.isArray(items) ? items : [];
       renderCarousel();
     } catch {
+      if (!alive || request !== generation) return;
+      if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+      section.querySelectorAll('video').forEach(video => video.pause?.());
       // API unavailable — render brand fallback cleanly without breaking
-      renderFallback();
+      renderFallback('Featured products could not load. Try again.');
     }
   }
 
   loadHero();
 
   section.destroy = () => {
+    alive = false; generation++;
+    section.querySelectorAll('video').forEach(video => video.pause?.());
     if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
   };
+  section.reload = loadHero;
 
   return section;
 }

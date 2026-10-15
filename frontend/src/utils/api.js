@@ -61,6 +61,7 @@ async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const headers = {
     'Accept': 'application/json',
+    ...(typeof options.body === 'string' ? {'Content-Type':'application/json'} : {}),
     ...options.headers,
   };
 
@@ -92,7 +93,12 @@ async function request(endpoint, options = {}) {
       throw new ApiError(message, res.status, errorData);
     }
 
-    return await res.json();
+    const data = res.status === 204 ? null : await res.json();
+    if (!['GET','HEAD','OPTIONS'].includes(method) && /^\/admin\/(products|collections|media|suppliers|inventory)(\/|$)/.test(endpoint)) {
+      try { window.localStorage?.setItem('alphazee_catalog_changed', `${Date.now()}-${Math.random()}`); } catch {}
+      if (typeof window !== 'undefined') window.dispatchEvent?.(new Event('alphazee:catalog-change'));
+    }
+    return data;
   } catch (err) {
     if (err instanceof ApiError) throw err;
     throw new ApiError(err.message || 'Network error while contacting store backend', 0);
@@ -113,6 +119,8 @@ export function transitionOwnerProduct(id, action, version) {
   return ownerCatalogWrite(`/admin/products/${encodeURIComponent(id)}/${action}`, { expected_version: version });
 }
 export function fetchOwnerCollections() { return request('/admin/collections'); }
+export function fetchVariantStock(id) { return request(`/admin/catalog/variants/${encodeURIComponent(id)}/stock`); }
+export function fetchStockHolds(id, params = {}) { return request(`/admin/inventory/${encodeURIComponent(id)}/holds?${new URLSearchParams(params)}`); }
 export function createOwnerCollection(payload) { return ownerCatalogWrite('/admin/collections', payload); }
 export function updateOwnerCollection(id, payload) { return ownerCatalogWrite(`/admin/collections/${encodeURIComponent(id)}`, payload); }
 export function reorderOwnerCollections(items) { return ownerCatalogWrite('/admin/collections/reorder', { items }); }
@@ -129,7 +137,7 @@ export function saveCollectionMedia(id, payload) { return ownerCatalogWrite(`/ad
 export function saveMediaPoster(id, payload) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/poster`, payload); }
 export function deleteOwnerMedia(id, expectedVersion) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/delete`, { expected_version: expectedVersion }); }
 
-// FormData deliberately lets the browser set its boundary. M4 adds picker/progress UI.
+// Let the browser set multipart boundaries; transport completion still awaits server acceptance.
 export function uploadOwnerMedia(file, { signal, onProgress } = {}) {
   const body = new FormData();
   body.append('file', file);
@@ -170,7 +178,7 @@ export function uploadOwnerMedia(file, { signal, onProgress } = {}) {
  * @returns {Promise<{ collections: Array, total: number }>}
  */
 export async function fetchCollections() {
-  return request('/collections');
+  return request('/collections', { cache: 'no-store' });
 }
 
 export async function fetchStorefrontCapabilities() {
@@ -193,7 +201,7 @@ export async function fetchProducts({ collectionId = null, page = 1, pageSize = 
   }
   query.set('page', String(page));
   query.set('page_size', String(pageSize));
-  return request(`/products?${query.toString()}`, { signal: signal || undefined });
+  return request(`/products?${query.toString()}`, { cache: 'no-store', signal: signal || undefined });
 }
 
 /**
@@ -201,7 +209,7 @@ export async function fetchProducts({ collectionId = null, page = 1, pageSize = 
  * @returns {Promise<Array>}
  */
 export async function fetchHeroProducts({ signal = null } = {}) {
-  return request('/products/hero', { signal: signal || undefined });
+  return request('/products/hero', { cache: 'no-store', signal: signal || undefined });
 }
 
 /**
@@ -212,7 +220,11 @@ export async function fetchHeroProducts({ signal = null } = {}) {
  * @returns {Promise<Object>}
  */
 export async function fetchProductBySlug(slug, { signal = null } = {}) {
-  return request(`/products/${encodeURIComponent(slug)}`, { signal: signal || undefined });
+  return request(`/products/${encodeURIComponent(slug)}`, { cache: 'no-store', signal: signal || undefined });
+}
+
+export function fetchProductById(id, { signal = null } = {}) {
+  return request(`/catalog/products/${encodeURIComponent(id)}`, { cache: 'no-store', signal: signal || undefined });
 }
 
 /**
@@ -373,8 +385,10 @@ export async function adjustAdminInventory(payload) {
  * @param {number} [params.pageSize=20]
  * @returns {Promise<{ orders: Array, total: number, page: number, page_size: number }>}
  */
-export async function fetchAdminOrders({ status = null, page = 1, pageSize = 20 } = {}) {
+export async function fetchAdminOrders({ status = null, page = 1, pageSize = 20, orderId = null, search = '' } = {}) {
   const query = new URLSearchParams();
+  if (orderId) query.set('order_id', orderId);
+  if (search.trim()) query.set('q', search.trim());
   if (status && status !== 'all') query.set('order_status', status);
   query.set('page', String(page));
   query.set('page_size', String(pageSize));

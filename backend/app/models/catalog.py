@@ -259,7 +259,7 @@ class Variant(Base):
         default=AvailabilityStatus.UNKNOWN,
     )
     """
-    Manually maintained availability status. Never derived from supplier stock.
+    Owner availability switch. Public eligibility additionally checks supplier/stock.
     - AVAILABLE   : can be purchased.
     - UNAVAILABLE : not currently purchasable.
     - UNKNOWN     : not yet confirmed.

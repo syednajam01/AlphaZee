@@ -4,7 +4,7 @@ import { cart } from '../utils/cart.js';
 import { capabilities, CHECKOUT_UNAVAILABLE } from '../utils/capabilities.js';
 import { storeConfig } from '../data/store-config.js';
 import { formatPkr } from '../utils/money.js';
-import { escapeHtml } from '../utils/dom.js';
+import { escapeHtml, createSafeImageElement } from '../utils/dom.js';
 import { submitOrder, uploadReceipt, validateCoupon, recoverPendingOrder, getPendingCheckoutAttempt, ApiError } from '../utils/api.js';
 import { getStoredUtmParams } from '../utils/utm.js';
 
@@ -43,6 +43,7 @@ export function createCheckoutView(onClose) {
 
         <h2 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 14px;">Order Summary</h2>
         <div id="checkout-items-list" style="margin-bottom: 20px;"></div>
+        <p id="checkout-catalog-status" role="status" aria-live="polite"></p>
 
         <!-- Promo Code Box -->
         <div style="margin-bottom: 20px; padding: 14px; background: #F8FAFC; border: 1px dashed var(--color-border); border-radius: var(--radius-btn);">
@@ -240,6 +241,9 @@ export function createCheckoutView(onClose) {
     const discountAmountEl = modal.querySelector('#checkout-discount-amount');
     const discountLabelEl = modal.querySelector('#checkout-discount-label');
     const placeBtn = modal.querySelector('#btn-place-order');
+    const catalogStatus = modal.querySelector('#checkout-catalog-status');
+    if (catalogStatus) catalogStatus.textContent = state.isReconciling ? 'Checking current catalog prices and availability…'
+      : state.hasUnavailable ? 'Some items are unavailable or could not be verified. Review your cart before ordering.' : '';
 
     const rawSubtotalMinor = state.items.reduce((acc, it) => acc + (it.price_minor * it.quantity), 0);
     const totals = calculateTotals(rawSubtotalMinor);
@@ -269,7 +273,7 @@ export function createCheckoutView(onClose) {
       }
     } else {
       if (placeBtn) {
-        placeBtn.disabled = !availability.checkoutEnabled;
+        placeBtn.disabled = !availability.checkoutEnabled || state.isReconciling || state.hasUnavailable;
         placeBtn.style.opacity = '1';
       }
       itemsList.innerHTML = state.items.map(item => {
@@ -280,6 +284,7 @@ export function createCheckoutView(onClose) {
 
         return `
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle);">
+            <span data-checkout-media="${item.variant_id}"></span>
             <div>
               <strong>${escapeHtml(item.title)}</strong> × ${item.quantity}
               <div style="font-size: 0.75rem; color: var(--color-text-muted);">
@@ -290,6 +295,9 @@ export function createCheckoutView(onClose) {
           </div>
         `;
       }).join('');
+      state.items.forEach(item => itemsList.querySelector(`[data-checkout-media="${item.variant_id}"]`)?.appendChild(
+        createSafeImageElement({src:item.image_url, alt:item.title, className:'checkout-item-image', width:48, height:48})
+      ));
     }
   }
 
@@ -305,6 +313,11 @@ export function createCheckoutView(onClose) {
     if (!code) return;
 
     const cartState = cart.getState();
+    if (cartState.isReconciling || cartState.hasUnavailable) {
+      errorBanner.textContent = 'Review your cart: prices and availability must be verified before ordering.';
+      errorBanner.style.display = 'block';
+      return;
+    }
     const rawSubtotalMinor = cartState.items.reduce((acc, it) => acc + (it.price_minor * it.quantity), 0);
 
     btnApplyCoupon.disabled = true;
@@ -572,6 +585,7 @@ export function createCheckoutView(onClose) {
       updateRadioStyle();
     }
     overlay.open();
+    cart.reconcileWithApi();
     renderCartState(cart.getState());
     capabilities.refresh().then(async () => {
       if (modal.hidden || !capabilities.getState().checkoutEnabled || !getPendingCheckoutAttempt() || recovering) return;

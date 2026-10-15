@@ -1,0 +1,75 @@
+# Independent local checkout lab. No development DB, credentials or media are shared.
+name: alphazee-checkout-lab
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: alphazee_lab
+      POSTGRES_PASSWORD: local-lab-only
+      POSTGRES_DB: alphazee_checkout_test
+    ports:
+      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:18001:8000"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U alphazee_lab -d alphazee_checkout_test]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    image: alphazee-checkout-lab-api:local
+    build: ./backend
+    network_mode: service:db
+    environment: &lab_environment
+      DATABASE_URL: postgresql://alphazee_lab:local-lab-only@127.0.0.1:5432/alphazee_checkout_test
+      APP_ENV: test
+      DEBUG: "false"
+      TEST_CHECKOUT_ENABLED: "true"
+      CHECKOUT_LAB: "true"
+      ALLOWED_ORIGINS: http://127.0.0.1:13001
+      BANK_NAME: SAMPLE SIMULATION - DO NOT TRANSFER
+      BANK_ACCOUNT_TITLE: SAMPLE local checkout lab
+      BANK_ACCOUNT_NUMBER: NO-REAL-ACCOUNT
+      BANK_IBAN: NO-REAL-IBAN
+    command: [alembic, upgrade, head]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+  api:
+    image: alphazee-checkout-lab-api:local
+    build: ./backend
+    network_mode: service:db
+    environment: *lab_environment
+    volumes:
+      - catalog_media:/var/lib/alphazee/catalog-media
+      - ./backend/.local/catalog-transfer:/transfer:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  web:
+    build:
+      context: ./frontend
+      target: development
+    environment:
+      VITE_HOST: 0.0.0.0
+      VITE_API_PROXY_TARGET: http://db:8000
+      VITE_CHECKOUT_LAB: "true"
+    command: [npm, run, dev, --, --host, 0.0.0.0]
+    ports:
+      - "127.0.0.1:13001:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+volumes:
+  pgdata:
+  catalog_media:

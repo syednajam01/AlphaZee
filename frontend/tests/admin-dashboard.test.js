@@ -13,10 +13,12 @@ function install(path = '/admin/orders') {
   doc.activeElement = doc.body;
   globalThis.document = doc;
   const listeners = new Map();
-  const location = { pathname: path };
+  const initial = new URL(path, 'http://localhost');
+  const location = { pathname: initial.pathname, search: initial.search };
+  const update = path => { const next = new URL(path, 'http://localhost'); location.pathname = next.pathname; location.search = next.search; };
   const history = { state: null,
-    replaceState(state, _, path) { this.state = state; location.pathname = path; },
-    pushState(state, _, path) { this.state = state; location.pathname = path; },
+    replaceState(state, _, path) { this.state = state; update(path); },
+    pushState(state, _, path) { this.state = state; update(path); },
     go() {},
   };
   globalThis.window = { location, history, confirm: () => true,
@@ -92,6 +94,18 @@ test('section parsing distinguishes admin root, reports and unknown paths', () =
   assert.equal(adminSection('/admin/reports'), 'reports');
   assert.equal(adminSection('/admin/orders/extra'), 'not-found');
   assert.equal(adminSection('/administrator'), 'not-found');
+});
+
+test('stock hold order query survives dashboard initialization and session restore', async () => {
+  const { location } = install('/admin/orders?order_id=sample-order');
+  const calls = [];
+  globalThis.fetch = async url => { calls.push(url); return {ok:true, status:200,
+    json:async()=>url.includes('/auth/') ? {csrf_token:'SAMPLE'} : {orders:[]} }; };
+  const dashboard = initAdminDashboard(); await dashboard.ready;
+  assert.equal(location.pathname,'/admin/orders');
+  assert.equal(location.search,'?order_id=sample-order');
+  assert.ok(calls.some(url => url.includes('/admin/orders?') && url.includes('order_id=sample-order')));
+  dashboard.destroy();
 });
 
 test('unsaved owner input guards navigation, refresh and page exit', async () => {

@@ -18,14 +18,17 @@ function installDom() {
     activeElement: body,
   });
   globalThis.document = doc;
-  globalThis.window = { addEventListener() {}, location: { search: '' }, matchMedia: () => ({ matches: false }) };
+  const listeners = new Map();
+  globalThis.window = { addEventListener(type, listener) { listeners.set(type, listener); },
+    removeEventListener(type) { listeners.delete(type); }, dispatchEvent(event) { listeners.get(event.type)?.(event); },
+    location: { search: '' }, matchMedia: () => ({ matches: false }) };
   return { doc, app };
 }
 
 test('offline storefront mounts, closed overlays are inert, and shell controls respond', async () => {
   installDom();
   globalThis.fetch = async () => { throw new Error('SAMPLE offline API'); };
-  initApp();
+  const application = initApp();
   await new Promise(resolve => setTimeout(resolve, 10));
   for (const id of ['product-modal', 'checkout-modal', 'tracking-modal', 'cart-drawer', 'mobile-nav-drawer']) {
     const root = document.getElementById(id);
@@ -109,4 +112,9 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
   document.getElementById('cart-drawer-backdrop').click();
   assert.equal(document.getElementById('cart-drawer').hidden, true);
   assert.equal(document.body.style.overflow, '');
+  const beforeRefresh = requests.length;
+  window.dispatchEvent({type:'storage', key:'alphazee_catalog_changed'});
+  await new Promise(resolve => setTimeout(resolve, 180));
+  assert.ok(requests.length >= beforeRefresh + 3, 'accepted owner changes refetch hero, collections and products');
+  application.destroy();
 });

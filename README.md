@@ -13,9 +13,9 @@ Public checkout is disabled server-side; only an explicitly configured local
 test database can accept sample orders. Historical milestone notes below do not
 establish current migration or launch readiness.
 The current verification status is in
-[the repair verification report](.context/repair_verification_report.md). All
-automated and terminal checks are distinct from browser verification, which the
-owner asked us to skip. Do not enable public checkout based on these checks.
+[the phase register](.context/owner_catalog_phase_status.json). All
+historical terminal checks are distinct from the newer actual browser checks
+recorded in [.context/m4_browser_verification.json](.context/m4_browser_verification.json). Do not enable public checkout based on these checks.
 
 AlphaZee is a Pakistan ecommerce brand with its own identity, storefront, customer relationships, order operations, and reporting.
 
@@ -26,12 +26,19 @@ AlphaZee is a Pakistan ecommerce brand with its own identity, storefront, custom
 - **Market**: Pakistan launch with prices quoted in PKR.
 - **Fulfillment Model**: List products from approved local suppliers and manually coordinate fulfillment. Supplier shipping terms, payment mechanics, stock confirmation, and return arrangements are verified before offering items to customers.
 - **Payment Methods**: Cash on Delivery (COD) and manual bank transfer. Transfer funds are personally verified in the bank account by the business owner before dispatching goods.
-- **Current Milestone**: Owner workflows and accounting repairs implemented; final terminal verification recorded separately from browser and production launch checks.
-- **Database State**: Development migrations have been applied through `e15a9c2b7046`. Disposable `_test` databases hold migration and concurrency evidence. No production deployment has been performed.
+- **Current Milestone**: M0–M8 implemented: owner/catalog/media/stock screens, storefront galleries/cart recovery, commerce operations/reports and the independent checkout lab with selected-catalog copying. M9 is next.
+- **Database State**: Development migrations have been applied through `f27b6d91c083`. Disposable `_test` databases hold migration and concurrency evidence. No production deployment has been performed.
 
 Direct owner dashboard: `http://localhost:13000/admin` for the local port profile.
-Catalog lifecycle APIs are implemented; managed uploads and dashboard authoring
-are the next phases. See [the M2 guide](.context/m2_catalog_runbook.md).
+Products, Collections and Media authoring are implemented, including validated
+uploads and atomic product/gallery saves. See [the M4 guide](.context/m4_catalog_authoring_runbook.md)
+and [durable media/account setup](.context/m3_media_runbook.md). Saved variants now include supplier/cost/stock controls and reserved-order links: [M5 guide](.context/m5_supplier_stock_runbook.md).
+
+The storefront displays managed media, variant galleries, product details and live catalog edits; saved carts recover across slug/price changes: [M6 guide](.context/m6_storefront_runbook.md). Public checkout remains closed.
+
+Orders, bank handoff/funds review, original/replacement COD settlement, returns/refunds, RTO, private access recovery and reports are documented in the [M7 operations guide](.context/m7_operations_runbook.md). Operational browser fixtures stay in the isolated test database.
+
+**Open local checkout:** `docker compose -f compose.checkout-lab.yml up --build --wait -d`, then visit **http://127.0.0.1:13001** (admin: `/admin`). Create your separate lab login with `docker compose -f compose.checkout-lab.yml exec api python scripts/provision_owner.py YOUR_LAB_USERNAME`. The lab has independent DB/media storage, isolated cookies and simulated payments. Normal/public checkout remains closed. See the [M8 copy/start/payment guide](.context/m8_checkout_lab_runbook.md).
 
 ---
 

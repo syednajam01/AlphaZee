@@ -1,8 +1,10 @@
 import { createOverlay } from '../utils/overlay.js';
 import { cart } from '../utils/cart.js';
-import { fetchProductBySlug } from '../utils/api.js';
+import { fetchProductBySlug, fetchProductById } from '../utils/api.js';
+import { mountProductGallery } from './ProductGallery.js';
+import { variantImage } from '../utils/productMedia.js';
 import { extractPriceMinor, formatDisplayPrice } from '../utils/money.js';
-import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
+import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
 
 export function createProductModal(onAddedToCart) {
   const modalContainer = document.createElement('div');
@@ -18,6 +20,7 @@ export function createProductModal(onAddedToCart) {
   let isLoading = false;
   let errorMessage = null;
   let activeModalRequestId = 0;
+  let gallery = null;
 
   modalContainer.innerHTML = `
     <div class="drawer-backdrop" style="z-index: 1;"></div>
@@ -36,6 +39,7 @@ export function createProductModal(onAddedToCart) {
   `;
 
   function render() {
+    gallery?.destroy(); gallery = null;
     const body = modalContainer.querySelector('#modal-body-content');
 
     if (isLoading) {
@@ -62,12 +66,13 @@ export function createProductModal(onAddedToCart) {
     if (!currentProduct) return;
 
     const variants = currentProduct.variants || [];
-    const sizes = [...new Set(variants.map(v => v.size).filter(Boolean))];
-    const colors = [...new Set(variants.map(v => v.color).filter(Boolean))];
+    const initialVariant = variants.find(v => v.availability === 'available') || variants[0];
+    const sizes = variants.some(v => v.size) ? [...new Set(variants.map(v => v.size || ''))] : [];
+    const colors = variants.some(v => v.color) ? [...new Set(variants.map(v => v.color || ''))] : [];
 
     if (variants.length > 0) {
-      if (sizes.length > 0 && !selectedSize) selectedSize = variants[0].size || sizes[0];
-      if (colors.length > 0 && !selectedColor) selectedColor = variants[0].color || colors[0];
+      if (sizes.length > 0 && selectedSize === null) selectedSize = initialVariant.size || '';
+      if (colors.length > 0 && selectedColor === null) selectedColor = initialVariant.color || '';
     } else {
       if (sizes.length > 0 && !selectedSize) selectedSize = sizes[0];
       if (colors.length > 0 && !selectedColor) selectedColor = colors[0];
@@ -75,8 +80,8 @@ export function createProductModal(onAddedToCart) {
 
     // Find the active variant strictly matching selectedSize and selectedColor
     const activeVariant = variants.find(v => {
-      const sizeMatch = sizes.length === 0 ? true : v.size === selectedSize;
-      const colorMatch = colors.length === 0 ? true : v.color === selectedColor;
+      const sizeMatch = sizes.length === 0 ? true : (v.size || '') === selectedSize;
+      const colorMatch = colors.length === 0 ? true : (v.color || '') === selectedColor;
       return sizeMatch && colorMatch;
     }) || (sizes.length === 0 && colors.length === 0 ? variants[0] : null);
 
@@ -94,7 +99,6 @@ export function createProductModal(onAddedToCart) {
       : (!hasValidPrice ? 'Price Unavailable' : (isAvailable ? 'Available' : 'Currently Unavailable'));
     const safeTitle = escapeHtml(currentProduct.title);
     const safeDesc = escapeHtml(currentProduct.description || '');
-    const safeImage = sanitizeMediaUrl(currentProduct.image_url);
 
     body.innerHTML = `
       <div class="modal-img-wrapper"></div>
@@ -112,6 +116,7 @@ export function createProductModal(onAddedToCart) {
             ${safeDesc}
           </p>
         ` : ''}
+        ${['material','care','sizing'].filter(key => currentProduct[key]).map(key => `<div class="product-detail-fact"><h3>${{material:'Material',care:'Care',sizing:'Sizing'}[key]}</h3><p>${escapeHtml(currentProduct[key])}</p></div>`).join('')}
 
         <!-- Color selector -->
         ${colors.length > 0 ? `
@@ -128,7 +133,7 @@ export function createProductModal(onAddedToCart) {
                     class="option-pill ${isSelected ? 'is-selected' : ''} ${!isComboAvailable ? 'is-unavailable' : ''}" 
                     data-color="${escapeHtml(col)}"
                     style="${!isComboAvailable ? 'opacity: 0.45; text-decoration: line-through;' : ''}">
-                    ${escapeHtml(col)}
+                    ${escapeHtml(col || 'Default')}
                   </button>
                 `;
               }).join('')}
@@ -153,7 +158,7 @@ export function createProductModal(onAddedToCart) {
                     class="option-pill ${isSelected ? 'is-selected' : ''} ${!isComboAvailable ? 'is-unavailable' : ''}" 
                     data-size="${escapeHtml(sz)}"
                     style="${!isComboAvailable ? 'opacity: 0.45; text-decoration: line-through;' : ''}">
-                    ${escapeHtml(sz)}
+                    ${escapeHtml(sz || 'Default')}
                   </button>
                 `;
               }).join('')}
@@ -182,13 +187,7 @@ export function createProductModal(onAddedToCart) {
 
     const imgWrapper = body.querySelector('.modal-img-wrapper');
     if (imgWrapper) {
-      imgWrapper.appendChild(
-        createSafeImageElement({
-          src: currentProduct.image_url,
-          alt: currentProduct.title || 'Product piece',
-          className: 'modal-img',
-        })
-      );
+      gallery = mountProductGallery(imgWrapper, currentProduct, activeVariant?.id);
     }
 
     // Colors click handling
@@ -216,7 +215,7 @@ export function createProductModal(onAddedToCart) {
           product_id: currentProduct.id,
           slug: currentProduct.slug,
           title: currentProduct.title,
-          image_url: safeImage,
+          image_url: sanitizeMediaUrl(variantImage(currentProduct, activeVariant.id)),
           price_minor: activePriceMinor,
           variant_id: activeVariant.id,
           sku: activeVariant.sku,
@@ -244,12 +243,13 @@ export function createProductModal(onAddedToCart) {
     const slug = typeof productOrSlug === 'string' ? productOrSlug : productOrSlug?.slug;
     const thisReqId = ++activeModalRequestId;
 
-    if (needsFetch && slug) {
+    if (needsFetch && (slug || productOrSlug?.id)) {
       isLoading = true;
       render();
 
       try {
-        const fetched = await fetchProductBySlug(slug);
+        const fetched = typeof productOrSlug === 'object' && productOrSlug?.id
+          ? await fetchProductById(productOrSlug.id) : await fetchProductBySlug(slug);
         if (thisReqId !== activeModalRequestId) return; // Stale request discarded
         currentProduct = fetched;
         isLoading = false;
@@ -271,7 +271,7 @@ export function createProductModal(onAddedToCart) {
     overlay.close();
   }
 
-  const overlay = createOverlay({ element: modalContainer, onClose: () => { activeModalRequestId++; } });
+  const overlay = createOverlay({ element: modalContainer, onClose: () => { activeModalRequestId++; gallery?.destroy(); gallery = null; } });
 
   modalContainer.querySelector('.drawer-backdrop').addEventListener('click', close);
   modalContainer.querySelector('#modal-close-btn').addEventListener('click', close);
@@ -279,6 +279,7 @@ export function createProductModal(onAddedToCart) {
   return {
     element: modalContainer,
     open,
-    close
+    close,
+    refresh() { if (!modalContainer.hidden && currentProduct) return open({id:currentProduct.id, slug:currentProduct.slug}); }
   };
 }

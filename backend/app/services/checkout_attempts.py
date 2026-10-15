@@ -13,6 +13,8 @@ COOKIE_MAX_AGE = 7 * 24 * 60 * 60
 
 
 def checkout_cookie_name():
+    if settings.checkout_lab:
+        return 'alphazee_lab_checkout_session'
     return '__Host-alphazee_checkout' if settings.is_production else 'alphazee_checkout_session'
 
 

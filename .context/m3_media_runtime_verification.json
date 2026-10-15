@@ -1,0 +1,56 @@
+{
+  "phase": "M3",
+  "prepared_at_utc": "2026-10-14T19:10:21.523397+00:00",
+  "database": "alphazee_m3_media_test",
+  "checks": [
+    "isolated_owner_login",
+    "decoded_libx264_and_http_range",
+    "decoded_libvpx_and_http_range",
+    "decoded_libvpx-vp9_and_http_range",
+    "unsupported_codec_rejected",
+    "duration_over_120_seconds_rejected",
+    "truncated_payload_rejected",
+    "container_extension_mismatch_rejected",
+    "poster_reference_blocks_deletion",
+    "ready_media_allows_publication",
+    "published_gallery_requires_poster",
+    "hero_video_shared_reference_blocks_deletion",
+    "checkout_stays_disabled"
+  ],
+  "checks_passed": 13,
+  "sample_asset_count": 4,
+  "development_modified": false,
+  "restart": {
+    "phase": "M3",
+    "check": "restart",
+    "checked_at_utc": "2026-10-14T19:12:47.798056+00:00",
+    "owner_login_survives": true,
+    "managed_asset_count": 4,
+    "all_bytes_and_checksums_match": true,
+    "product_and_associations_survive": true,
+    "checkout_enabled": false,
+    "development_modified": false
+  },
+  "recreate": {
+    "phase": "M3",
+    "check": "recreate",
+    "checked_at_utc": "2026-10-14T19:14:33.075888+00:00",
+    "owner_login_survives": true,
+    "managed_asset_count": 4,
+    "all_bytes_and_checksums_match": true,
+    "product_and_associations_survive": true,
+    "checkout_enabled": false,
+    "development_modified": false
+  },
+  "matched_backup_restore": {
+    "phase": "M3",
+    "check": "restore",
+    "checked_at_utc": "2026-10-15T00:47:08.561574+00:00",
+    "owner_login_survives": true,
+    "managed_asset_count": 4,
+    "all_bytes_and_checksums_match": true,
+    "product_and_associations_survive": true,
+    "checkout_enabled": false,
+    "development_modified": false
+  }
+}

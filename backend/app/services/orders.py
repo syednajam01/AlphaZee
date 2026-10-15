@@ -176,6 +176,8 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
             )
 
         product = variant.product
+        if active_sv.supplier.status != 'active' or active_sv.supplier_cost_minor is None:
+            raise ValueError('This variant requires an active supplier and wholesale cost before purchase.')
         unit_price_minor = variant.price_minor
         unit_cost_minor = active_sv.supplier_cost_minor
         line_total_minor = unit_price_minor * quantity

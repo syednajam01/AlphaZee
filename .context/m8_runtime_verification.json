@@ -1,0 +1,48 @@
+{
+  "phase": "M8",
+  "checked_at_utc": "2026-10-15T10:43:17.318949+00:00",
+  "snapshot": {
+    "product_id": "lab-5c1d3d87f002d727c18454501695ff7e",
+    "status": "published",
+    "media": [
+      {
+        "id": "23e59fbd1c1f8dcc378a6e4ff8435ad2",
+        "checksum": "56c41ec19ddbcbd9e4feb424b9eac1db91de0e51266d1970cd7babd35f8c73b2",
+        "poster_id": null
+      },
+      {
+        "id": "6d01cf65b96c2d5a3ddfa95995ca1e38",
+        "checksum": "e272caf03fd40eafb3a8148a97cb791decae765eea75c15a618e801e6f1981d7",
+        "poster_id": "23e59fbd1c1f8dcc378a6e4ff8435ad2"
+      }
+    ],
+    "stock": [
+      {
+        "physical": 20,
+        "held": 1,
+        "available": 19
+      },
+      {
+        "physical": 19,
+        "held": 0,
+        "available": 19
+      }
+    ],
+    "order_states": [
+      "delivered",
+      "confirmed",
+      "cancelled",
+      "cancelled"
+    ],
+    "schema_head": "f27b6d91c083"
+  },
+  "restart_preserves_catalog_orders_media_and_stock": true,
+  "independent_named_volumes": true,
+  "lab_checkout_enabled": true,
+  "normal_checkout_enabled": false,
+  "normal_development_modified": false,
+  "normal_order_creation_http_statuses": {
+    "http://localhost:13000": 503,
+    "http://127.0.0.1:18000": 503
+  }
+}

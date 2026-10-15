@@ -1,6 +1,7 @@
 import * as api from '../../utils/api.js';
 import { escapeHtml as esc, sanitizeMediaUrl } from '../../utils/dom.js';
 import { parseCatalogPkr } from '../../utils/money.js';
+import { mountVariantStock } from './VariantStock.js';
 
 const button = (label, id = '', extra = '') => `<button type="button" class="btn btn-secondary" ${id ? `id="${id}"` : ''} ${extra}>${esc(label)}</button>`;
 const options = (items, selected) => items.map(([value, label]) => `<option value="${esc(value)}" ${String(selected ?? '') === String(value) ? 'selected' : ''}>${esc(label)}</option>`).join('');
@@ -8,7 +9,7 @@ const field = (name, label, value, { textarea = false, type = 'text', max = 5000
   ? `<textarea name="${name}" maxlength="${max}" rows="3">${esc(value)}</textarea>`
   : `<input name="${name}" type="${type}" maxlength="${max}" value="${esc(value)}" ${type === 'number' ? 'min="0" step="1"' : ''}>`}</label>`;
 const preview = asset => asset.kind === 'video'
-  ? `<video controls preload="metadata" src="${esc(sanitizeMediaUrl(asset.url, ''))}" aria-label="Video preview"></video>`
+  ? `<video controls preload="metadata" src="${esc(sanitizeMediaUrl(asset.url, ''))}" ${asset.poster_id ? `poster="/api/v1/media/${esc(asset.poster_id)}/content"` : ''} aria-label="Video preview"></video>`
   : `<img loading="lazy" src="${esc(sanitizeMediaUrl(asset.url))}" alt="${esc(asset.original_name || 'Catalog image')}">`;
 
 export function catalogError(error) {
@@ -33,9 +34,15 @@ export function collectVariant(row) {
 }
 
 export function mountCatalogSection(section, container, context) {
+  const parentContext = context;
+  let catalogDirty = false;
+  const dirtyStock = new Set();
+  context = { ...parentContext, setDirty(value) { catalogDirty = value; parentContext.setDirty(catalogDirty || dirtyStock.size > 0); } };
+  let stockViews = [];
   let alive = true, busy = false, currentProduct = null, currentCollection = null;
   let mediaPage = 1, assets = [], assetTotal = 0, collections = [], links = [];
   const knownAssets = new Map();
+  const posterDrafts = new Map();
   let productsPage = 1, productFilter = { search: '', status: '', collection_id: '' };
   const controllers = new Set(), objectUrls = new Set();
   const queue = [];
@@ -132,6 +139,7 @@ export function mountCatalogSection(section, container, context) {
   }
 
   async function editProduct(product) {
+    stockViews.forEach(v => v.destroy()); stockViews = [];
     await loadAssets();
     if (!current()) return;
     currentProduct = product; links = (product.media || []).map(link => ({ ...link, asset_id: link.asset.id }));
@@ -167,6 +175,19 @@ export function mountCatalogSection(section, container, context) {
       query('#catalog-variants').appendChild(node.firstElementChild || node); wireRemoveVariants(); markDirty();
     });
     wireRemoveVariants();
+    let supplierRequest;
+    const suppliers = () => {
+      // Refresh after creation, and share concurrent initial reads between variants.
+      if (!supplierRequest) supplierRequest = api.fetchAdminSuppliers().finally(() => { supplierRequest = null; });
+      return supplierRequest;
+    };
+    for (const variant of product.variants || []) {
+      if (archived) continue;
+      stockViews.push(mountVariantStock(query(`[data-variant-stock="${variant.id}"]`), variant, {
+        isCurrent: current, suppliers,
+        onDirty(id, value) { if (value) dirtyStock.add(id); else dirtyStock.delete(id); parentContext.setDirty(catalogDirty || dirtyStock.size > 0); },
+      }));
+    }
     bind('#catalog-attach', () => {
       const asset = assets.find(a => a.id === query('#catalog-attach-asset').value), role = query('#catalog-attach-role').value;
       if (!asset) { status('Choose a library asset first.', true); return; }
@@ -182,6 +203,7 @@ export function mountCatalogSection(section, container, context) {
     form.addEventListener('submit', event => {
       event.preventDefault();
       action(async () => {
+        if (dirtyStock.size) throw new Error('Save or reload the unsaved supplier/stock inputs before saving product details.');
         const fields = Object.fromEntries(['title', 'slug', 'collection_id', 'badge', 'description', 'short_description', 'material', 'care', 'sizing', 'hero_benefit'].map(name => [name, value(form, name).trim() || null]));
         fields.is_hero = form.querySelector('[name="is_hero"]').checked;
         const order = value(form, 'hero_order'); fields.hero_order = order === '' ? null : Number(order);
@@ -241,7 +263,10 @@ export function mountCatalogSection(section, container, context) {
         syncLinks(); const index = Number(control.dataset[attribute]);
         if (!delta) links.splice(index, 1); else [links[index], links[index + delta]] = [links[index + delta], links[index]];
         renderLinks(); markDirty();
-        query('#catalog-product-media')?.querySelector(`[data-link-${delta ? 'up' : 'remove'}="${delta ? index + delta : Math.min(index, links.length - 1)}"]`)?.focus();
+        const nextIndex = delta ? index + delta : Math.min(index, links.length - 1);
+        const nextControl = query('#catalog-product-media')?.querySelector(`[data-${kebab}="${nextIndex}"]`);
+        if (nextControl && !nextControl.disabled) nextControl.focus();
+        else query('#catalog-product-media')?.querySelector(`[data-link-remove="${nextIndex}"]`)?.focus();
       }));
     }
   }
@@ -309,7 +334,11 @@ export function mountCatalogSection(section, container, context) {
       ${['queued', 'uploading'].includes(item.state) ? button('Cancel upload', '', `data-upload-cancel="${index}"`) : ''}
       ${['failed', 'canceled'].includes(item.state) ? button('Retry upload', '', `data-upload-retry="${index}"`) : ''}</article>`).join('');
     node.querySelectorAll('[data-upload-cancel]').forEach(control => control.addEventListener('click', () => {
-      const item = queue[Number(control.dataset.uploadCancel)]; item.state = 'canceled'; item.controller?.abort(); renderQueue();
+      const item = queue[Number(control.dataset.uploadCancel)];
+      if (item.asset) return;
+      item.state = 'canceled'; item.controller?.abort();
+      if (item.url) { URL.revokeObjectURL(item.url); objectUrls.delete(item.url); item.url = ''; }
+      renderQueue();
     }));
     node.querySelectorAll('[data-upload-retry]').forEach(control => control.addEventListener('click', () => {
       const item = queue[Number(control.dataset.uploadRetry)]; item.state = 'queued'; item.progress = 0; item.message = ''; renderQueue(); processQueue();
@@ -331,6 +360,7 @@ export function mountCatalogSection(section, container, context) {
         try {
           const accepted = await api.uploadOwnerMedia(item.file, { signal: item.controller.signal, onProgress: percent => { item.progress = percent; renderQueue(); } });
           item.state = 'accepted'; item.progress = 100; item.message = 'Saved in library'; item.asset = accepted;
+          renderQueue();
           if (item.url) { URL.revokeObjectURL(item.url); objectUrls.delete(item.url); item.url = ''; }
           if (current()) {
             try { await afterUpload?.(accepted); }
@@ -339,7 +369,7 @@ export function mountCatalogSection(section, container, context) {
         } catch (error) { item.state = error.name === 'AbortError' ? 'canceled' : 'failed'; item.message = catalogError(error); }
         finally { controllers.delete(item.controller); item.controller = null; renderQueue(); }
       }
-    } finally { uploading = false; if (current() && section === 'media' && queue.every(item => item.state === 'accepted')) context.setDirty(false); }
+    } finally { uploading = false; if (current() && section === 'media' && queue.every(item => item.state === 'accepted')) context.setDirty(posterDrafts.size > 0); }
   }
 
   async function mediaLibrary() {
@@ -356,19 +386,21 @@ export function mountCatalogSection(section, container, context) {
       <p>${asset.width} × ${asset.height} · ${(asset.byte_size / 1024 / 1024).toFixed(2)} MiB${asset.duration_ms ? ` · ${(asset.duration_ms / 1000).toFixed(1)} seconds` : ''}</p>
       <p>Usage: ${asset.usage?.products?.length || 0} product roles, ${asset.usage?.collections?.length || 0} collections, ${asset.usage?.posters_for?.length || 0} posters.</p>
       ${asset.usage?.products?.map(x => `<p>${esc(x.product_title || 'Product')} · ${esc(x.role.replaceAll('_', ' '))}${x.variant_id ? ' · variant image' : ''}</p>`).join('') || ''}
-      ${asset.kind === 'video' ? `<label>Poster image<select name="poster_id">${options(imageChoices(), asset.poster_id)}</select></label>${button('Save poster', '', `data-save-poster="${asset.id}"`)}` : ''}
+      ${asset.kind === 'video' ? `<label>Poster image<select name="poster_id">${options(imageChoices(), posterDrafts.has(asset.id) ? posterDrafts.get(asset.id) : asset.poster_id)}</select></label>${button('Save poster', '', `data-save-poster="${asset.id}"`)}` : ''}
       ${button('Delete unused file', '', `data-delete-asset="${asset.id}"`)}</article>`).join('') || '<p>No files uploaded yet.</p>'}</div>`;
     node.querySelectorAll('[data-save-poster]').forEach(control => control.addEventListener('click', () => {
       const asset = assets.find(a => a.id === control.dataset.savePoster), card = control.closest('[data-library-asset]');
-      action(() => api.saveMediaPoster(asset.id, { expected_version: asset.edit_version, poster_id: card.querySelector('[name="poster_id"]').value || null }), async () => { await loadAssets(); renderLibraryCards(); status('Video poster saved.'); context.setDirty(false); });
+      action(() => api.saveMediaPoster(asset.id, { expected_version: asset.edit_version, poster_id: card.querySelector('[name="poster_id"]').value || null }), async () => { posterDrafts.delete(asset.id); await loadAssets(); renderLibraryCards(); status('Video poster saved.'); context.setDirty(posterDrafts.size > 0); });
     }));
-    node.querySelectorAll('[name="poster_id"]').forEach(control => control.addEventListener('change', markDirty));
+    node.querySelectorAll('[name="poster_id"]').forEach(control => control.addEventListener('change', () => {
+      posterDrafts.set(control.closest('[data-library-asset]').dataset.libraryAsset, control.value); markDirty();
+    }));
     node.querySelectorAll('[data-delete-asset]').forEach(control => control.addEventListener('click', () => {
       const asset = assets.find(a => a.id === control.dataset.deleteAsset);
       if (!window.confirm('Delete this unused public file? Attached files cannot be deleted.')) return;
-      action(() => api.deleteOwnerMedia(asset.id, asset.edit_version), async () => { await loadAssets(); renderLibraryCards(); status('Unused file deleted.'); });
+      action(() => api.deleteOwnerMedia(asset.id, asset.edit_version), async () => { knownAssets.delete(asset.id); posterDrafts.delete(asset.id); await loadAssets(); renderLibraryCards(); status('Unused file deleted.'); });
     }));
   }
   const ready = section === 'products' ? products() : section === 'collections' ? collectionList() : mediaLibrary();
-  return { ready, destroy() { alive = false; controllers.forEach(c => c.abort()); objectUrls.forEach(url => URL.revokeObjectURL(url)); objectUrls.clear(); } };
+  return { ready, destroy() { alive = false; stockViews.forEach(v => v.destroy()); controllers.forEach(c => c.abort()); objectUrls.forEach(url => URL.revokeObjectURL(url)); objectUrls.clear(); } };
 }

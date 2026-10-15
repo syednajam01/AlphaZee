@@ -1,6 +1,6 @@
 # AlphaZee: owner dashboard, catalog and media implementation plan
 
-Date: 2026-10-14. Source: `next_target.txt`. Status: M0–M2 completed; M3–M9 pending. See [M0 evidence](m0_implementation_report.md), [M1 evidence](m1_dashboard_runbook.md), [M2 evidence](m2_catalog_runbook.md) and `owner_catalog_phase_status.json`.
+Date: 2026-10-14. Source: `next_target.txt`. Updated 2026-10-15: M0–M8 completed; M9 pending. See [M8 evidence](m8_checkout_lab_runbook.md) and `owner_catalog_phase_status.json`. The owner selected opening checkout only in the isolated lab.
 
 This plan was originally prepared at the owner's planning-only request. The owner has since authorized phase implementation. The target's explicit browser acceptance requirements supersede the earlier terminal-only verification approach for the relevant future phases; M0 is a terminal baseline with a private isolated backup restore.
 
@@ -90,7 +90,7 @@ Primary inspected files: `backend/app/models/catalog.py`, `schemas/catalog.py`, 
 7. Detaching a product image removes an association only. Refuse deleting referenced files, including poster/collection/hero dependencies; serialize attach/delete decisions to prevent races. Never overwrite bytes behind an existing public key. Require a replacement primary image or unpublish before removing the last publish-required image.
 8. Document DB-plus-media backup/restore as one consistent set, the container path and how to discover the actual Docker volume name. Restart/rebuild must retain assets.
 
-**Acceptance:** valid image/video uploads survive restart; oversize/corrupt/disguised/path-traversal uploads fail; shared references survive detach/delete attempts; failed transactions leave no broken references; private payment evidence is never publicly served.
+**Acceptance:** valid image/video uploads survive restart; oversize/corrupt/disguised/path-traversal uploads fail; shared references survive detach/delete attempts; failed transactions leave no broken references; private payment evidence is never publicly served. Completed 2026-10-15: isolated migration, 13 real Docker media checks, asset checksums after restart/recreation/matched restore, and persistent owner login passed. See `m3_media_runbook.md`.
 
 ## Phase M4 — usable Products, Collections and Media screens
 
@@ -103,7 +103,7 @@ Primary inspected files: `backend/app/models/catalog.py`, `schemas/catalog.py`, 
 5. Media library: local file picker, multiple-image/video selection, previews, real upload progress via a compatible upload client, retry/cancel, alt text and attachment usage. Keep progress, validation and final server acceptance distinct. Revoke temporary object URLs when finished.
 6. Product gallery: choose primary image, reorder using keyboard-capable buttons (drag optional), replace/remove associations, assign media to a variant, choose video poster and hero media. Saving descriptions must not accidentally discard gallery changes.
 
-**Acceptance:** the owner creates a collection and draft with variants/media, revisits it, edits it and publishes without source/SQL changes. Failed upload/save retains useful input; no false success or dead controls.
+**Acceptance:** the owner creates a collection and draft with variants/media, revisits it, edits it and publishes without source/SQL changes. Failed upload/save retains useful input; no false success or dead controls. Completed 2026-10-15: product/collection/media screens, atomic detail/gallery saves, error recovery and 34 isolated Chrome checks passed; 234 backend and 92 frontend tests plus builds passed. See `m4_catalog_authoring_runbook.md`. M5 was subsequently authorized and completed; see its evidence below.
 
 ## Phase M5 — supplier setup and readable stock holds
 
@@ -115,7 +115,7 @@ Primary inspected files: `backend/app/models/catalog.py`, `schemas/catalog.py`, 
 4. Display physical, reserved and available separately; e.g. `10 / 2 / 8`, then `2 units reserved for orders #ABC and #XYZ`, expandable into individual quantities. Handle multiple holds, legacy reconciliation and zero holds; paginate large lists.
 5. Derive public purchase availability from the current mapping/stock and owner availability setting. Public responses expose no wholesale costs, supplier identities, reservation details or customer data. Stock remains authoritative at locked checkout time.
 
-**Acceptance:** reservation details reconcile with aggregate totals; cancellation releases holds, dispatch deducts once and inspection restocks only accepted quantities. Existing concurrency tests still pass; unauthorized hold reads fail.
+**Acceptance:** reservation details reconcile with aggregate totals; cancellation releases holds, dispatch deducts once and inspection restocks only accepted quantities. Existing concurrency tests still pass; unauthorized hold reads fail. Completed 2026-10-15: inline supplier/cost/stock, shared hold predicate, paginated order links, supplier history and private stock-based public availability. 246 backend / 96 frontend tests, 55 Chrome checks, builds and no-schema-change verification passed. See `m5_supplier_stock_runbook.md`.
 
 ## Phase M6 — real storefront integration
 
@@ -127,7 +127,7 @@ Primary inspected files: `backend/app/models/catalog.py`, `schemas/catalog.py`, 
 4. Refetch after owner changes or customer refresh. Reconcile stale carts on price, variant activation, unpublish and archive changes. Treat slug changes explicitly so a saved cart can resolve by stable identity or show a recoverable unavailable item instead of silently changing variants.
 5. Keep images responsive and lazy-load nonprimary media; avoid automatic video downloads in product grids. Provide playback controls and useful unsupported-media feedback.
 
-**Acceptance:** changes to description/price/primary media survive refresh and appear on the storefront; archive/unpublish removes purchase paths; public JSON contains no private fields; the existing design and navigation remain functional.
+**Acceptance:** changes to description/price/primary media survive refresh and appear on the storefront; archive/unpublish removes purchase paths; public JSON contains no private fields; the existing design and navigation remain functional. Completed 2026-10-15: explicit public managed-media contract, stable variant order, responsive image/video gallery and detail fields, managed cards/hero/covers, stable-ID stale-cart recovery, checkout gating and accepted owner-change refresh. 249 backend / 102 frontend tests, 83 isolated Chrome checks and Docker builds passed. See `m6_storefront_runbook.md`.
 
 ## Phase M7 — operational dashboard and reports completion
 
@@ -208,12 +208,12 @@ Recommended order: **M0 → M1 → M2 → M3 → M4 → M5 → M6 → M7 → M8 
 | M0 Baseline/contracts | Completed | `m0_implementation_report.md`; backup restore, baseline checks and contracts |
 | M1 Dashboard entry | Completed | `m1_dashboard_runbook.md`; direct route, auth, navigation, browser and production deep links |
 | M2 Catalog domain/API | Completed | `m2_catalog_runbook.md`; migration, backups, protected lifecycle, concurrency and history tests |
-| M3 Managed media | Pending | Validated upload, references, storage/durability |
-| M4 Authoring screens | Pending | Dashboard product/collection/media workflow |
-| M5 Supplier/stock details | Pending | Holds reconcile; private links; stock regressions |
-| M6 Storefront | Pending | Real product/media visibility and stale-cart behavior |
-| M7 Operations/reports | Pending | Existing workflows usable in routed dashboard |
-| M8 Checkout lab | Pending | Independent runtime, selected copy and simulated payment |
+| M3 Managed media | Completed | `m3_media_runbook.md`; migration, validation, references, restart/recreate and matched restore |
+| M4 Authoring screens | Completed | `m4_catalog_authoring_runbook.md`; atomic authoring, 234 backend / 92 frontend tests, 34 Chrome checks |
+| M5 Supplier/stock details | Completed | `m5_supplier_stock_runbook.md`; 246 backend / 96 frontend tests, 55 Chrome checks |
+| M6 Storefront | Completed | `m6_storefront_runbook.md`; 249 backend / 102 frontend tests, 83 Chrome checks |
+| M7 Operations/reports | Completed | `m7_operations_runbook.md`; 251 backend / 107 frontend tests, 65 isolated Chrome checks |
+| M8 Checkout lab | Completed | `m8_checkout_lab_runbook.md`; 260 backend / 107 frontend tests, 98 Chrome checks, selected media copy and restart proof |
 | M9 Acceptance/handoff | Pending | Actual tests/browser results and owner guide |
 
 Final success means routine real-product management is possible through `/admin`, products and durable media appear correctly on the storefront, historical commerce data remains valid, and isolated checkout walkthroughs have documented execution evidence. Public ordering and production deployment remain outside this milestone.

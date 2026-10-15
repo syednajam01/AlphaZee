@@ -1,0 +1,27 @@
+﻿{
+  "phase": "M7",
+  "checked_at_utc": "2026-10-15T09:53:28.936704+00:00",
+  "database": "alphazee_dev",
+  "source_row_counts": {
+    "products": 0,
+    "collections": 0,
+    "media_assets": 0,
+    "orders": 0,
+    "supplier_variants": 0
+  },
+  "owner_account_present_enabled": true,
+  "plaintext_password_recorded": false,
+  "migration_head": "f27b6d91c083",
+  "schema_changes": false,
+  "public_checkout_enabled": false,
+  "http_checks": {
+    "/storefront/capabilities": 200,
+    "/products": 200,
+    "/catalog/products/nonexistent-m6-product": 404,
+    "/admin/orders": 401,
+    "/admin/analytics/profit-loss": 401,
+    "/admin/returns": 401,
+    "/admin/catalog/variants/1/stock": 401,
+    "/admin/inventory/00000000-0000-0000-0000-000000000001/holds": 401
+  }
+}

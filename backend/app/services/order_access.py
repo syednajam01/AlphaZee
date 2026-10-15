@@ -25,6 +25,8 @@ def _hash(raw: str) -> str:
 
 
 def cookie_name() -> str:
+    if settings.checkout_lab:
+        return 'alphazee_lab_order_session'
     return '__Host-alphazee_order' if settings.is_production else 'alphazee_order_session'
 
 

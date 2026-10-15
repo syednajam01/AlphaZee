@@ -157,6 +157,7 @@ export function createFeaturedProducts(onOpenProductModal) {
             <h3 class="product-card-title">${safeTitle}</h3>
             <div class="product-card-price-row">
               <span class="product-card-price">${formattedPrice}</span>
+              ${product.availability === 'unavailable' ? '<span class="badge badge-neutral">Currently unavailable</span>' : ''}
             </div>
             <button 
               class="btn btn-secondary product-card-btn" 
@@ -178,7 +179,7 @@ export function createFeaturedProducts(onOpenProductModal) {
         wrapper.appendChild(
           createSafeImageElement({
             src: product.image_url,
-            alt: product.title || 'Product',
+            alt: product.image_alt || product.title || 'Product',
             className: 'product-card-img',
             loading: 'lazy',
             width: 320,

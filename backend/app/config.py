@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     app_title: str = "AlphaZee API"
     app_version: str = "0.1.0"
     test_checkout_enabled: bool = False
+    checkout_lab: bool = False
 
     @property
     def checkout_enabled(self) -> bool:
@@ -55,6 +56,8 @@ class Settings(BaseSettings):
                 "Test checkout requires APP_ENV=test and a loopback PostgreSQL "
                 "DATABASE_URL ending in _test, without connection query overrides."
             )
+        if self.checkout_lab and not self.checkout_enabled:
+            raise ValueError('CHECKOUT_LAB requires the isolated test checkout gate.')
         return self
 
     # ── Security & Authentication ─────────────────────────────────────────────
@@ -72,6 +75,9 @@ class Settings(BaseSettings):
     def bank_transfer_enabled(self) -> bool:
         """Only a complete, checksum-valid Pakistani bank account may be offered."""
         import re
+
+        if self.checkout_lab:
+            return True  # Explicit simulation; guarded by validate_test_checkout.
 
         fields = (self.bank_name, self.bank_account_title, self.bank_account_number, self.bank_iban)
         if any(not value or any(marker in value.upper() for marker in

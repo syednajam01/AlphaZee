@@ -33,7 +33,7 @@ class InventoryMetricResponse(BaseModel):
     size: Optional[str] = None
     color: Optional[str] = None
     physical_on_hand: int = Field(description="Total physical units in warehouse/supplier premises")
-    held_reservations: int = Field(description="Units held in open active reservations (held/confirmed/dispatched)")
+    held_reservations: int = Field(description="Units held by held/confirmed reservations or unreconciled legacy stock holds")
     available_to_sell: int = Field(description="Net available units for new orders (Physical - Held)")
     version: int = Field(description="Optimistic concurrency control version")
 
@@ -49,10 +49,11 @@ class InventoryAdjustRequest(BaseModel):
     """Optimistically guarded stock adjustment request."""
 
     supplier_variant_id: uuid.UUID = Field(description="Supplier variant UUID")
-    quantity_delta: int = Field(description="Positive (stock received) or negative (damaged/shrinkage) delta")
-    expected_version: int = Field(ge=1, description="Expected concurrency version number")
+    quantity_delta: int = Field(strict=True, ge=-2147483647, le=2147483647, description="Positive (stock received) or negative (damaged/shrinkage) delta")
+    expected_version: int = Field(strict=True, ge=0, description="Expected concurrency version number")
     reason: str = Field(min_length=3, max_length=100, description="Reason for stock movement")
     reference_id: Optional[str] = Field(default=None, max_length=100, description="Optional invoice/PO/audit ref")
+    notes: Optional[str] = Field(default=None, max_length=500)
 
 
 class AdminOrderListResponse(BaseModel):
@@ -96,7 +97,7 @@ class SupplierVariantAssignRequest(BaseModel):
     """Assign or update a catalog variant supplier cost."""
 
     variant_id: int = Field(ge=1, description="Catalog variant ID")
-    supplier_cost_minor: int = Field(ge=0, description="Wholesale cost in PKR minor units (paisas)")
+    supplier_cost_minor: int = Field(strict=True, ge=0, le=2147483647, description="Wholesale cost in PKR minor units (paisas)")
     active: bool = Field(default=True, description="Whether this is the primary active supplying vendor")
 
 
@@ -134,6 +135,10 @@ class AdminOverviewMetricsResponse(BaseModel):
     delivered_orders: int
     total_skus: int
     low_stock_skus: int
+    cash_received_minor: int = 0
+    courier_held_cod_minor: int = 0
+    refund_outstanding_minor: int = 0
+    estimated_contribution_minor: int = 0
 
 
 class ShipmentCreateRequest(BaseModel):

@@ -15,6 +15,8 @@ from app.services.session_store import csrf_token, token_hash, utcnow
 
 
 def cookie_name() -> str:
+    if settings.checkout_lab:
+        return 'alphazee_lab_owner_session'
     return '__Host-alphazee_owner' if settings.is_production else 'alphazee_owner_session'
 
 

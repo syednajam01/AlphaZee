@@ -5,7 +5,6 @@ import {
   fetchAdminInventory,
   adjustAdminInventory,
   fetchAdminOrders,
-  verifyOrderPayment,
   confirmSupplierAcceptance,
   reviewExpiredOrders,
   fetchPaymentInstructionsPreview,
@@ -35,7 +34,6 @@ import {
   approveAdminReturn,
   dispatchAdminReplacement,
   inspectAdminShipmentRto,
-  recoverAdminOrderAccess,
   revokeAdminOrderAccess,
   receiveAdminReturn,
   inspectAdminReturn,
@@ -50,8 +48,10 @@ import {
   removeLegacyAdminCredentials,
 } from '../utils/api.js';
 import { escapeHtml } from '../utils/dom.js';
-import { formatPkr, pkrToMinor } from '../utils/money.js';
+import { formatPkr, parseCatalogPkr } from '../utils/money.js';
 import { mountCatalogSection } from './admin/CatalogWorkspace.js';
+import { mountStockHolds } from './admin/StockHolds.js';
+import {orderEvidence, returnEvidence, mountFundsReview, mountAccessRecovery} from './admin/OrderEvidence.js';
 
 export function createAdminConsoleModal({ page = false, initialTab = 'overview', onNavigate = () => {} } = {}) {
   const modal = document.createElement('div');
@@ -67,8 +67,11 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   let authGeneration = 0;
   let viewGeneration = 0;
   let catalogView = null;
+  let stockHoldViews = [];
   let dispatchOpener = null;
   let remitOpener = null;
+  let ordersPage = 1, ordersStatus = '', ordersSearch = '', returnsStatus = '';
+  let settlementGeneration = 0;
   removeLegacyAdminCredentials();
   let isCollapsed = false;
 
@@ -212,7 +215,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           </div>
           <div>
             <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Courier Fee Charged to AlphaZee (PKR)</label>
-            <input type="number" id="dispatch-shipping-cost" value="250" min="0" step="10" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+            <input type="number" id="dispatch-shipping-cost" value="250" min="0" step="0.01" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
           </div>
           <div>
             <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Tracking Web URL (Optional)</label>
@@ -280,7 +283,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     modal.querySelector('[data-tab="analytics"] .admin-nav-label').textContent = 'Reports';
     returnLink.addEventListener('click', event => { if (!canLeave()) event.preventDefault(); });
     for (const type of ['input', 'change']) modal.addEventListener(type, event => {
-      if (authenticated && event.target?.closest?.('form')) dirty = true;
+      const form = event.target?.closest?.('form');
+      if (authenticated && form && !['admin-order-filters','admin-return-filters'].includes(form.id)) dirty = true;
     });
   }
 
@@ -400,6 +404,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   }
 
   function renderLogin(message = '') {
+    settlementGeneration++;
+    stockHoldViews.forEach(view => view.destroy()); stockHoldViews = [];
     catalogView?.destroy(); catalogView = null;
     authGeneration++;
     viewGeneration++;
@@ -463,6 +469,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     if (!authenticated) { renderLogin(); return; }
     const generation = authGeneration;
     const view = ++viewGeneration;
+    stockHoldViews.forEach(v => v.destroy()); stockHoldViews = [];
     catalogView?.destroy(); catalogView = null;
     dirty = false;
     contentArea.innerHTML = '<div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 40px 0;">Loading data...</div>';
@@ -515,6 +522,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     const data = await fetchAdminOverview();
     if (view !== viewGeneration) return;
     container.innerHTML = `
+      <div class="admin-financial-overview">${[['Cash received after refunds',data.cash_received_minor],['Courier-held COD',data.courier_held_cod_minor],['Refund outstanding',data.refund_outstanding_minor],['Estimated contribution',data.estimated_contribution_minor]].map(([label,amount])=>`<div><span>${label}</span><strong>${escapeHtml(formatPkr(amount ?? 0))}</strong></div>`).join('')}</div>
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
           <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Delivered Sales</div>
@@ -540,16 +548,32 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     `;
   }
 
+  async function openSettlement(shipmentId, opener, view) {
+    if(opener.disabled || !authenticated || view!==viewGeneration || !canLeave())return;
+    const request=++settlementGeneration;
+    remitOpener=opener; opener.disabled=true;
+    try {
+      const shipment=await fetchAdminShipmentSettlement(shipmentId);
+      if(!authenticated || view!==viewGeneration || request!==settlementGeneration)return;
+      currentRemitOutstandingMinor=shipment.settlement_outstanding_minor;
+      modal.querySelector('#remit-shipment-id').value=shipmentId;
+      modal.querySelector('#remit-summary').textContent=`Gross COD ${formatPkr(shipment.cod_amount_minor)} · Bank receipts ${formatPkr(shipment.cod_remitted_amount_minor)} · Deductions ${formatPkr(shipment.settlement_deductions_minor)} · Outstanding ${formatPkr(shipment.settlement_outstanding_minor)}`;
+      modal.querySelector('#remit-history').textContent=(shipment.settlement_entries || []).map(entry=>`${entry.entry_type}: ${formatPkr(entry.amount_minor)} (${entry.reference})`).join(' | ') || 'No settlement entries yet.';
+      modal.querySelector('#remit-error').style.display='none';
+      modal.querySelector('#admin-remittance-modal').style.display='flex';
+      setPageBackgroundInert(true);modal.querySelector('#remit-amount-pkr').focus();
+    } catch(error) {if(authenticated && view===viewGeneration)showSessionMessage(error.message || 'Unable to load settlement');}
+    finally {opener.disabled=false;}
+  }
+
   // 2. Orders Tab
   async function renderOrdersTab(container, view) {
-    const res = await fetchAdminOrders();
+    const orderId = new URLSearchParams(window.location?.search || '').get('order_id');
+    const res = await fetchAdminOrders({ orderId, page:ordersPage, status:ordersStatus, search:ordersSearch });
     if (view !== viewGeneration) return;
     const orders = res.orders || [];
 
-    if (orders.length === 0) {
-      container.innerHTML = '<div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 40px 0;">No customer orders placed yet.</div>';
-      return;
-    }
+    const isCurrent = () => authenticated && view === viewGeneration;
 
     const rowsHtml = orders.map(o => {
       const isBank = o.payment_method === 'bank_transfer';
@@ -561,7 +585,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
 
       return `
         <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-          <td style="padding: 12px 8px; font-weight: 700; color: #4ADE80;">${escapeHtml(o.order_number)}</td>
+          <td style="padding: 12px 8px; font-weight: 700; color: #4ADE80;">${escapeHtml(o.order_number)}${orderEvidence(o)}</td>
           <td style="padding: 12px 8px;">
             <div>${escapeHtml(o.customer_name)}</div>
             <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.5);">${escapeHtml(o.customer_phone)} • ${escapeHtml(o.shipping_city)}</div>
@@ -588,7 +612,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             <button class="btn btn-secondary btn-revoke-order-access" data-order-id="${o.id}" style="padding: 4px 8px; font-size: .7rem;">Revoke Access</button>
             ${!isPaid && isBank && !isCancelled && o.payment_review_status !== 'required' ? `
               <button class="btn btn-primary btn-verify-payment" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
-                Verify Bank Transfer
+                Review Bank Transfer
               </button>
             ` : ''}
             ${o.order_status === 'placed' && !isCancelled ? `
@@ -640,6 +664,9 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     }).join('');
 
     container.innerHTML = `
+      <form id="admin-order-filters" class="catalog-toolbar"><label>Order number or phone<input name="search" maxlength="100" value="${escapeHtml(ordersSearch)}"></label>
+        <label>Order status<select name="status"><option value="">All statuses</option>${['placed','confirmed','dispatched','delivered','rto','cancelled'].map(s=>`<option value="${s}" ${s===ordersStatus?'selected':''}>${s}</option>`).join('')}</select></label>
+        <button type="submit" class="btn btn-secondary">Apply order filters</button>${orderId ? '<a class="admin-return-link" href="/admin/orders">Show all orders</a>' : ''}</form>
       <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
         <button id="btn-review-expired-orders" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
           Check Expired Bank Transfers
@@ -657,22 +684,20 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
               <th style="padding: 8px; text-align: right;">Actions</th>
             </tr>
           </thead>
-          <tbody>${rowsHtml}</tbody>
+          <tbody>${rowsHtml || '<tr><td colspan="6">No orders match this view. Clear filters to see other orders.</td></tr>'}</tbody>
         </table>
       </div>
+      <div class="catalog-toolbar"><button type="button" class="btn btn-secondary" data-orders-prev ${ordersPage<=1?'disabled':''}>Previous orders</button><span>Page ${ordersPage} · ${res.total ?? orders.length} orders</span><button type="button" class="btn btn-secondary" data-orders-next ${ordersPage*(res.page_size || 20)>=(res.total ?? orders.length)?'disabled':''}>Next orders</button></div>
       <div id="payment-workflow-panel" role="region" aria-live="polite"></div>
     `;
 
+    const filter = container.querySelector('#admin-order-filters');
+    filter.addEventListener('submit',event=>{event.preventDefault();if(!isCurrent() || !canLeave())return;ordersSearch=filter.querySelector('[name="search"]').value.trim();ordersStatus=filter.querySelector('[name="status"]').value;ordersPage=1;loadActiveTabData();});
+    for (const [selector,delta] of [['[data-orders-prev]',-1],['[data-orders-next]',1]]) container.querySelector(selector).addEventListener('click',event=>{if(event.currentTarget?.disabled || !isCurrent() || !canLeave())return;ordersPage+=delta;loadActiveTabData();});
+
     container.querySelectorAll('.btn-recover-order-access').forEach(b => b.addEventListener('click', async () => {
-      const note = prompt('Describe how you independently verified this customer before issuing a new code:');
-      if (note === null) return;
-      if (note.trim().length < 10) { alert('Enter a verification note of at least 10 characters.'); return; }
-      b.disabled = true;
-      try {
-        const result = await recoverAdminOrderAccess(b.getAttribute('data-order-id'), note.trim());
-        prompt(`Private code for ${result.order_number}. Copy it now and convey it through the verified channel; it will not be shown again.`, result.access_code);
-      } catch (error) { alert(error.message || 'Access recovery failed'); }
-      finally { b.disabled = false; }
+      if(!isCurrent() || !canLeave())return;
+      mountAccessRecovery(container.querySelector('#payment-workflow-panel'),orders.find(o=>o.id===b.getAttribute('data-order-id')),{isCurrent,onIssued:()=>{dirty=false;}});
     }));
     container.querySelectorAll('.btn-revoke-order-access').forEach(b => b.addEventListener('click', async () => {
       if (!confirm('Revoke all customer codes and sessions for this order?')) return;
@@ -683,20 +708,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     }));
     container.querySelectorAll('.btn-remit-order').forEach(b => b.addEventListener('click', async () => {
       const shipmentId = b.getAttribute('data-shipment-id');
-      remitOpener = b;
-      b.disabled = true;
-      try {
-        const shipment = await fetchAdminShipmentSettlement(shipmentId);
-        currentRemitOutstandingMinor = shipment.settlement_outstanding_minor;
-        modal.querySelector('#remit-shipment-id').value = shipmentId;
-        modal.querySelector('#remit-summary').textContent = `Gross COD ${formatPkr(shipment.cod_amount_minor)} · Bank receipts ${formatPkr(shipment.cod_remitted_amount_minor)} · Deductions ${formatPkr(shipment.settlement_deductions_minor)} · Outstanding ${formatPkr(shipment.settlement_outstanding_minor)}`;
-        modal.querySelector('#remit-history').textContent = shipment.settlement_entries.map(entry => `${entry.entry_type}: ${formatPkr(entry.amount_minor)} (${entry.reference})`).join(' | ') || 'No settlement entries yet.';
-        modal.querySelector('#remit-error').style.display = 'none';
-        modal.querySelector('#admin-remittance-modal').style.display = 'flex';
-        setPageBackgroundInert(true);
-        modal.querySelector('#remit-amount-pkr').focus();
-      } catch (error) { alert(error.message || 'Unable to load settlement'); }
-      finally { b.disabled = false; }
+      await openSettlement(shipmentId,b,view);
     }));
 
     const purgeBtn = container.querySelector('#btn-review-expired-orders');
@@ -721,6 +733,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         workflowPanel.textContent = 'Loading payment instructions...';
         try {
           const preview = await fetchPaymentInstructionsPreview(orderId);
+          if(!isCurrent())return;
           workflowPanel.innerHTML = `
             <form id="instructions-sent-form" style="margin-top: 16px; padding: 16px; border: 1px solid rgba(255,255,255,.2);">
               <h3>Bank instructions for ${escapeHtml(preview.order_number)}</h3>
@@ -737,6 +750,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             event.preventDefault();
             const form = event.currentTarget;
             const submit = form.querySelector('button[type="submit"]');
+            if(submit.disabled || !isCurrent())return;
+            if(!form.elements.confirmed_sent.checked || form.elements.reference.value.trim().length<3){form.querySelector('.payment-workflow-feedback').textContent='Confirm successful handoff and enter its reference.';return;}
             submit.disabled = true;
             try {
               await markPaymentInstructionsSent(orderId, {
@@ -773,6 +788,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           event.preventDefault();
           const form = event.currentTarget;
           const submit = form.querySelector('button[type="submit"]');
+          if(submit.disabled || !isCurrent())return;
+          if(!form.elements.funds_checked.checked || form.elements.note.value.trim().length<5){form.querySelector('.payment-workflow-feedback').textContent='Confirm you checked funds and enter a review note.';return;}
           submit.disabled = true;
           try {
             await resolvePaymentReview(orderId, {
@@ -791,14 +808,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     container.querySelectorAll('.btn-verify-payment').forEach(b => {
       b.addEventListener('click', async () => {
         const orderId = b.getAttribute('data-order-id');
-        b.disabled = true;
-        try {
-          await verifyOrderPayment(orderId);
-          await loadActiveTabData();
-        } catch (error) {
-          if (error.status !== 401) showSessionMessage(error.message || 'Payment verification failed.');
-          b.disabled = false;
-        }
+        if(!isCurrent() || !canLeave())return;
+        mountFundsReview(workflowPanel,orders.find(o=>o.id===orderId),{isCurrent,onSaved:loadActiveTabData});
       });
     });
 
@@ -858,7 +869,9 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         const reason = prompt('Enter RTO reason (e.g. customer refused, unreachable, bad address):');
         if (reason !== null) {
           const costInput = prompt('Enter courier return shipping cost in PKR (optional, default 0):', '0');
-          const costMinor = costInput ? pkrToMinor(parseFloat(costInput) || 0) : 0;
+          if(costInput === null)return;
+          const costMinor = parseCatalogPkr(costInput || '0');
+          if(costMinor === null){alert('Enter a nonnegative PKR courier cost with up to two decimals.');return;}
           b.disabled = true;
           try {
             await initiateOrderRto(orderId, { reason, rto_courier_cost_minor: costMinor });
@@ -992,7 +1005,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         <td style="padding: 12px 8px; font-weight: 600;">${escapeHtml(it.product_title)}<div style="font-size: .7rem; opacity: .7;">${escapeHtml(it.supplier_name || '')}</div></td>
         <td style="padding: 12px 8px; font-family: monospace; color: rgba(255, 255, 255, 0.7);">${escapeHtml(it.sku)} ${escapeHtml([it.size, it.color].filter(Boolean).join(' / '))}</td>
         <td style="padding: 12px 8px;">${it.physical_on_hand}</td>
-        <td style="padding: 12px 8px; color: #FBBF24;">${it.held_reservations}</td>
+        <td style="padding: 12px 8px; color: #FBBF24;">${it.held_reservations}<details><summary>See reserved orders</summary><div data-inventory-holds="${it.supplier_variant_id}"></div></details></td>
         <td style="padding: 12px 8px; font-weight: 700; color: ${it.available_to_sell <= 2 ? '#F87171' : '#4ADE80'};">${it.available_to_sell}</td>
       </tr>
     `).join('');
@@ -1022,6 +1035,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       </form>` : '<p>No active supplier variants. Assign a catalog variant to a supplier first.</p>'}
     `;
     const form = container.querySelector('#inventory-adjust-form');
+    for (const item of items) stockHoldViews.push(mountStockHolds(container.querySelector(`[data-inventory-holds="${item.supplier_variant_id}"]`), item.supplier_variant_id, null, () => view === viewGeneration && authenticated));
     form?.addEventListener('submit', async event => {
       event.preventDefault();
       const button = form.querySelector('button[type="submit"]');
@@ -1119,12 +1133,12 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
               </div>
               <div>
                 <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Value *</label>
-                <input type="number" id="cpn-val" required min="0" value="10" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+                <input type="number" id="cpn-val" required min="0" step="0.01" value="10" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
               </div>
             </div>
             <div>
               <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Min Subtotal (PKR)</label>
-              <input type="number" id="cpn-min-pkr" value="0" min="0" step="100" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+              <input type="number" id="cpn-min-pkr" value="0" min="0" step="0.01" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
             </div>
             <div>
               <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Usage Limit (Optional)</label>
@@ -1158,13 +1172,13 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       e.preventDefault();
       const code = container.querySelector('#cpn-code').value.trim();
       const discountType = container.querySelector('#cpn-type').value;
-      let val = parseInt(container.querySelector('#cpn-val').value, 10) || 0;
-      if (discountType === 'fixed_amount') {
-        val = pkrToMinor(val);
-      }
-      const minPkr = parseInt(container.querySelector('#cpn-min-pkr').value, 10) || 0;
+      if(saveBtn.disabled)return;
+      const rawValue = container.querySelector('#cpn-val').value.trim();
+      const val = discountType === 'fixed_amount' ? parseCatalogPkr(rawValue) : discountType === 'free_shipping' ? 0 : Number(rawValue);
+      const minimum = parseCatalogPkr(container.querySelector('#cpn-min-pkr').value || '0');
       const limitRaw = container.querySelector('#cpn-limit').value.trim();
-      const usageLimit = limitRaw ? parseInt(limitRaw, 10) : null;
+      const usageLimit = limitRaw ? Number(limitRaw) : null;
+      if(val === null || minimum === null || (discountType === 'percentage' && (!Number.isInteger(val) || val<1 || val>100)) || (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit<1 || usageLimit>2147483647))){cpnError.textContent='Use exact PKR amounts, a whole percentage from 1–100 and a positive whole usage limit.';cpnError.style.display='block';return;}
 
       saveBtn.disabled = true;
       saveBtn.textContent = 'Creating...';
@@ -1175,7 +1189,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           code,
           discount_type: discountType,
           discount_value: val,
-          min_subtotal_minor: pkrToMinor(minPkr),
+          min_subtotal_minor: minimum,
           usage_limit: usageLimit,
         });
         await loadActiveTabData();
@@ -1190,12 +1204,12 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
 
   // 5. Returns Tab
   async function renderReturnsTab(container, view) {
-    const returns = await fetchAdminReturns();
+    const returns = await fetchAdminReturns({status:returnsStatus});
     if (view !== viewGeneration) return;
 
     const rowsHtml = returns.map(r => `
       <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-        <td style="padding: 12px 8px; font-family: monospace; color: rgba(255, 255, 255, 0.7);">${escapeHtml(String(r.id).slice(0, 8))}</td>
+        <td style="padding: 12px 8px; font-family: monospace; color: rgba(255, 255, 255, 0.7);">${escapeHtml(String(r.id).slice(0, 8))}${returnEvidence(r)}</td>
         <td style="padding: 12px 8px; text-transform: capitalize;">${escapeHtml(r.return_type)}</td>
         <td style="padding: 12px 8px;">${escapeHtml(r.reason)}</td>
         <td style="padding: 12px 8px; color: rgba(255, 255, 255, 0.6);">${escapeHtml(r.customer_notes || '—')}</td>
@@ -1210,8 +1224,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         <td style="padding: 12px 8px; text-align: right;">
           ${r.status === 'requested' ? `
             <button class="btn btn-primary btn-approve-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">Approve</button>
-            <button class="btn btn-secondary btn-reject-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: 0.7rem; color: #F87171;">Reject</button>
           ` : ''}
+          ${['requested','approved'].includes(r.status) && !r.received_quantity ? `<button class="btn btn-secondary btn-reject-ret" data-ret-id="${r.id}">Reject / withdraw approval</button>` : ''}
           ${['approved', 'item_received', 'inspected_passed'].includes(r.status) ? `
             ${r.status === 'approved' && r.inspection_state !== 'legacy_review' && r.received_quantity === 0 ? `<button class="btn btn-secondary btn-receive-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Record Receipt</button>` : ''}
             ${r.inspection_state !== 'legacy_review' && r.received_quantity > r.sellable_quantity + r.damaged_quantity ? `<button class="btn btn-secondary btn-inspect-ret" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Inspect Units</button>` : ''}
@@ -1220,9 +1234,12 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           ${r.return_type === 'size_exchange' && ['inspected_passed', 'completed'].includes(r.status) && r.received_quantity === r.quantity && !r.replacement_shipment_id ? `<button class="btn btn-primary btn-dispatch-replacement" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Dispatch Replacement</button>` : ''}
           ${r.return_type === 'refund_bank_transfer' && r.status === 'completed' && r.refund_outstanding.minor > 0 ? `<button class="btn btn-primary btn-record-refund" data-ret-id="${r.id}" style="padding: 4px 8px; font-size: .7rem;">Record Paid Refund</button>` : ''}
           ${r.replacement_shipment_id ? `<div style="font-size: .7rem;">Replacement: ${escapeHtml(r.replacement_shipment_status)}</div>
+            ${r.replacement_shipment_status === 'dispatched' ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="in_transit">In Transit</button>` : ''}
+            ${['dispatched','in_transit'].includes(r.replacement_shipment_status) ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="out_for_delivery">Out for Delivery</button>` : ''}
             ${['dispatched', 'in_transit', 'out_for_delivery'].includes(r.replacement_shipment_status) ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="delivered">Mark Delivered</button><button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="rto_initiated">Start RTO</button>` : ''}
             ${r.replacement_shipment_status === 'rto_initiated' ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="rto_delivered">Receive RTO</button>` : ''}
-            ${r.replacement_shipment_status === 'rto_delivered' ? `<button class="btn btn-secondary btn-inspect-replacement-rto" data-ret-id="${r.id}">Inspect RTO</button>` : ''}` : ''}
+            ${r.replacement_shipment_status === 'rto_delivered' ? `<button class="btn btn-secondary btn-inspect-replacement-rto" data-ret-id="${r.id}">Inspect RTO</button>` : ''}
+            ${r.replacement_shipment_status === 'delivered' && r.replacement_charge?.minor>0 ? `<button class="btn btn-secondary btn-remit-replacement" data-shipment-id="${r.replacement_shipment_id}">Replacement COD settlement</button>` : ''}` : ''}
         </td>
       </tr>
     `).join('');
@@ -1230,6 +1247,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     container.innerHTML = `
       <div>
         <h3 style="font-size: 0.9375rem; font-weight: 700; margin-bottom: 12px;">Customer Return & Size Exchange Inquiries</h3>
+        <form id="admin-return-filters" class="catalog-toolbar"><label>Return status<select name="status"><option value="">All statuses</option>${['requested','approved','item_received','inspected_passed','completed','rejected'].map(s=>`<option value="${s}" ${s===returnsStatus?'selected':''}>${s}</option>`).join('')}</select></label><button type="submit" class="btn btn-secondary">Filter returns</button></form>
         <div style="overflow-x: auto;">
           <table style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead>
@@ -1249,6 +1267,9 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       </div>
     `;
 
+    const returnFilter=container.querySelector('#admin-return-filters');
+    returnFilter.addEventListener('submit',event=>{event.preventDefault();if(!canLeave())return;returnsStatus=returnFilter.querySelector('select').value;loadActiveTabData();});
+    container.querySelectorAll('.btn-remit-replacement').forEach(button=>button.addEventListener('click',()=>openSettlement(button.getAttribute('data-shipment-id'),button,view)));
     container.querySelectorAll('.btn-approve-ret').forEach(b => {
       b.addEventListener('click', async () => {
         const id = b.getAttribute('data-ret-id');
@@ -1257,13 +1278,12 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         if (ret?.return_type === 'size_exchange') {
           const charge = prompt('Additional replacement charge in PKR (default 0; original COD is never charged again):', '0');
           if (charge === null) return;
-          const amount = Number(charge);
-          if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))
-              || Math.round(amount * 100) > 2147483647) {
+          const amount = parseCatalogPkr(charge);
+          if (amount === null) {
             alert('Enter a non-negative amount in PKR.');
             return;
           }
-          payload.replacement_charge_minor = Math.round(amount * 100);
+          payload.replacement_charge_minor = amount;
         }
         b.disabled = true;
         try { await approveAdminReturn(id, payload); await loadActiveTabData(); }
@@ -1274,6 +1294,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     container.querySelectorAll('.btn-reject-ret').forEach(b => {
       b.addEventListener('click', async () => {
         const id = b.getAttribute('data-ret-id');
+        if(!confirm('Reject this return and release any unused replacement reservation?'))return;
         b.disabled = true;
         try { await rejectAdminReturn(id); await loadActiveTabData(); }
         catch (error) { alert(error.message || 'Failed to reject return'); b.disabled = false; }
@@ -1343,9 +1364,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       const amountValue = prompt(`Actual refund sent (PKR; remaining ${formatPkr(ret.refund_outstanding.minor)}):`,
         String(ret.refund_outstanding.minor / 100));
       if (amountValue === null) return;
-      const amount = Number(amountValue);
-      const amountMinor = pkrToMinor(amount);
-      if (!Number.isFinite(amount) || amountMinor <= 0 || amountMinor > ret.refund_outstanding.minor) {
+      const amountMinor = parseCatalogPkr(amountValue);
+      if (amountMinor === null || amountMinor <= 0 || amountMinor > ret.refund_outstanding.minor) {
         alert('Enter a positive refund within the remaining approved amount.'); return;
       }
       const reference = prompt('Bank transfer or cash payment reference:');
@@ -1364,7 +1384,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       const value = prompt(`Cumulative received quantity (requested ${ret.quantity}):`, String(ret.quantity));
       if (value === null) return;
       const quantity = Number(value);
-      if (!Number.isInteger(quantity) || quantity < ret.received_quantity || quantity > ret.quantity) {
+      if (!Number.isInteger(quantity) || quantity <= 0 || quantity < ret.received_quantity || quantity > ret.quantity) {
         alert('Enter a whole quantity between the previous receipt and requested quantity.');
         return;
       }
@@ -1417,7 +1437,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     container.innerHTML = `
       <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
         <div>
-          <h3 style="font-size: 0.9375rem; font-weight: 700; margin-bottom: 12px;">Active Local Suppliers</h3>
+          <h3 style="font-size: 0.9375rem; font-weight: 700; margin-bottom: 12px;">Registered Local Suppliers</h3>
           <div style="overflow-x: auto;">
             <table style="width: 100%; border-collapse: collapse; text-align: left;">
               <thead>
@@ -1470,10 +1490,9 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       event.preventDefault();
       const button = mappingForm.querySelector('button[type="submit"]');
       if (button.disabled) return;
-      const cost = Number(mappingForm.querySelector('#mapping-cost').value);
-      const costMinor = pkrToMinor(cost);
+      const costMinor = parseCatalogPkr(mappingForm.querySelector('#mapping-cost').value);
       const feedback = mappingForm.querySelector('#mapping-feedback');
-      if (!Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(costMinor)) {
+      if (costMinor === null) {
         feedback.textContent = 'Enter a nonnegative wholesale cost in PKR.'; return;
       }
       button.disabled = true;
@@ -1533,18 +1552,20 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         <td style="padding: 10px 8px;">${escapeHtml(c.utm_medium)}</td>
         <td style="padding: 10px 8px;">${escapeHtml(c.utm_campaign)}</td>
         <td style="padding: 10px 8px; font-weight: 600;">${c.orders_count}</td>
-        <td style="padding: 10px 8px; font-weight: 700; color: #4ADE80;">${c.formatted_revenue}</td>
-        <td style="padding: 10px 8px; color: #F59E0B;">${c.formatted_discount}</td>
+        <td style="padding: 10px 8px; font-weight: 700; color: #4ADE80;">${escapeHtml(c.formatted_revenue)}</td>
+        <td style="padding: 10px 8px; color: #F59E0B;">${escapeHtml(c.formatted_discount)}</td>
       </tr>
     `).join('');
 
     container.innerHTML = `
+      <p>All-time operational figures from recorded orders, shipments and payments; estimated contribution excludes unrecorded overhead. Marketing order value includes undelivered orders.</p>
+      ${data.total_orders_count === 0 ? '<p role="status">No active orders currently contribute to this report. Recorded cash and historical evidence remain separate.</p>' : ''}
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
         
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
           <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Delivered Sales</div>
           <div style="font-size: 1.5rem; font-weight: 800; color: #4ADE80;">${escapeHtml(data.formatted_gross_revenue)}</div>
-          <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Undelivered and unpaid orders excluded</div>
+          <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Delivered order value; bank prepayments are reported separately</div>
         </div>
 
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
@@ -1571,7 +1592,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           <div>COD receipts cleared in bank: ${formatPkr(data.cod_remitted_minor)}</div>
           <div>Documented courier deductions: ${formatPkr(data.courier_deductions_minor)}</div>
           <div>COD outstanding with couriers: ${formatPkr(data.courier_held_cod_minor)}</div>
-          <div>Refunds approved/completed: ${formatPkr(data.sales_reversals_minor)}</div>
+          <div>Completed refund liabilities: ${formatPkr(data.sales_reversals_minor)}</div>
           <div>Refunds actually paid: ${formatPkr(data.refund_paid_minor)}</div>
           <div>Refunds still payable: ${formatPkr(data.refund_outstanding_minor)}</div>
           <div>Business cash after refunds: ${formatPkr(data.business_cash_received_minor)}</div>
@@ -1613,7 +1634,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             <strong style="color: #4ADE80;">${formatPkr(data.cod_remitted_minor)}</strong>
           </div>
           <p style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); margin: 12px 0 0 0;">
-            COD cash collected by couriers is remitted on weekly payout cycles. Track clearing references on each order.
+            Record actual courier receipts and evidenced deductions. Payout timing depends on your courier agreement; outstanding amounts remain visible until settled.
           </p>
         </div>
 
@@ -1629,7 +1650,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
                 <th style="padding: 8px;">Medium</th>
                 <th style="padding: 8px;">Campaign</th>
                 <th style="padding: 8px;">Orders</th>
-                <th style="padding: 8px;">Revenue</th>
+                <th style="padding: 8px;">Order value (not cash)</th>
                 <th style="padding: 8px;">Discounts Given</th>
               </tr>
             </thead>
@@ -1692,10 +1713,9 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     if (button.disabled) return;
     const error = form.querySelector('#dispatch-error');
     const tracking = form.querySelector('#dispatch-tracking-number').value.trim();
-    const cost = Number(form.querySelector('#dispatch-shipping-cost').value);
-    const costMinor = pkrToMinor(cost);
+    const costMinor = parseCatalogPkr(form.querySelector('#dispatch-shipping-cost').value || '0');
     const trackingUrl = form.querySelector('#dispatch-tracking-url').value.trim();
-    if (tracking.length < 3 || !Number.isFinite(cost) || cost < 0 || !Number.isSafeInteger(costMinor)) {
+    if (tracking.length < 3 || costMinor === null) {
       error.textContent = 'Enter a tracking number and a nonnegative courier fee.';
       error.style.display = 'block'; return;
     }
@@ -1728,16 +1748,13 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     const submit = form.querySelector('#btn-submit-remit');
     if (submit.disabled) return;
     const error = form.querySelector('#remit-error');
-    const amount = Number(form.querySelector('#remit-amount-pkr').value);
+    const cashMinor = parseCatalogPkr(form.querySelector('#remit-amount-pkr').value || '0');
     const deductionType = form.querySelector('#remit-deduction-type').value;
-    const deductionAmount = Number(form.querySelector('#remit-deduction-pkr').value || 0);
-    const cashMinor = pkrToMinor(amount);
-    const deductionMinor = pkrToMinor(deductionAmount);
+    const deductionMinor = parseCatalogPkr(form.querySelector('#remit-deduction-pkr').value || '0');
     const cashRef = form.querySelector('#remit-ref').value.trim();
     const deductionRef = form.querySelector('#remit-deduction-ref').value.trim();
     const deductionNote = form.querySelector('#remit-deduction-note').value.trim();
-    const invalid = ![amount, deductionAmount].every(Number.isFinite) || amount < 0 || deductionAmount < 0
-      || !Number.isSafeInteger(cashMinor) || !Number.isSafeInteger(deductionMinor)
+    const invalid = cashMinor === null || deductionMinor === null
       || cashMinor + deductionMinor <= 0 || cashMinor + deductionMinor > currentRemitOutstandingMinor
       || (cashMinor > 0 && cashRef.length < 3)
       || (deductionType ? deductionMinor <= 0 || deductionRef.length < 3 || deductionNote.length < 5 : deductionMinor > 0);
@@ -1818,6 +1835,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     selectTab,
     canLeave,
     destroy() {
+      stockHoldViews.forEach(v => v.destroy()); stockHoldViews = [];
       catalogView?.destroy(); catalogView = null;
       close(); unsubscribeSession();
       document.removeEventListener('keydown', pageKeyDown);

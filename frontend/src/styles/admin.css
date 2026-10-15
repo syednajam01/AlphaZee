@@ -36,6 +36,9 @@
 #catalog-status { white-space: pre-wrap; color: #ade6bf; overflow-wrap: anywhere; }
 #catalog-status.catalog-error { color: #ffb4a9; }
 .catalog-field-error { color: #ffb4a9; font-size: .8rem; }
+.variant-stock-panel { margin-top: 12px; padding: 16px; border: 1px solid #547561; border-radius: 8px; display: grid; gap: 12px; }
+.variant-stock-panel details { min-width: 0; overflow-wrap: anywhere; }
+.variant-stock-panel summary { cursor: pointer; padding: 8px 0; }
 .catalog-workspace [aria-invalid=true] { border-color: #ffb4a9 !important; }
 .catalog-workspace button:disabled { opacity: .5; cursor: wait; }
 .catalog-workspace :focus-visible { outline: 2px solid #a5d6bc; outline-offset: 2px; }
@@ -55,3 +58,9 @@
   .admin-page #admin-tab-content { padding: 16px !important; }
   .admin-page header { padding: 12px 16px !important; }
 }
+.admin-financial-overview { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 12px; margin-bottom: 16px; }
+.admin-financial-overview div { padding: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; }
+.admin-financial-overview strong { display: block; margin-top: 8px; }
+.admin-operation-form { display: grid; gap: 12px; padding: 16px; margin-top: 16px; border: 1px solid rgba(255,255,255,.2); }
+.admin-order-evidence { min-width: 190px; max-width: 340px; color: #DDD; font-weight: 400; margin-top: 8px; }
+.admin-order-evidence li { margin: 8px 0; }

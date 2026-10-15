@@ -202,7 +202,8 @@ class TestProductDetail:
             availability=AvailabilityStatus.AVAILABLE
         )
         variants = client.get("/api/v1/products/avail-test").json()["variants"]
-        assert variants[0]["availability"] == "available"
+        # The owner switch alone cannot offer stock with no supplying vendor.
+        assert variants[0]["availability"] == "unavailable"
 
     def test_hero_product_includes_hero_meta(self, client, db_session):
         col = make_collection(db_session)

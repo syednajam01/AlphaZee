@@ -12,13 +12,13 @@ export function adminSection(pathname) {
 
 export function initAdminDashboard() {
   const root = document.getElementById('app');
-  let currentPath = window.location.pathname;
+  let currentPath = window.location.pathname + (window.location.search || '');
   let index = 0;
   let restoringHistory = false;
   window.history.replaceState({ ...window.history.state, adminIndex: index }, '', currentPath);
   const internalTab = section => section === 'reports' ? 'analytics' : section;
   const dashboard = createAdminConsoleModal({ page: true,
-    initialTab: internalTab(adminSection(currentPath)),
+    initialTab: internalTab(adminSection(window.location.pathname)),
     onNavigate(tab) {
       const section = tab === 'analytics' ? 'reports' : tab;
       const path = section === 'overview' ? '/admin' : `/admin/${section}`;
@@ -41,9 +41,9 @@ export function initAdminDashboard() {
       else window.history.replaceState({ adminIndex: index }, '', currentPath);
       return;
     }
-    currentPath = window.location.pathname;
+    currentPath = window.location.pathname + (window.location.search || '');
     index = event.state?.adminIndex ?? index;
-    dashboard.selectTab(internalTab(adminSection(currentPath)), { checkDirty: false });
+    dashboard.selectTab(internalTab(adminSection(window.location.pathname)), { checkDirty: false });
   };
   window.addEventListener('popstate', popstate);
   dashboard.ready = dashboard.open();

@@ -6,6 +6,7 @@ __pycache__
 *.pyc
 .pytest_cache
 .pytest_tmp
+.local
 tests
 *.log
 README.md

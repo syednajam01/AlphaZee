@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import select, update, func, or_
+from sqlalchemy import select, update, func
 from sqlalchemy.orm import Session
 
 from app.models.inventory import (
@@ -25,6 +25,7 @@ from app.models.inventory import (
     SupplierVariant,
 )
 from app.models.suppliers import Supplier
+from app.queries.stock_rules import holding_predicate
 
 
 class StaleInventoryError(Exception):
@@ -98,8 +99,8 @@ def adjust_inventory(
     If 0 rows are updated, raises StaleInventoryError (optimistic concurrency conflict).
     Both the balance update and event insertion execute within the caller's transaction.
     """
-    if new_on_hand < 0:
-        raise ValueError(f"new_on_hand must be non-negative, got {new_on_hand}")
+    if not 0 <= new_on_hand <= 2147483647:
+        raise ValueError(f"new_on_hand must be between 0 and 2147483647, got {new_on_hand}")
 
     if reason not in ALLOWED_STOCK_EVENT_REASONS:
         raise ValueError(
@@ -120,8 +121,7 @@ def adjust_inventory(
         )
     held_query = select(func.coalesce(func.sum(StockReservation.quantity), 0)).where(
         StockReservation.supplier_variant_id == supplier_variant_id,
-        or_(StockReservation.stage.in_(OPEN_RESERVATION_STAGES),
-            StockReservation.legacy_stock_hold.is_(True)),
+        holding_predicate(),
     )
     if releasing_reservation_id:
         held_query = held_query.where(StockReservation.id != releasing_reservation_id)
