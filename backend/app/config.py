@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import List, Union
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +24,9 @@ class Settings(BaseSettings):
 
     # ── Database ─────────────────────────────────────────────────────────────
     database_url: str = "postgresql://alphazee:changeme@localhost:5433/alphazee_dev"
+    catalog_media_root: Path = Path(__file__).resolve().parents[2] / '.local' / 'catalog-media'
+    media_probe_timeout: int = Field(default=15, ge=1, le=60)
+    media_decode_timeout: int = Field(default=30, ge=1, le=120)
 
     # ── Application ───────────────────────────────────────────────────────────
     app_env: str = "development"

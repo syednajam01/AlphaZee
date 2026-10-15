@@ -45,6 +45,8 @@ services:
     image: alphazee-api:${IMAGE_TAG:-local}
     build: ./backend
     environment: *api_environment
+    volumes:
+      - catalog_media:/var/lib/alphazee/catalog-media
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -73,3 +75,4 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  catalog_media:

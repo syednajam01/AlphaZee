@@ -153,13 +153,14 @@ class TestCatalogDatabaseConstraints:
         """Deleting a collection with existing products is rejected by ON DELETE RESTRICT."""
         col = _create_collection(db_session, "col-restrict")
         _create_product(db_session, col.id, "prod-restrict")
+        assert col.products  # Even loaded children must not be silently orphaned.
 
         db_session.delete(col)
         with pytest.raises(IntegrityError):
             db_session.flush()
 
-    def test_product_fk_on_delete_cascade(self, db_session):
-        """Deleting a product cascades and deletes all associated variants."""
+    def test_product_fk_on_delete_restrict(self, db_session):
+        """Catalog lifecycle retains variants instead of destructive product cascades."""
         col = _create_collection(db_session, "col-cascade")
         prod = _create_product(db_session, col.id, "prod-cascade")
 
@@ -176,11 +177,13 @@ class TestCatalogDatabaseConstraints:
         db_session.flush()
         v_id = v.id
 
-        db_session.delete(prod)
-        db_session.flush()
+        with pytest.raises(IntegrityError):
+            with db_session.begin_nested():
+                db_session.delete(prod)
+                db_session.flush()
 
         loaded_variant = db_session.get(Variant, v_id)
-        assert loaded_variant is None
+        assert loaded_variant is not None
 
     def test_duplicate_sku_rejected(self, db_session):
         """Variant SKU uniqueness is enforced across all products."""

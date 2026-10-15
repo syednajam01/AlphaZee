@@ -55,7 +55,7 @@ test('direct dashboard login preserves route, restores session and supports navi
   assert.ok(requests.some(url => url.includes('/admin/orders')));
   dashboard.element.querySelector('[data-tab="products"]').click(); await flush();
   assert.equal(location.pathname, '/admin/products');
-  assert.match(dashboard.element.querySelector('#admin-tab-content').textContent, /coming next/);
+  assert.ok(dashboard.element.querySelector('#catalog-new-product'));
   location.pathname = '/admin/suppliers'; listeners.get('popstate')({ state: { adminIndex: 0 } });
   await flush();
   assert.match(dashboard.element.querySelector('#admin-view-title').textContent, /Suppliers/);

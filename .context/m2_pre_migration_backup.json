@@ -1,0 +1,185 @@
+{
+  "checked_at_utc": "2026-10-14T18:23:40.204895+00:00",
+  "phase": "M2 pre-migration",
+  "python": "3.13.3",
+  "git_head": "9acedc9ef63cf1ca10389108ce03fefd111bd1ab",
+  "working_tree": [
+    " M .context/owner_catalog_migration_verification.json",
+    " M backend/app/api/v1/catalog.py",
+    " M backend/app/main.py",
+    " M backend/app/models/catalog.py",
+    " M backend/app/queries/catalog.py",
+    " M backend/app/schemas/catalog.py",
+    " M backend/app/services/orders.py",
+    " M backend/scripts/verify_m0_baseline.py",
+    " M docker-compose.yml",
+    " M frontend/src/utils/api.js",
+    " M frontend/src/utils/money.js",
+    " M frontend/vite.config.js",
+    "?? backend/alembic/versions/e15a9c2b7046_catalog_lifecycle.py",
+    "?? backend/app/api/v1/owner_catalog.py",
+    "?? backend/app/schemas/owner_catalog.py",
+    "?? backend/app/services/owner_catalog.py",
+    "?? backend/scripts/apply_m2_development.py",
+    "?? backend/scripts/verify_m2_migration.py",
+    "?? backend/tests/test_owner_catalog.py",
+    "?? frontend/tests/catalog-money.test.js"
+  ],
+  "source": {
+    "host": "localhost",
+    "port": 5433,
+    "database": "alphazee_dev"
+  },
+  "revision": [
+    "c94e31f7d562"
+  ],
+  "http": {
+    "web_ready": 200,
+    "web_capabilities": {
+      "checkout_enabled": false,
+      "test_mode": false,
+      "payment_methods": [
+        "cod"
+      ]
+    },
+    "web/admin/overview": 401,
+    "web/admin/catalog/variants": 401,
+    "web_order_post": 503,
+    "api_ready": 200,
+    "api_capabilities": {
+      "checkout_enabled": false,
+      "test_mode": false,
+      "payment_methods": [
+        "cod"
+      ]
+    },
+    "api/admin/overview": 401,
+    "api/admin/catalog/variants": 401,
+    "api_order_post": 503
+  },
+  "tables": {
+    "alembic_version": {
+      "rows": 1,
+      "sha256": "7765f49b98be21cd9ddf1e114f35b60288a3a0ba30e69cd6fd4555162dab77d2"
+    },
+    "collections": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "coupons": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "courier_settlement_entries": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "inventory_balances": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_access_attempts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_access_grants": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_access_sessions": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_lines": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_returns": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "orders": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "owner_credentials": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "owner_login_buckets": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "owner_sessions": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "payment_receipts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "products": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "refund_executions": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "shipment_allocations": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "shipments": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stock_events": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stock_reservations": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "supplier_memberships": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "supplier_variants": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "suppliers": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "user_accounts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "variants": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "config_hashes": {
+    "backend/.env": "4e7fcedb862e4607af8df170383f59088928f04b1cd8c00d677bf0877500e19a",
+    ".env.docker.local": "16f81755556bf30764f7cec69cb2944d958c65ba74acc8ef9c13f749440e8712",
+    "docker-compose.yml": "812d5b6fa488661d05e3a45782dc82c1754b7eb0413c37b060841f4c287d88c6",
+    "compose.prod.yml": "4b644100280326472fce66ba3c39f65f33f6c73c41df0768d02887d7a4ee6e6b"
+  },
+  "config_unchanged": true,
+  "backup": ".local\\backups\\alphazee_m2_restore_949d78efca08_test.dump",
+  "backup_bytes": 79492,
+  "backup_sha256": "bf51a6dbdda623230c3b1ae7630cd2c3f829632a9509b537f57d50f72005fb88",
+  "restore_database": "alphazee_m2_restore_949d78efca08_test",
+  "restore_matches_all_public_table_rows": true,
+  "source_table_rows_unchanged": true,
+  "restore_retained": true,
+  "private_restore_not_a_browser_fixture": true,
+  "browser_executed": false,
+  "schema_and_sequences_sha256": "32bcc179dc3b615893e7ef13205d6e2b70193d6ba08c520d2e1fd0634e1d993c",
+  "restore_schema_and_sequences_match": true,
+  "media_storage": "No managed file storage exists yet; M3 will add it"
+}

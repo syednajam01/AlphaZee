@@ -1,0 +1,44 @@
+# Disposable M3 acceptance stack; never shares development DB or media volumes.
+name: alphazee-m3-media-check
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: alphazee
+      POSTGRES_PASSWORD: SAMPLE-m3-only
+      POSTGRES_DB: alphazee_m3_media_test
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U alphazee -d alphazee_m3_media_test]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    image: alphazee-api:latest
+    build: ./backend
+    environment: &environment
+      DATABASE_URL: postgresql://alphazee:SAMPLE-m3-only@db:5432/alphazee_m3_media_test
+      APP_ENV: test
+      DEBUG: "false"
+      TEST_CHECKOUT_ENABLED: "false"
+      ALLOWED_ORIGINS: http://127.0.0.1:13003
+    command: [alembic, upgrade, head]
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    image: alphazee-api:latest
+    build: ./backend
+    environment: *environment
+    volumes:
+      - catalog_media:/var/lib/alphazee/catalog-media
+      - ./.local/m3-media-check:/evidence
+    ports:
+      - 127.0.0.1:18003:8000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+volumes:
+  pgdata:
+  catalog_media:

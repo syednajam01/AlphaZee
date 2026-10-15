@@ -189,6 +189,10 @@ class ProductDetailSchema(BaseModel):
     slug: str
     title: str
     description: Optional[str] = None
+    short_description: Optional[str] = None
+    material: Optional[str] = None
+    care: Optional[str] = None
+    sizing: Optional[str] = None
     collection_id: str
     image_url: Optional[str] = None
     badge: Optional[str] = None

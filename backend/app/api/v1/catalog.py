@@ -103,6 +103,10 @@ def _build_product_detail(product) -> ProductDetailSchema:
         badge=product.badge,
         is_hero=product.is_hero,
         hero=hero,
+        short_description=product.short_description,
+        material=product.material,
+        care=product.care,
+        sizing=product.sizing,
         variants=variants,
     )
 

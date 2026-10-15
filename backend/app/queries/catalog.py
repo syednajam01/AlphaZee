@@ -64,7 +64,7 @@ def get_active_products(
     base_stmt = (
         select(Product)
         .join(Collection, Product.collection_id == Collection.id)
-        .where(Product.is_active.is_(True), Collection.is_active.is_(True))
+        .where(Product.is_active.is_(True), Product.status == 'published', Collection.is_active.is_(True))
     )
     if collection_id:
         base_stmt = base_stmt.where(Product.collection_id == collection_id)
@@ -101,6 +101,7 @@ def get_product_by_slug(db: Session, slug: str) -> Product | None:
         .where(
             Product.slug == slug,
             Product.is_active.is_(True),
+            Product.status == 'published',
             Collection.is_active.is_(True),
         )
         .options(
@@ -123,6 +124,7 @@ def get_hero_products(db: Session) -> list[Product]:
         .join(Collection, Product.collection_id == Collection.id)
         .where(
             Product.is_active.is_(True),
+            Product.status == 'published',
             Product.is_hero.is_(True),
             Collection.is_active.is_(True),
         )
@@ -143,5 +145,5 @@ def get_min_price_minor(product: Product) -> int | None:
 
     Used to populate the `min_price` field on list responses.
     """
-    active_prices = [v.price_minor for v in product.variants if v.is_active]
+    active_prices = [v.price_minor for v in product.variants if v.is_active and v.price_minor is not None]
     return min(active_prices) if active_prices else None

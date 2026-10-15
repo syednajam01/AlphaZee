@@ -1,0 +1,20 @@
+{
+  "phase": "M3",
+  "checked_at_utc": "2026-10-14T19:11:37.790332+00:00",
+  "database": "alphazee_dev",
+  "prior_revision": [
+    "e15a9c2b7046"
+  ],
+  "revision": [
+    "f27b6d91c083"
+  ],
+  "backup": ".local\\backups\\alphazee_m3_restore_253f0bd8b7cc_test.dump",
+  "restore_database": "alphazee_m3_restore_253f0bd8b7cc_test",
+  "all_existing_row_counts_preserved": true,
+  "non_collection_row_digests_preserved": true,
+  "configuration_preserved": true,
+  "owner_credentials_preserved": true,
+  "alembic_check": "passed",
+  "checkout_enabled": false,
+  "demo_data_inserted": false
+}

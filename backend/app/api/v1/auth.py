@@ -37,6 +37,10 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         .where(OwnerCredential.username == payload.username, OwnerCredential.enabled.is_(True), UserAccount.is_active.is_(True))
         .with_for_update(of=OwnerCredential))
     valid = verify_password(payload.password.get_secret_value(), owner.password_hash if owner else DUMMY_HASH)
+    if owner and settings.is_production:
+        user = db.get(UserAccount, owner.user_id)
+        if user.auth_subject.startswith('local-development-owner:'):
+            valid = False
     if not valid or owner is None:
         db.rollback()
         raise HTTPException(401, 'Invalid username or password')

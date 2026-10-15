@@ -99,7 +99,7 @@ def test_collection_cascade_alignment():
     """Verify Collection.products does not cascade deletes to Products (aligns with RESTRICT FK)."""
     cascade = Collection.products.property.cascade
     assert cascade.delete_orphan is False
-    assert Collection.products.property.passive_deletes is True
+    assert Collection.products.property.passive_deletes == 'all'
 
 
 def test_variant_option_normalization():

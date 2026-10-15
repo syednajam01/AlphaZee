@@ -1,0 +1,9 @@
+{
+  "checked_at_utc": "2026-10-15T00:33:37.966961+00:00",
+  "username": "syed123",
+  "account_and_password_hash_preserved": true,
+  "login_after_database_api_restart": true,
+  "existing_unexpired_session_survives": true,
+  "database_volume": "alphazee_pgdata",
+  "plaintext_password_saved": false
+}

@@ -173,7 +173,7 @@ def get_inventory_summary_endpoint(db: Session = Depends(get_db)) -> InventorySu
                 supplier_id=sv.supplier_id,
                 supplier_name=sv.supplier.name,
                 variant_id=sv.variant_id,
-                product_title=product.title if product else "Unknown Product",
+                product_title=(product.title or 'Untitled draft') if product else "Unknown Product",
                 sku=variant.sku if variant else "UNKNOWN",
                 size=variant.size if variant else None,
                 color=variant.color if variant else None,
@@ -251,7 +251,7 @@ def adjust_inventory_endpoint(
         supplier_id=sv.supplier_id,
         supplier_name=sv.supplier.name,
         variant_id=sv.variant_id if sv else 0,
-        product_title=product.title if product else "Unknown Product",
+        product_title=(product.title or 'Untitled draft') if product else "Unknown Product",
         sku=variant.sku if variant else "UNKNOWN",
         size=variant.size if variant else None,
         color=variant.color if variant else None,
@@ -671,7 +671,7 @@ def list_catalog_variants_for_owner(db: Session = Depends(get_db)) -> list[Catal
     active_links = db.scalars(select(SupplierVariant).where(SupplierVariant.active.is_(True))).all()
     links = {link.variant_id: link for link in active_links}
     return [CatalogVariantAdminSchema(
-        id=variant.id, product_title=variant.product.title, sku=variant.sku,
+        id=variant.id, product_title=variant.product.title or 'Untitled draft', sku=variant.sku,
         size=variant.size, color=variant.color, is_active=variant.is_active,
         active_supplier_id=links[variant.id].supplier_id if variant.id in links else None,
         supplier_cost_minor=links[variant.id].supplier_cost_minor if variant.id in links else None,

@@ -45,6 +45,7 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-proxy-headers"]
     volumes:
       - ./backend:/app
+      - catalog_media:/var/lib/alphazee/catalog-media
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
@@ -58,6 +59,7 @@ services:
       target: development
     environment:
       VITE_HOST: 0.0.0.0
+      VITE_USE_POLLING: "true"
       VITE_API_PROXY_TARGET: http://api:8000
     command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0"]
     volumes:
@@ -80,3 +82,4 @@ volumes:
   pgdata:
     driver: local
   frontend_node_modules:
+  catalog_media:

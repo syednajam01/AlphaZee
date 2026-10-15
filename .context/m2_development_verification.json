@@ -1,0 +1,19 @@
+{
+  "phase": "M2",
+  "checked_at_utc": "2026-10-14T18:24:05.874419+00:00",
+  "database": "alphazee_dev",
+  "prior_revision": [
+    "c94e31f7d562"
+  ],
+  "revision": [
+    "e15a9c2b7046"
+  ],
+  "backup": ".local\\backups\\alphazee_m2_restore_949d78efca08_test.dump",
+  "restore_database": "alphazee_m2_restore_949d78efca08_test",
+  "row_counts_preserved": true,
+  "non_catalog_row_digests_preserved": true,
+  "configuration_preserved": true,
+  "alembic_check": "passed",
+  "checkout_enabled": false,
+  "demo_data_inserted": false
+}

@@ -51,6 +51,7 @@ import {
 } from '../utils/api.js';
 import { escapeHtml } from '../utils/dom.js';
 import { formatPkr, pkrToMinor } from '../utils/money.js';
+import { mountCatalogSection } from './admin/CatalogWorkspace.js';
 
 export function createAdminConsoleModal({ page = false, initialTab = 'overview', onNavigate = () => {} } = {}) {
   const modal = document.createElement('div');
@@ -65,6 +66,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   let currentRemitOutstandingMinor = 0;
   let authGeneration = 0;
   let viewGeneration = 0;
+  let catalogView = null;
   let dispatchOpener = null;
   let remitOpener = null;
   removeLegacyAdminCredentials();
@@ -398,6 +400,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   }
 
   function renderLogin(message = '') {
+    catalogView?.destroy(); catalogView = null;
     authGeneration++;
     viewGeneration++;
     authenticated = false;
@@ -460,6 +463,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     if (!authenticated) { renderLogin(); return; }
     const generation = authGeneration;
     const view = ++viewGeneration;
+    catalogView?.destroy(); catalogView = null;
     dirty = false;
     contentArea.innerHTML = '<div style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 40px 0;">Loading data...</div>';
 
@@ -479,7 +483,12 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       } else if (activeTab === 'analytics') {
         await renderAnalyticsTab(contentArea, view);
       } else if (['products', 'collections', 'media'].includes(activeTab)) {
-        contentArea.innerHTML = `<section class="admin-empty-state"><h3>${escapeHtml(activeTab[0].toUpperCase() + activeTab.slice(1))} management is coming next</h3><p>Catalog editing and uploads will be added in the next implementation phases. No catalog changes can be saved here yet.</p></section>`;
+        catalogView = mountCatalogSection(activeTab, contentArea, {
+          isCurrent: () => view === viewGeneration && authenticated,
+          setDirty: value => { if (view === viewGeneration) dirty = value; },
+          canLeave,
+        });
+        await catalogView.ready;
       } else {
         contentArea.innerHTML = '<section class="admin-empty-state"><h3>Section not found</h3><p>Choose a section from the owner navigation.</p></section>';
       }
@@ -1809,6 +1818,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     selectTab,
     canLeave,
     destroy() {
+      catalogView?.destroy(); catalogView = null;
       close(); unsubscribeSession();
       document.removeEventListener('keydown', pageKeyDown);
       if (page) window.removeEventListener('beforeunload', beforeUnload);

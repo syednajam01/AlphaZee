@@ -7,6 +7,7 @@ Models are defined in submodules and imported here so that:
 """
 
 from app.database import Base  # re-export so Alembic can find it
+from app.models.media import MediaAsset, ProductMedia  # noqa: F401
 from app.models.catalog import AvailabilityStatus, Collection, Product, Variant  # noqa: F401
 from app.models.suppliers import Supplier, SupplierMembership, UserAccount  # noqa: F401
 from app.models.inventory import (  # noqa: F401

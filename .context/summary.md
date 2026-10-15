@@ -1,12 +1,12 @@
 # AlphaZee — short operating guide
 
-Updated 2026-10-14 through M1. Normal API checks: database connected, catalog empty, public checkout disabled, COD capability only. Isolated Chrome verified the direct owner dashboard/session/navigation at desktop/mobile sizes; complete commerce browser journeys remain pending.
+Updated 2026-10-14 through M2. Catalog lifecycle APIs now support drafts, versioned edits and archival; upload/editor screens remain M3/M4 work. The stale Docker Vite `/admin` module was fixed with polling/restart. Normal catalog is empty and public checkout stays disabled; isolated browser and database verification are recorded in [M2 guide](m2_catalog_runbook.md).
 
 ## 1. What the app is
 
 AlphaZee is a Pakistan apparel/essentials store with supplier-based fulfillment and an owner console. The frontend uses Vite, vanilla JavaScript and CSS; FastAPI/Python handles `/api/v1`; PostgreSQL stores commerce data; SQLAlchemy/Alembic manage models and migrations. Prices use integer paisas internally (100 = PKR 1).
 
-The main flows are implemented, but the site is **not open for public orders**. Currently there are no products or collections in the running development catalog. An empty storefront is therefore expected. There is no full product/collection editing screen; catalog setup currently requires backend data work. `backend/seed.py` is an optional development/test sample-data tool.
+The main flows are implemented, but the site is **not open for public orders**. Currently there are no products or collections in development. Owner APIs can save incomplete drafts, variants and collections; the full editing screen and managed uploads are still pending. New publication requires validated media from M3. `backend/seed.py` is an optional sample tool, not the intended real-catalog workflow.
 
 ## 2. Start, access and stop
 
@@ -64,8 +64,8 @@ Production uses `compose.prod.yml`: private DB/API, automatic migrations, static
 
 ## 7. Completed work and remaining limits
 
-Completed: checkout containment (0), startup/dialog/button repairs (L1), owner authentication (A), retry/concurrency safety (B), bank/supplier review (C), stock/shipment/inspection corrections (D/E), Docker packaging, secure customer access/exchanges (G), settlement/refund accounting (F), remaining owner frontend wiring (L2), and terminal verification (V). Development migration head: `c94e31f7d562`.
+Completed: earlier commerce repairs (0/L1/A/B/C/D/E/G/F/L2/V), Docker packaging, M0 backup/contracts, M1 direct dashboard and M2 catalog lifecycle/APIs. Development migration head: `e15a9c2b7046`.
 
-Earlier full verification: **209 backend tests**, migrations and real PostgreSQL concurrency passed. M1: **87 frontend tests, 25 focused backend auth/session tests, builds and 13 isolated Chrome checks passed**; development fingerprints stayed unchanged. See [M1 guide](m1_dashboard_runbook.md), [earlier verification](repair_verification_report.md) and [control inventory](frontend_control_inventory.md).
+M2 verification: **218 backend tests, final 17 focused catalog tests, 88 frontend tests, builds, real edit-version contention and isolated migration/backup checks passed**. Browser checks include the actual `/admin` login and isolated draft/publication guard. See [M2 guide](m2_catalog_runbook.md) and [earlier verification](repair_verification_report.md).
 
-Still needed: catalog/media authoring (M2–M4), real catalog/business setup, valid bank details, support/legal/recovery configuration, production DNS/TLS/credentials, assessment of two reported npm advisories, and complete catalog/commerce browser acceptance. No public production deployment has been completed; public checkout stays closed.
+Still needed: media uploads and authoring screens (M3/M4), supplier/stock detail integration, real catalog/business setup, valid bank/support/legal/recovery configuration, isolated checkout lab and complete commerce browser acceptance. No public production deployment has been completed; public checkout stays closed.

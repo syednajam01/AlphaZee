@@ -4,7 +4,7 @@
   "phases": {
     "M0": "completed",
     "M1": "completed",
-    "M2": "pending",
+    "M2": "completed",
     "M3": "pending",
     "M4": "pending",
     "M5": "pending",
@@ -38,7 +38,21 @@
     "production_web_image_build": "passed",
     "public_checkout_enabled": false
   },
-  "next_phase": "M2",
+  "m2_evidence": {
+    "report": "m2_catalog_runbook.md",
+    "migration": "owner_catalog_migration_verification.json",
+    "development": "m2_development_verification.json",
+    "browser": "m2_browser_verification.json",
+    "backend_tests_passed": 218,
+    "final_focused_catalog_tests_passed": 17,
+    "frontend_tests_passed": 88,
+    "chrome_checks_passed": 15,
+    "production_images_built": true,
+    "media_uploads_pending": true,
+    "authoring_screens_pending": true,
+    "public_checkout_enabled": false
+  },
+  "next_phase": "M3",
   "migration_evidence": "owner_catalog_migration_verification.json",
   "browser_checklist": "owner_catalog_browser_checklist.md"
 }

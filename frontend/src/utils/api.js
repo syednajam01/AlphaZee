@@ -23,8 +23,9 @@ export function onOwnerSessionExpired(listener) {
 }
 
 function forgetOwnerSession() {
+  const hadSession = ownerCsrfToken !== null;
   ownerCsrfToken = null;
-  ownerExpiryListeners.forEach(listener => listener());
+  if (hadSession) ownerExpiryListeners.forEach(listener => listener());
 }
 
 export async function loginOwner(username, password) {
@@ -86,7 +87,8 @@ async function request(endpoint, options = {}) {
       } catch {
         // Response was not JSON
       }
-      const message = errorData?.detail || `API request failed: ${res.status} ${res.statusText}`;
+      const detail = errorData?.detail;
+      const message = typeof detail === 'string' ? detail : detail?.message || `API request failed: ${res.status} ${res.statusText}`;
       throw new ApiError(message, res.status, errorData);
     }
 
@@ -95,6 +97,72 @@ async function request(endpoint, options = {}) {
     if (err instanceof ApiError) throw err;
     throw new ApiError(err.message || 'Network error while contacting store backend', 0);
   }
+}
+
+// Owner catalog contracts used by the M4 authoring screens. All writes inherit
+// same-origin cookies/CSRF from the central request client.
+export function fetchOwnerProducts(params = {}) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== null && value !== ''));
+  return request(`/admin/products?${query}`);
+}
+export function fetchOwnerProduct(id) { return request(`/admin/products/${encodeURIComponent(id)}`); }
+export function createOwnerProduct(payload = {}) { return ownerCatalogWrite('/admin/products', payload); }
+export function updateOwnerProduct(id, payload) { return ownerCatalogWrite(`/admin/products/${encodeURIComponent(id)}`, payload); }
+export function transitionOwnerProduct(id, action, version) {
+  if (!['publish', 'unpublish', 'archive', 'restore'].includes(action)) throw new Error('Unknown product action');
+  return ownerCatalogWrite(`/admin/products/${encodeURIComponent(id)}/${action}`, { expected_version: version });
+}
+export function fetchOwnerCollections() { return request('/admin/collections'); }
+export function createOwnerCollection(payload) { return ownerCatalogWrite('/admin/collections', payload); }
+export function updateOwnerCollection(id, payload) { return ownerCatalogWrite(`/admin/collections/${encodeURIComponent(id)}`, payload); }
+export function reorderOwnerCollections(items) { return ownerCatalogWrite('/admin/collections/reorder', { items }); }
+function ownerCatalogWrite(path, payload) {
+  return request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+}
+
+export function fetchOwnerMedia(params = {}) {
+  return request(`/admin/media?${new URLSearchParams(params)}`);
+}
+export function fetchOwnerMediaAsset(id) { return request(`/admin/media/${encodeURIComponent(id)}`); }
+export function saveProductMedia(id, payload) { return ownerCatalogWrite(`/admin/media/products/${encodeURIComponent(id)}`, payload); }
+export function saveCollectionMedia(id, payload) { return ownerCatalogWrite(`/admin/media/collections/${encodeURIComponent(id)}`, payload); }
+export function saveMediaPoster(id, payload) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/poster`, payload); }
+export function deleteOwnerMedia(id, expectedVersion) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/delete`, { expected_version: expectedVersion }); }
+
+// FormData deliberately lets the browser set its boundary. M4 adds picker/progress UI.
+export function uploadOwnerMedia(file, { signal, onProgress } = {}) {
+  const body = new FormData();
+  body.append('file', file);
+  if (onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const abort = () => xhr.abort();
+      const finish = () => signal?.removeEventListener('abort', abort);
+      xhr.open('POST', `${API_BASE}/admin/media`);
+      xhr.setRequestHeader('Accept', 'application/json');
+      if (ownerCsrfToken) xhr.setRequestHeader('X-CSRF-Token', ownerCsrfToken);
+      xhr.upload.onprogress = event => {
+        if (event.lengthComputable) onProgress(Math.min(100, Math.round(event.loaded / event.total * 100)));
+      };
+      xhr.onload = () => {
+        finish();
+        let data;
+        try { data = JSON.parse(xhr.responseText); } catch { data = null; }
+        if (xhr.status >= 200 && xhr.status < 300 && data?.id) resolve(data);
+        else {
+          if (xhr.status === 401) forgetOwnerSession();
+          const detail = data?.detail;
+          reject(new ApiError(typeof detail === 'string' ? detail : detail?.message || 'Upload could not be accepted', xhr.status, data));
+        }
+      };
+      xhr.onerror = () => { finish(); reject(new ApiError('Upload connection failed. Check the library before retrying.', 0)); };
+      xhr.onabort = () => { finish(); const error = new Error('Upload canceled. Check the library before retrying.'); error.name = 'AbortError'; reject(error); };
+      if (signal?.aborted) { const error = new Error('Upload canceled'); error.name = 'AbortError'; reject(error); return; }
+      signal?.addEventListener('abort', abort, { once: true });
+      xhr.send(body);
+    });
+  }
+  return request('/admin/media', { method: 'POST', body, signal });
 }
 
 /**

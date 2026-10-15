@@ -1,15 +1,16 @@
 {
-  "milestone": "owner_dashboard_catalog_media",
-  "phase": "M0",
-  "status": "not_applicable_no_schema_changes",
-  "new_migrations": [],
-  "development_downgraded": false,
-  "next_required_phase": "M2",
-  "required_checks": [
-    "upgrade disposable historical fixture database",
-    "inspect lifecycle, draft nullability and legacy media backfills",
-    "verify historical order, stock and finance preservation",
-    "downgrade reversible new migrations only in isolated target",
-    "re-upgrade and compare Alembic schema"
-  ]
+  "phase": "M2",
+  "checked_at_utc": "2026-10-14T18:16:47.973290+00:00",
+  "database": "alphazee_m2_migration_e2a7473666_test",
+  "prior_revision": "c94e31f7d562",
+  "head_revision": "e15a9c2b7046",
+  "upgrade_downgrade_reupgrade": "passed",
+  "incomplete_draft_downgrade_refused": true,
+  "legacy_active_inactive_states_preserved": true,
+  "legacy_image_preserved": true,
+  "referenced_product_delete_rejected": true,
+  "historical_order_snapshots_preserved": true,
+  "alembic_check": "passed",
+  "development_modified": false,
+  "database_retained": true
 }

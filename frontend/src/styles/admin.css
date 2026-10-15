@@ -16,6 +16,30 @@
 .admin-page .admin-tab-btn:focus-visible, .admin-page a:focus-visible { outline: 2px solid #a5d6bc; outline-offset: 2px; }
 .admin-page #admin-tab-content { min-width: 0; overflow-x: auto; }
 .admin-page #admin-session-message { padding: 0 24px; }
+.catalog-workspace { display: grid; gap: 20px; max-width: 1280px; }
+.catalog-workspace form, .catalog-workspace fieldset { display: grid; gap: 16px; min-width: 0; }
+.catalog-workspace fieldset { padding: 16px; border: 1px solid #40574a; border-radius: 8px; }
+.catalog-workspace legend { padding: 0 8px; font-weight: 600; }
+.catalog-fields, .catalog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 16px; }
+.catalog-workspace label { display: grid; gap: 6px; font-size: .85rem; }
+.catalog-workspace input:not([type=checkbox]), .catalog-workspace select, .catalog-workspace textarea {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 10px; color: #fff; background: #101713; border: 1px solid #486352; border-radius: 6px; font: inherit;
+}
+.catalog-workspace textarea { resize: vertical; }
+.catalog-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.catalog-workspace .catalog-card { padding: 16px; border: 1px solid #344b3c; border-radius: 8px; display: grid; gap: 12px; align-content: start; }
+.catalog-workspace .catalog-card p, .catalog-workspace .catalog-card h3 { margin: 0; overflow-wrap: anywhere; }
+.catalog-workspace img, .catalog-workspace video { max-width: 100%; width: 100%; max-height: 240px; object-fit: contain; background: #0c100e; border-radius: 6px; }
+.catalog-media-card { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 16px; padding: 12px; margin: 10px 0; border: 1px solid #344b3c; }
+.catalog-upload-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(80px, 150px); gap: 10px; padding: 12px 0; overflow-wrap: anywhere; }
+.catalog-upload-row progress { width: 100%; accent-color: #52b788; }
+#catalog-status { white-space: pre-wrap; color: #ade6bf; overflow-wrap: anywhere; }
+#catalog-status.catalog-error { color: #ffb4a9; }
+.catalog-field-error { color: #ffb4a9; font-size: .8rem; }
+.catalog-workspace [aria-invalid=true] { border-color: #ffb4a9 !important; }
+.catalog-workspace button:disabled { opacity: .5; cursor: wait; }
+.catalog-workspace :focus-visible { outline: 2px solid #a5d6bc; outline-offset: 2px; }
+@media (max-width: 550px) { .catalog-media-card { grid-template-columns: 1fr; } .catalog-toolbar > label { width: 100%; } }
 .admin-empty-state { padding: 24px; border: 1px solid #33483b; border-radius: 8px; }
 .admin-empty-state h3 { margin-bottom: 12px; }
 .admin-page #admin-dispatch-modal > div, .admin-page #admin-remittance-modal > div {

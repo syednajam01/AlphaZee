@@ -1,0 +1,13 @@
+{
+  "phase": "M3",
+  "checked_at_utc": "2026-10-14T19:01:12.471687+00:00",
+  "database": "alphazee_m3_migration_250545c27d_test",
+  "prior_revision": "e15a9c2b7046",
+  "head_revision": "f27b6d91c083",
+  "upgrade_downgrade_reupgrade": "passed",
+  "nonempty_media_downgrade_refused": true,
+  "legacy_product_rows_and_urls_preserved": true,
+  "alembic_check": "passed",
+  "development_modified": false,
+  "database_retained": true
+}

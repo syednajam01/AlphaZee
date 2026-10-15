@@ -1,6 +1,6 @@
 # AlphaZee: owner dashboard, catalog and media implementation plan
 
-Date: 2026-10-14. Source: `next_target.txt`. Status: M0 and M1 completed; M2–M9 pending. See [M0 evidence](m0_implementation_report.md), [M1 evidence](m1_dashboard_runbook.md) and `owner_catalog_phase_status.json`.
+Date: 2026-10-14. Source: `next_target.txt`. Status: M0–M2 completed; M3–M9 pending. See [M0 evidence](m0_implementation_report.md), [M1 evidence](m1_dashboard_runbook.md), [M2 evidence](m2_catalog_runbook.md) and `owner_catalog_phase_status.json`.
 
 This plan was originally prepared at the owner's planning-only request. The owner has since authorized phase implementation. The target's explicit browser acceptance requirements supersede the earlier terminal-only verification approach for the relevant future phases; M0 is a terminal baseline with a private isolated backup restore.
 
@@ -75,7 +75,7 @@ Primary inspected files: `backend/app/models/catalog.py`, `schemas/catalog.py`, 
 7. Publish only with a valid title/slug/active collection, required customer description, ready primary image and at least one complete active variant. Return an actionable list of unmet requirements. No stock requirement for publishing; explain sellability separately.
 8. Preserve existing catalog URLs/legacy media references during migration. Media readiness validation becomes active with M3; no bypass that accidentally publishes new incomplete records. Enforce published visibility in all public list/detail/hero and order-entry paths.
 
-**Acceptance:** owner-only catalog writes, incomplete draft saves, actionable publish rejection, conflict handling and historical-order preservation pass API tests. Migration upgrades/backfills and any reversible downgrade pass on isolated historical fixtures; no development downgrade is used.
+**Acceptance:** owner-only catalog writes, incomplete draft saves, actionable publish rejection, conflict handling and historical-order preservation pass API tests. Migration upgrades/backfills and any reversible downgrade pass on isolated historical fixtures; no development downgrade is used. Completed 2026-10-14: migration/backup verification, 218 backend tests, final 17 focused catalog tests, 88 frontend tests/build and browser checks. New publication remains guarded until M3 ready media; authoring UI remains M4. The stale Docker Vite `/admin` module issue was corrected with polling/restart. See `m2_catalog_runbook.md`.
 
 ## Phase M3 — upload storage and media service
 
@@ -207,7 +207,7 @@ Recommended order: **M0 → M1 → M2 → M3 → M4 → M5 → M6 → M7 → M8 
 | --- | --- | --- |
 | M0 Baseline/contracts | Completed | `m0_implementation_report.md`; backup restore, baseline checks and contracts |
 | M1 Dashboard entry | Completed | `m1_dashboard_runbook.md`; direct route, auth, navigation, browser and production deep links |
-| M2 Catalog domain/API | Pending | Migration and protected lifecycle tests |
+| M2 Catalog domain/API | Completed | `m2_catalog_runbook.md`; migration, backups, protected lifecycle, concurrency and history tests |
 | M3 Managed media | Pending | Validated upload, references, storage/durability |
 | M4 Authoring screens | Pending | Dashboard product/collection/media workflow |
 | M5 Supplier/stock details | Pending | Holds reconcile; private links; stock regressions |

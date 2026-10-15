@@ -39,7 +39,7 @@ def wait_http(url):
     raise RuntimeError('Isolated service did not become ready')
 
 
-def main():
+def main(*, report_name='m1_browser_verification.json', phase='M1', normal_admin_check=False):
     sys.stdout.reconfigure(encoding='utf-8')
     source = make_url(settings.database_url)
     if source.get_backend_name() != 'postgresql' or source.host not in {'localhost', '127.0.0.1', '::1'} or source.query:
@@ -47,7 +47,7 @@ def main():
     chrome = Path('C:/Program Files/Google/Chrome/Application/chrome.exe')
     if not chrome.is_file():
         raise RuntimeError('Chrome executable unavailable; browser checks not executed')
-    name = 'alphazee_m1_browser_' + uuid.uuid4().hex[:10] + '_test'
+    name = f'alphazee_{phase.lower()}_browser_' + uuid.uuid4().hex[:10] + '_test'
     target = source.set(database=name)
     admin = create_engine(source.set(database='postgres'), isolation_level='AUTOCOMMIT', hide_parameters=True)
     with admin.connect() as db:
@@ -65,7 +65,7 @@ def main():
     with Session(engine) as db:
         provision_owner(db, 'sample_m1_owner', password)
         db.commit()
-    artifacts = ROOT / '.local' / 'm1-browser' / uuid.uuid4().hex[:10]
+    artifacts = ROOT / '.local' / f'{phase.lower()}-browser' / uuid.uuid4().hex[:10]
     artifacts.mkdir(parents=True)
     processes = []
     checks = []
@@ -138,6 +138,20 @@ def main():
             expect('getComputedStyle(document.querySelector("#admin-sidebar")).display === "none"', 'private_navigation_hidden')
             evaluate(f'document.querySelector("#admin-username").value="sample_m1_owner"; document.querySelector("#admin-password").value={json.dumps(password)}; document.querySelector("#admin-auth-form").requestSubmit(); true')
             expect('!document.querySelector("#admin-auth-form") && document.querySelector("#admin-tab-content").textContent.includes("No customer orders")', 'login_orders')
+            if phase == 'M2':
+                result = evaluate('''(async () => {
+                  const session = await fetch('/api/v1/auth/session').then(r => r.json());
+                  const headers = {'Content-Type':'application/json', 'X-CSRF-Token':session.csrf_token};
+                  const response = await fetch('/api/v1/admin/products', {method:'POST',headers,
+                    body:JSON.stringify({title:'SAMPLE browser draft',variants:[{sku:'SAMPLE-BROWSER-M2',price_minor:123450}]})});
+                  const product = await response.json();
+                  const publish = await fetch('/api/v1/admin/products/'+product.id+'/publish', {method:'POST',headers,
+                    body:JSON.stringify({expected_version:product.edit_version})});
+                  const publicCatalog = await fetch('/api/v1/products').then(r=>r.json());
+                  return response.status===201 && product.status==='draft' && product.variants[0].price_minor===123450 && publish.status===422 && publicCatalog.total===0;
+                })()''')
+                if not result: raise RuntimeError('Browser catalog draft/publication guard failed')
+                checks.append('owner_catalog_draft_and_publication_guard')
             click('[data-tab="products"]')
             expect('location.pathname === "/admin/products" && document.querySelector("#admin-tab-content").textContent.includes("coming next")', 'products_route_placeholder')
             evaluate('window.__m1ReloadSentinel = true; true')
@@ -165,14 +179,18 @@ def main():
                 db.execute(text("UPDATE owner_sessions SET expires_at=now()-interval '1 minute'"))
             click('#btn-refresh-admin-tab')
             expect('!!document.querySelector("#admin-auth-form") && document.querySelector("#admin-session-message").textContent.includes("session has ended")', 'expired_session_login_screen')
+            if normal_admin_check:
+                cdp('Page.navigate', {'url': 'http://localhost:13000/admin'})
+                expect('location.origin === "http://localhost:13000" && !!document.querySelector("#admin-auth-form") && !document.querySelector("#nav-track-order") && document.querySelector("#admin-session-message").textContent === ""', 'actual_normal_admin_shows_login_not_home')
+                screenshot('normal-admin-login.png')
             if events: raise RuntimeError('Browser runtime/network errors observed')
-        report = {'checked_at_utc': datetime.now(timezone.utc).isoformat(), 'phase': 'M1',
+        report = {'checked_at_utc': datetime.now(timezone.utc).isoformat(), 'phase': phase,
                   'database': name, 'sample_owner_only': True, 'source_database_modified': False,
                   'checkout_enabled': False, 'browser': 'headless Chrome via CDP', 'checks': checks,
                   'runtime_network_errors': events, 'screenshots': str(artifacts.relative_to(ROOT)),
                   'external_fonts_blocked_to_verify_local_startup': True,
                   'passed': True, 'database_retained': True}
-        (ROOT / '.context/m1_browser_verification.json').write_text(json.dumps(report, indent=2) + '\n')
+        (ROOT / '.context' / report_name).write_text(json.dumps(report, indent=2) + '\n')
         print(json.dumps(report, indent=2))
     finally:
         for process in reversed(processes):
@@ -184,4 +202,11 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--phase-m2', action='store_true')
+    args = parser.parse_args()
+    if args.phase_m2:
+        main(report_name='m2_browser_verification.json', phase='M2', normal_admin_check=True)
+    else:
+        main()

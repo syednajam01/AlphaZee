@@ -10,8 +10,8 @@ Design rules enforced via database constraints:
 - Slugs are unique so URLs are stable and conflict-free.
 - SKUs are globally unique across all products.
 - Variant (product_id, size, color) combination is unique per product (NULLS NOT DISTINCT).
-- Foreign keys: Collection FK uses RESTRICT to prevent accidental orphan products; Product → Variant uses CASCADE.
-- Order history must snapshot prices, titles, and variant descriptions at purchase time; variant records are not protected by FK for order history purposes.
+- Foreign keys use RESTRICT to protect collection/product/variant history.
+- Order history snapshots prices, titles and variant descriptions; catalog records are retained.
 - Hero entries reference the catalog product rather than duplicating data.
 - Image / video URLs stored as text; files live outside the database.
 """
@@ -33,6 +33,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
+from sqlalchemy import event, inspect as sa_inspect, text
 
 from app.database import Base
 
@@ -72,6 +73,7 @@ class Collection(Base):
     """
 
     __tablename__ = "collections"
+    edit_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text('1'))
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     """Stable, human-readable identifier (e.g. 'essentials')."""
@@ -87,6 +89,7 @@ class Collection(Base):
 
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     """URL to the collection hero image; file lives outside the database."""
+    image_media_id: Mapped[str | None] = mapped_column(ForeignKey('media_assets.id', ondelete='RESTRICT'))
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     """Inactive collections and their products are excluded from public API responses."""
@@ -99,7 +102,7 @@ class Collection(Base):
         "Product",
         back_populates="collection",
         cascade="save-update, merge",
-        passive_deletes=True,
+        passive_deletes='all',
     )
 
     def __repr__(self) -> str:
@@ -118,18 +121,30 @@ class Product(Base):
     """
 
     __tablename__ = "products"
+    __table_args__ = (
+        CheckConstraint("status IN ('draft', 'published', 'archived')", name='ck_product_status'),
+        CheckConstraint("status != 'published' OR (title IS NOT NULL AND slug IS NOT NULL AND collection_id IS NOT NULL)", name='ck_product_published_identity'),
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'published'"))
+    edit_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text('1'))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    short_description: Mapped[str | None] = mapped_column(Text)
+    material: Mapped[str | None] = mapped_column(Text)
+    care: Mapped[str | None] = mapped_column(Text)
+    sizing: Mapped[str | None] = mapped_column(Text)
+    legacy_media: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text('true'))
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     """Stable product identifier (e.g. 'prod-heavyweight-tee')."""
 
-    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    slug: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
     """URL-safe slug for product detail pages."""
 
-    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(300), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    collection_id: Mapped[str] = mapped_column(
-        String(100), ForeignKey("collections.id", ondelete="RESTRICT"), nullable=False
+    collection_id: Mapped[str | None] = mapped_column(
+        String(100), ForeignKey("collections.id", ondelete="RESTRICT"), nullable=True
     )
     """Foreign key to the owning collection. Prevents accidental orphan products."""
 
@@ -170,9 +185,10 @@ class Product(Base):
     )
 
     # Relationships
-    collection: Mapped[Collection] = relationship("Collection", back_populates="products")
+    collection: Mapped[Collection | None] = relationship("Collection", back_populates="products")
+    media_links: Mapped[list['ProductMedia']] = relationship('ProductMedia', back_populates='product', cascade='save-update, merge', passive_deletes='all', order_by='ProductMedia.display_order')
     variants: Mapped[list[Variant]] = relationship(
-        "Variant", back_populates="product", cascade="all, delete-orphan"
+        "Variant", back_populates="product", cascade="save-update, merge", passive_deletes='all'
     )
 
     def __repr__(self) -> str:
@@ -209,6 +225,7 @@ class Variant(Base):
             postgresql_nulls_not_distinct=True,
         ),
         CheckConstraint("price_minor >= 0", name="ck_variant_price_nonnegative"),
+        CheckConstraint("NOT is_active OR price_minor IS NOT NULL", name='ck_variant_active_price'),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -217,7 +234,7 @@ class Variant(Base):
     """Globally unique stock-keeping unit identifier."""
 
     product_id: Mapped[str] = mapped_column(
-        String(100), ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+        String(100), ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
     )
 
     size: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -226,7 +243,7 @@ class Variant(Base):
     color: Mapped[str | None] = mapped_column(String(100), nullable=True)
     """Color name (e.g. 'Chalk White'). Null for products with no color option."""
 
-    price_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    price_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     """
     Price in PKR minor units (paisas). Non-negative.
     PKR 3,450 = 345000 paisas.
@@ -274,7 +291,7 @@ class Variant(Base):
         Note: Any fractional rupee prices (e.g. 345050 minor units = PKR 3,450.50)
         will truncate the fractional part. Use price_minor for exact calculations and storage.
         """
-        return self.price_minor // 100
+        return self.price_minor // 100 if self.price_minor is not None else None
 
     def __repr__(self) -> str:
         return (
@@ -282,3 +299,16 @@ class Variant(Base):
             f"size={self.size!r} color={self.color!r} "
             f"price=PKR{self.price_pkr}>"
         )
+
+
+@event.listens_for(Product, 'before_insert')
+@event.listens_for(Product, 'before_update')
+def synchronize_product_lifecycle(mapper, connection, product):
+    """Compatibility for legacy ORM callers; owner APIs write lifecycle explicitly."""
+    state = sa_inspect(product)
+    if product.status is None:
+        product.status = 'draft' if product.is_active is False else 'published'
+    elif state.attrs.is_active.history.has_changes() and not state.attrs.status.history.has_changes():
+        if product.status != 'archived':
+            product.status = 'published' if product.is_active else 'draft'
+    product.is_active = product.status == 'published'

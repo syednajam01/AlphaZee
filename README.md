@@ -27,7 +27,11 @@ AlphaZee is a Pakistan ecommerce brand with its own identity, storefront, custom
 - **Fulfillment Model**: List products from approved local suppliers and manually coordinate fulfillment. Supplier shipping terms, payment mechanics, stock confirmation, and return arrangements are verified before offering items to customers.
 - **Payment Methods**: Cash on Delivery (COD) and manual bank transfer. Transfer funds are personally verified in the bank account by the business owner before dispatching goods.
 - **Current Milestone**: Owner workflows and accounting repairs implemented; final terminal verification recorded separately from browser and production launch checks.
-- **Database State**: Development migrations have been applied through `c94e31f7d562`. Disposable `_test` databases hold migration and concurrency evidence. No production deployment has been performed.
+- **Database State**: Development migrations have been applied through `e15a9c2b7046`. Disposable `_test` databases hold migration and concurrency evidence. No production deployment has been performed.
+
+Direct owner dashboard: `http://localhost:13000/admin` for the local port profile.
+Catalog lifecycle APIs are implemented; managed uploads and dashboard authoring
+are the next phases. See [the M2 guide](.context/m2_catalog_runbook.md).
 
 ---
 

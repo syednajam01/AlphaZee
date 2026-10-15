@@ -1,0 +1,220 @@
+{
+  "checked_at_utc": "2026-10-14T19:11:15.235758+00:00",
+  "phase": "M3 pre-migration",
+  "python": "3.13.3",
+  "git_head": "9acedc9ef63cf1ca10389108ce03fefd111bd1ab",
+  "working_tree": [
+    " M .context/owner_catalog_migration_verification.json",
+    " M .context/owner_catalog_phase_status.json",
+    " M .context/owner_dashboard_catalog_media_implementation_plan.md",
+    " M .context/summary.md",
+    " M README.md",
+    " M backend/Dockerfile",
+    " M backend/app/api/v1/admin.py",
+    " M backend/app/api/v1/auth.py",
+    " M backend/app/api/v1/catalog.py",
+    " M backend/app/config.py",
+    " M backend/app/dependencies/auth.py",
+    " M backend/app/main.py",
+    " M backend/app/models/__init__.py",
+    " M backend/app/models/catalog.py",
+    " M backend/app/queries/catalog.py",
+    " M backend/app/schemas/catalog.py",
+    " M backend/app/services/orders.py",
+    " M backend/app/services/owners.py",
+    " M backend/app/services/passwords.py",
+    " M backend/requirements.txt",
+    " M backend/scripts/provision_owner.py",
+    " M backend/scripts/verify_m0_baseline.py",
+    " M backend/scripts/verify_m1_browser.py",
+    " M backend/tests/test_catalog_integration.py",
+    " M backend/tests/test_catalog_unit.py",
+    " M compose.prod.yml",
+    " M docker-compose.yml",
+    " M frontend/src/utils/api.js",
+    " M frontend/src/utils/money.js",
+    " M frontend/vite.config.js",
+    "?? .context/m2_browser_verification.json",
+    "?? .context/m2_catalog_runbook.md",
+    "?? .context/m2_development_verification.json",
+    "?? .context/m2_pre_migration_backup.json",
+    "?? .context/m3_migration_verification.json",
+    "?? backend/alembic/versions/e15a9c2b7046_catalog_lifecycle.py",
+    "?? backend/alembic/versions/f27b6d91c083_managed_media.py",
+    "?? backend/app/api/v1/media.py",
+    "?? backend/app/api/v1/owner_catalog.py",
+    "?? backend/app/models/media.py",
+    "?? backend/app/schemas/media.py",
+    "?? backend/app/schemas/owner_catalog.py",
+    "?? backend/app/services/media.py",
+    "?? backend/app/services/media_storage.py",
+    "?? backend/app/services/owner_catalog.py",
+    "?? backend/scripts/apply_m2_development.py",
+    "?? backend/scripts/apply_m3_development.py",
+    "?? backend/scripts/cleanup_catalog_media.py",
+    "?? backend/scripts/verify_m2_migration.py",
+    "?? backend/scripts/verify_m3_media_runtime.py",
+    "?? backend/scripts/verify_m3_migration.py",
+    "?? backend/tests/test_media.py",
+    "?? backend/tests/test_owner_catalog.py",
+    "?? compose.media-check.yml",
+    "?? frontend/tests/catalog-money.test.js"
+  ],
+  "source": {
+    "host": "localhost",
+    "port": 5433,
+    "database": "alphazee_dev"
+  },
+  "revision": [
+    "e15a9c2b7046"
+  ],
+  "http": {
+    "web_ready": 200,
+    "web_capabilities": {
+      "checkout_enabled": false,
+      "test_mode": false,
+      "payment_methods": [
+        "cod"
+      ]
+    },
+    "web/admin/overview": 401,
+    "web/admin/catalog/variants": 401,
+    "web_order_post": 503,
+    "api_ready": 200,
+    "api_capabilities": {
+      "checkout_enabled": false,
+      "test_mode": false,
+      "payment_methods": [
+        "cod"
+      ]
+    },
+    "api/admin/overview": 401,
+    "api/admin/catalog/variants": 401,
+    "api_order_post": 503
+  },
+  "tables": {
+    "alembic_version": {
+      "rows": 1,
+      "sha256": "5935bda251d5f8c0289c791ed233fd6a42c484ba08c66e81fa94653bbfb0b52b"
+    },
+    "collections": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "coupons": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "courier_settlement_entries": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "inventory_balances": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_access_attempts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_access_grants": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_access_sessions": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_lines": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "order_returns": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "orders": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "owner_credentials": {
+      "rows": 1,
+      "sha256": "5e368e2bc301784c981df36fcee5e60ff96606d3f435edc06159670f117daf25"
+    },
+    "owner_login_buckets": {
+      "rows": 3,
+      "sha256": "49a3918f0ecea14039ab7505292274172abc73664c429e2e68eacbe1d86999b3"
+    },
+    "owner_sessions": {
+      "rows": 1,
+      "sha256": "3381f5d7feca30857b0a17ccd211ca712e7bf7134419be7d429d3dd93ea349a5"
+    },
+    "payment_receipts": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "products": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "refund_executions": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "shipment_allocations": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "shipments": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stock_events": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stock_reservations": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "supplier_memberships": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "supplier_variants": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "suppliers": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "user_accounts": {
+      "rows": 1,
+      "sha256": "55f7635a62cfdaa197e87719bf4993a3abdf557c22fb6fc1efc4936530034f30"
+    },
+    "variants": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "config_hashes": {
+    "backend/.env": "4e7fcedb862e4607af8df170383f59088928f04b1cd8c00d677bf0877500e19a",
+    ".env.docker.local": "16f81755556bf30764f7cec69cb2944d958c65ba74acc8ef9c13f749440e8712",
+    "docker-compose.yml": "615326bb4491238e2cdc73a620f2131cf93d6623c49e2685544ff85629de7ccd",
+    "compose.prod.yml": "4a1fc9626df57c26a3f86909e1c300c4a814aadc1f55e3ae35efed2f380fbabc"
+  },
+  "config_unchanged": true,
+  "backup": ".local\\backups\\alphazee_m3_restore_253f0bd8b7cc_test.dump",
+  "backup_bytes": 80855,
+  "backup_sha256": "68fe7b50b899d9d544bac0530488876d11ea1b004818e3081203dd4f0416d007",
+  "restore_database": "alphazee_m3_restore_253f0bd8b7cc_test",
+  "restore_matches_all_public_table_rows": true,
+  "source_table_rows_unchanged": true,
+  "restore_retained": true,
+  "private_restore_not_a_browser_fixture": true,
+  "browser_executed": false,
+  "schema_and_sequences_sha256": "212450ca11522f9b8394a454a99367d917eaf2a26949d420df0865936d56a49a",
+  "restore_schema_and_sequences_match": true,
+  "media_storage": "No managed file storage exists yet; M3 will add it"
+}

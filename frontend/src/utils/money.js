@@ -78,3 +78,13 @@ export function formatDisplayPrice(priceData, fallback = 'Price unavailable') {
   if (minor === null) return fallback;
   return formatPkr(minor);
 }
+
+/** Exact decimal-text conversion for catalog inputs; null means invalid. */
+export function parseCatalogPkr(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text)) return null;
+  const [whole, fraction = ''] = text.split('.');
+  const minor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
+  return minor <= 2147483647n ? Number(minor) : null;
+}

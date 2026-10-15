@@ -20,7 +20,7 @@ from typing import Sequence
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.models.catalog import AvailabilityStatus, Product, Variant
+from app.models.catalog import AvailabilityStatus, Collection, Product, Variant
 from app.models.inventory import StockReservation, SupplierVariant
 from app.models.orders import (
     ALLOWED_PAYMENT_METHODS,
@@ -151,9 +151,18 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         if quantity <= 0:
             raise ValueError(f"Item quantity must be strictly positive, got {quantity}")
 
-        variant = db.get(Variant, variant_id)
+        # Shared catalog locks serialize against owner lifecycle/price edits without
+        # serializing independent buyers; reservation locks remain authoritative.
+        product_id = db.scalar(select(Variant.product_id).where(Variant.id == variant_id))
+        product = db.scalar(select(Product).where(Product.id == product_id).with_for_update(read=True).execution_options(populate_existing=True))
+        variant = db.scalar(select(Variant).where(Variant.id == variant_id).with_for_update(read=True).execution_options(populate_existing=True))
         if variant is None:
             raise ValueError(f"Variant id {variant_id} not found in catalog.")
+
+        collection = db.scalar(select(Collection).where(Collection.id == product.collection_id).with_for_update(read=True).execution_options(populate_existing=True)) if product else None
+        if (product is None or product.status != 'published' or not product.is_active
+                or collection is None or not collection.is_active or variant.price_minor is None):
+            raise ValueError('This product is no longer available for new orders.')
 
         if not variant.is_active or variant.availability != AvailabilityStatus.AVAILABLE:
             raise ValueError(

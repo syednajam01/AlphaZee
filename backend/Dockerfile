@@ -5,9 +5,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
-    && useradd --create-home --uid 10001 app
+    && useradd --create-home --uid 10001 app \
+    && mkdir -p /var/lib/alphazee/catalog-media/staging /var/lib/alphazee/catalog-media/objects \
+    && chown -R app:app /var/lib/alphazee/catalog-media
+ENV CATALOG_MEDIA_ROOT=/var/lib/alphazee/catalog-media
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app app ./app

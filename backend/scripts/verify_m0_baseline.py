@@ -121,7 +121,7 @@ def http_checks():
     return checks
 
 
-def main():
+def main(*, report_name='m0_baseline_verification.json', phase='M0', restore_prefix='alphazee_m0_restore_'):
     url = make_url(settings.database_url)
     if (settings.app_env != 'development' or settings.checkout_enabled
             or url.get_backend_name() != 'postgresql' or url.query
@@ -129,7 +129,9 @@ def main():
             or url.port != 5433 or url.database != 'alphazee_dev'):
         raise RuntimeError('Requires the normal loopback development database on port 5433')
     engine = create_engine(url, hide_parameters=True, connect_args={'connect_timeout': 5})
-    restore_name = 'alphazee_m0_restore_' + uuid.uuid4().hex[:12] + '_test'
+    if Path(report_name).name != report_name or not restore_prefix.replace('_', '').isalnum():
+        raise RuntimeError('Invalid internal evidence identifiers')
+    restore_name = restore_prefix + uuid.uuid4().hex[:12] + '_test'
     backup_dir = ROOT / '.local' / 'backups'
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup = backup_dir / (restore_name + '.dump')
@@ -181,7 +183,7 @@ def main():
             or schema_before != restored_schema or schema_before != schema_after):
         raise RuntimeError('Restored data, development data or configuration fingerprint mismatch')
     report = {
-        'checked_at_utc': datetime.now(timezone.utc).isoformat(), 'phase': 'M0',
+        'checked_at_utc': datetime.now(timezone.utc).isoformat(), 'phase': phase,
         'python': platform.python_version(),
         'git_head': command(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE).stdout.decode().strip(),
         'working_tree': command(['git', 'status', '--short'], stdout=subprocess.PIPE).stdout.decode().splitlines(),
@@ -197,7 +199,7 @@ def main():
         'restore_schema_and_sequences_match': True,
         'media_storage': 'No managed file storage exists yet; M3 will add it',
     }
-    (ROOT / '.context' / 'm0_baseline_verification.json').write_text(
+    (ROOT / '.context' / report_name).write_text(
         json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({key: report[key] for key in ('phase', 'revision', 'backup',
         'restore_database', 'restore_matches_all_public_table_rows', 'source_table_rows_unchanged',

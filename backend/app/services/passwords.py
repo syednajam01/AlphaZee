@@ -6,8 +6,15 @@ import secrets
 ITERATIONS = 600_000
 
 
-def hash_password(password: str) -> str:
-    if not 12 <= len(password) <= 128:
+def hash_password(password: str, *, allow_short_local: bool = False) -> str:
+    if allow_short_local:
+        from app.config import settings
+        if not settings.is_development:
+            raise ValueError('Short passwords are permitted only for explicit local development provisioning.')
+    minimum = 6 if allow_short_local else 12
+    if not minimum <= len(password) <= 128:
+        if allow_short_local:
+            raise ValueError('Local development password must contain 6 to 128 characters.')
         raise ValueError('Password must contain 12 to 128 characters.')
     salt = secrets.token_hex(32)
     digest = hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(salt), ITERATIONS).hex()

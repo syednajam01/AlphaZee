@@ -53,6 +53,10 @@ def require_owner_session(request: Request, token: str = Depends(require_session
             raise HTTPException(403, 'Invalid or missing CSRF token')
         statement = statement.with_for_update(of=OwnerSession)
     row = db.execute(statement).first()
+    if row is not None and settings.is_production:
+        user = db.get(UserAccount, row[1].user_id)
+        if user.auth_subject.startswith('local-development-owner:'):
+            raise HTTPException(401, 'Local development credentials cannot access production')
     if row is None:
         raise HTTPException(401, 'Invalid or missing owner session')
     return OwnerPrincipal(session=row[0], owner=row[1], token=token)
