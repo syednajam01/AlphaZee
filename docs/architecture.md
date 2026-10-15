@@ -2,6 +2,8 @@
 
 Owner: Syed Najam. Milestone: Catalog Foundation & Frontend Integration.
 
+This is the original architecture record. For current implemented catalog/media, operations and isolated checkout contracts, read [the operating summary](../.context/summary.md), [owner handoff](../.context/m9_owner_handoff.md) and phase guides. The repository remains Vite/plain JavaScript, FastAPI/SQLAlchemy/Alembic and PostgreSQL; later owner-authorized phases supersede historical omissions below.
+
 ---
 
 ## 1. System Overview

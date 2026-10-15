@@ -1,6 +1,6 @@
 # AlphaZee — short operating guide
 
-Updated 2026-10-15 through M8. `/admin` supports catalog/media/supplier/stock authoring and order/payment/return operations. The storefront shows managed media and stable-ID carts. The `syed123` development account persists. **Checkout is open in the isolated lab at http://127.0.0.1:13001**; normal/public checkout remains closed, as selected. See [checkout lab guide](m8_checkout_lab_runbook.md), [operations](m7_operations_runbook.md), [storefront](m6_storefront_runbook.md) and [backup](m3_media_runbook.md). M9 is next.
+Updated 2026-10-15: **M0–M9 complete for the local milestone**. `/admin` manages catalog/media/suppliers/stock and order/payment/return operations. The storefront uses managed media and stable-ID carts; `syed123` persists. **Checkout is open only in the isolated lab at http://127.0.0.1:13001**, as selected. Start with the [owner handoff](m9_owner_handoff.md); see [final evidence](m9_implementation_report.md), [lab guide](m8_checkout_lab_runbook.md), [operations](m7_operations_runbook.md) and [backup](m3_media_runbook.md).
 
 ## 1. What the app is
 
@@ -66,10 +66,10 @@ Production uses `compose.prod.yml`: private DB/API, automatic migrations, static
 
 ## 7. Completed work and remaining limits
 
-Completed: earlier commerce repairs (0/L1/A/B/C/D/E/G/F/L2/V), Docker packaging and M0–M8: backup/contracts, dashboard, catalog lifecycle, durable media, authoring, supplier/stock, storefront/cart, operations/reports and independent checkout lab/selected-catalog copying. Migration head: `f27b6d91c083` (M5–M8 need no migration). Media persists in each project’s `catalog_media` volume; back up database and files together.
+Completed: earlier commerce repairs (0/L1/A/B/C/D/E/G/F/L2/V), Docker packaging and M0–M9: dashboard, catalog lifecycle, durable media, authoring, supplier/stock, storefront/cart, operations/reports, independent checkout lab/copying and final local acceptance/handoff. Migration head: `f27b6d91c083` (M5–M9 need no migration). Media persists in each project’s `catalog_media` volume; back up database and files together.
 
-M8 verification: **260 backend tests, 107 frontend tests, development/production builds and 98 lab Chrome checks passed**, with no unexpected JavaScript errors. Development still has no sample catalog/orders, the owner remains enabled and its checkout closed. Evidence is in `owner_catalog_phase_status.json`, the M8 browser/runtime reports and phase guides.
+M9 verification: **260 backend tests, 108 frontend tests, development/production/lab builds and 228 Chrome checks passed** (145 commerce/mobile/archive + 83 authoring/storefront). No unexpected browser/network failures; expected security denials and offline recovery were checked. Migration cycle/comparison and archived history/media/stock persistence passed. Development remains free of sample catalog/orders, the owner enabled and its checkout closed. Evidence is in the phase register and M9 reports.
 
-M7 adds order search/status/pagination and evidence, explicit cleared-funds review, replacement shipment status/settlement, return/refund history and one-time access recovery. Exact PKR inputs preserve paisas. Overview/Reports distinguish delivered sales, cash after refunds, courier-held COD, refund outstanding and estimated contribution. Successful empty API responses now refresh correctly. Verification details are in the phase register and M7 guide.
+M9 fixed completed replacement-RTO inspection staying actionable, clarified one-time receipt and made phone report cards readable. Vite 7.3.7/esbuild 0.28.2 report zero npm advisories; native frontend work needs Node 20.19+ or 22.12+ (Docker uses Node 22). One existing backend AnyIO deprecation warning remains. The owner handoff covers first-product setup, selected copy, payments and backups.
 
-Still needed (M9): final milestone acceptance/handoff, including the purchased-product archive/history journey and broader mobile checkout review. Your real catalog/business setup and valid bank/support/legal/recovery configuration remain owner setup tasks. No public production deployment has been completed; public checkout stays closed.
+Remaining owner setup: real catalog, supplier/business arrangements and valid bank/support/legal/recovery configuration. Public launch/deployment needs a separate request; it has not occurred. There is no automatic next phase. Normal and lab stacks are available; temporary acceptance infrastructure is stopped.

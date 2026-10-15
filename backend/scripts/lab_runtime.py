@@ -16,7 +16,7 @@ def guard():
 
 def main():
     guard();parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--provision');parser.add_argument('--expire');parser.add_argument('--verify',action='store_true');parser.add_argument('--snapshot-token');args=parser.parse_args()
+    parser.add_argument('--provision');parser.add_argument('--expire');parser.add_argument('--verify',action='store_true');parser.add_argument('--snapshot-token');parser.add_argument('--phase',choices=['M8','M9'],default='M8');args=parser.parse_args()
     with SessionLocal() as db:
         if args.provision:
             if not re.fullmatch('sample_m8_[a-f0-9]{8}',args.provision):raise ValueError('Only SAMPLE acceptance owners')
@@ -48,7 +48,9 @@ def main():
                 media.append({'id':asset.id,'checksum':digest,'poster_id':asset.poster_id})
             stocks=[variant_stock(db,v.id)['mapping'] for v in sorted(product.variants,key=lambda v:v.id)]
             orders=list(db.scalars(select(Order).where(Order.customer_name=='SAMPLE M8 '+token).order_by(Order.placed_at)))
-            assert len(orders)==4 and [o.order_status for o in orders]==['delivered','confirmed','cancelled','cancelled']
+            expected=['delivered','confirmed','cancelled','cancelled']+(['delivered'] if args.phase=='M9' else [])
+            assert len(orders)==len(expected) and [o.order_status for o in orders]==expected
+            assert product.status==('archived' if args.phase=='M9' else 'published')
             assert stocks[0]['physical_on_hand']==20 and stocks[0]['held_reservations']==1 and stocks[0]['available_to_sell']==19
             assert stocks[1]['physical_on_hand']==19 and stocks[1]['held_reservations']==0
             print(json.dumps({'product_id':product.id,'status':product.status,'media':media,

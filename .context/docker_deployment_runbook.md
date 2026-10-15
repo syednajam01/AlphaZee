@@ -46,6 +46,8 @@ The production frontend is static; redeploy after frontend edits. Production rea
 
 ## Managed media and persistent owner accounts (M3/M4)
 
+M9 completed local acceptance and the [owner handoff](m9_owner_handoff.md). Development/production/lab images build on Node 22 with Vite 7.3.7 and esbuild 0.28.2; the final npm audit reports zero advisories. Mobile report cards now stack readably and completed replacement RTO inspection is no longer offered as pending. No new migration is required. Normal development and the lab remain available with independent persistent storage; production deployment/public checkout were not enabled. See [executed evidence](m9_implementation_report.md).
+
 M8 adds `compose.checkout-lab.yml`: independent project/database/media, web on 127.0.0.1:13001, API 18001, PostgreSQL 5434. Its API/migrations share the DB namespace to satisfy the existing loopback test checkout gate. Only the lab opens checkout; it has a SAMPLE banner, simulated bank configuration and distinct owner/order/checkout cookies. Provision a separate owner interactively and use the explicit catalog-only export/import tool. See the [M8 runbook](m8_checkout_lab_runbook.md). Keep this Compose file separate from normal and production deployments.
 
 M7 operational/report changes require no new environment settings or migration. Both development and production images build successfully. The acceptance-only `compose.operations-check.yml` must be combined with `compose.media-check.yml`; it adds synthetic bank settings solely for the isolated test database. See [M7 verification and operating steps](m7_operations_runbook.md). Normal checkout remains disabled.

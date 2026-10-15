@@ -4,7 +4,7 @@ Owner: Syed Najam. Milestone: Database Design Discussion Preparation.
 
 ---
 
-> **Notice**: The database design is currently under discussion. None of the items below are implemented or assumed in the code. All schema changes remain paused until explicit owner approval.
+> **Historical planning record (superseded).** The owner subsequently authorized the database and commerce phases; this document does not impose a current schema pause. Implemented behavior and remaining scope are recorded in [the current phase register](../.context/owner_catalog_phase_status.json) and [owner handoff](../.context/m9_owner_handoff.md). Questions below describe the original discussion, not the present implementation state.
 
 The following commercial, operational, and database questions are prepared for our database specification discussion:
 

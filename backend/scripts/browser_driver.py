@@ -1,5 +1,6 @@
 """Terminal-only Chrome/CDP driver for local acceptance checks."""
 import json,os,subprocess,time
+from urllib.parse import urlsplit
 from websockets.sync.client import connect
 from verify_m1_browser import free_port,wait_http
 
@@ -7,6 +8,7 @@ class Browser:
     def __init__(self,artifacts):
         self.artifacts=artifacts;artifacts.mkdir(parents=True,exist_ok=True)
         self.port=free_port();self.sequence=0;self.answers=[];self.errors=[];self.checks=[]
+        self.http_errors=[];self.network_failures=[];self.request_paths={}
     def __enter__(self):
         self.process=subprocess.Popen(['C:/Program Files/Google/Chrome/Application/chrome.exe','--headless=new','--disable-extensions',
             '--no-first-run','--disable-background-networking',f'--remote-debugging-port={self.port}',f'--user-data-dir={self.artifacts/"profile"}','about:blank'],
@@ -22,6 +24,16 @@ class Browser:
         self.ws.send(json.dumps({'id':sequence,'method':method,'params':params or {}}))
         while True:
             message=json.loads(self.ws.recv(timeout=40))
+            if message.get('method')=='Network.requestWillBeSent':
+                self.request_paths[message['params']['requestId']]=urlsplit(message['params']['request']['url']).path
+            if message.get('method')=='Network.responseReceived':
+                response=message['params']['response'];path=urlsplit(response['url']).path
+                if response['status']>=400 and path.startswith('/api/v1/'):
+                    self.http_errors.append({'path':path,'status':int(response['status'])})
+            if message.get('method')=='Network.loadingFailed':
+                event=message['params'];path=self.request_paths.get(event['requestId'],'')
+                if path.startswith('/api/v1/') and not event.get('canceled'):
+                    self.network_failures.append({'path':path,'error':event.get('errorText','')})
             if message.get('method')=='Page.javascriptDialogOpening':
                 dialog=message['params'];value=self.answers.pop(0) if dialog['type']=='prompt' and self.answers else dialog.get('defaultPrompt','')
                 self.ws.send(json.dumps({'id':100000+sequence,'method':'Page.handleJavaScriptDialog','params':{'accept':True,'promptText':value}}))

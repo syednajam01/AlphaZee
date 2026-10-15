@@ -2,6 +2,8 @@
 
 Owner: Syed Najam. Milestone: Catalog Foundation & Frontend Integration.
 
+Historical decisions below must be read alongside later explicit owner instructions and [the current agent guide](../.agent/AGENTS.md). In particular, the database pause was lifted through authorized implementation phases, and the owner selected opening checkout only in the separate local lab. See [current phase evidence](../.context/owner_catalog_phase_status.json) and [handoff](../.context/m9_owner_handoff.md).
+
 ---
 
 ## 1. Confirmed Decisions

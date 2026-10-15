@@ -1238,7 +1238,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             ${['dispatched','in_transit'].includes(r.replacement_shipment_status) ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="out_for_delivery">Out for Delivery</button>` : ''}
             ${['dispatched', 'in_transit', 'out_for_delivery'].includes(r.replacement_shipment_status) ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="delivered">Mark Delivered</button><button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="rto_initiated">Start RTO</button>` : ''}
             ${r.replacement_shipment_status === 'rto_initiated' ? `<button class="btn btn-secondary btn-replacement-status" data-ret-id="${r.id}" data-next="rto_delivered">Receive RTO</button>` : ''}
-            ${r.replacement_shipment_status === 'rto_delivered' ? `<button class="btn btn-secondary btn-inspect-replacement-rto" data-ret-id="${r.id}">Inspect RTO</button>` : ''}
+            ${r.replacement_shipment_status === 'rto_delivered' && !r.replacement_rto_inspected_at && r.replacement_stock_reconciliation_status !== 'legacy_review' ? `<button class="btn btn-secondary btn-inspect-replacement-rto" data-ret-id="${r.id}">Inspect RTO</button>` : ''}
+            ${r.replacement_rto_inspected_at ? '<div>Replacement RTO inspection completed</div>' : ''}
             ${r.replacement_shipment_status === 'delivered' && r.replacement_charge?.minor>0 ? `<button class="btn btn-secondary btn-remit-replacement" data-shipment-id="${r.replacement_shipment_id}">Replacement COD settlement</button>` : ''}` : ''}
         </td>
       </tr>
@@ -1381,11 +1382,11 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
 
     container.querySelectorAll('.btn-receive-ret').forEach(b => b.addEventListener('click', async () => {
       const ret = returns.find(item => item.id === b.getAttribute('data-ret-id'));
-      const value = prompt(`Cumulative received quantity (requested ${ret.quantity}):`, String(ret.quantity));
+      const value = prompt(`Actual received quantity, recorded once (requested ${ret.quantity}):`, String(ret.quantity));
       if (value === null) return;
       const quantity = Number(value);
       if (!Number.isInteger(quantity) || quantity <= 0 || quantity < ret.received_quantity || quantity > ret.quantity) {
-        alert('Enter a whole quantity between the previous receipt and requested quantity.');
+        alert('Enter a positive whole quantity no greater than the requested quantity. This receipt is recorded once.');
         return;
       }
       b.disabled = true;
@@ -1560,7 +1561,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     container.innerHTML = `
       <p>All-time operational figures from recorded orders, shipments and payments; estimated contribution excludes unrecorded overhead. Marketing order value includes undelivered orders.</p>
       ${data.total_orders_count === 0 ? '<p role="status">No active orders currently contribute to this report. Recorded cash and historical evidence remain separate.</p>' : ''}
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
+      <div class="admin-report-summary" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
         
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
           <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Delivered Sales</div>
@@ -1601,7 +1602,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+      <div class="admin-report-secondary" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
         
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
           <h4 style="font-size: 0.8125rem; font-weight: 700; color: #FFFFFF; margin: 0 0 10px 0;">Courier Costs & RTO Analytics</h4>

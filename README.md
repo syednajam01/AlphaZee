@@ -14,8 +14,8 @@ test database can accept sample orders. Historical milestone notes below do not
 establish current migration or launch readiness.
 The current verification status is in
 [the phase register](.context/owner_catalog_phase_status.json). All
-historical terminal checks are distinct from the newer actual browser checks
-recorded in [.context/m4_browser_verification.json](.context/m4_browser_verification.json). Do not enable public checkout based on these checks.
+historical terminal checks are distinct from the final actual browser checks
+recorded in [the M9 verification report](.context/m9_implementation_report.md). Public checkout remains outside this local milestone.
 
 AlphaZee is a Pakistan ecommerce brand with its own identity, storefront, customer relationships, order operations, and reporting.
 
@@ -26,7 +26,7 @@ AlphaZee is a Pakistan ecommerce brand with its own identity, storefront, custom
 - **Market**: Pakistan launch with prices quoted in PKR.
 - **Fulfillment Model**: List products from approved local suppliers and manually coordinate fulfillment. Supplier shipping terms, payment mechanics, stock confirmation, and return arrangements are verified before offering items to customers.
 - **Payment Methods**: Cash on Delivery (COD) and manual bank transfer. Transfer funds are personally verified in the bank account by the business owner before dispatching goods.
-- **Current Milestone**: M0–M8 implemented: owner/catalog/media/stock screens, storefront galleries/cart recovery, commerce operations/reports and the independent checkout lab with selected-catalog copying. M9 is next.
+- **Current Milestone**: M0–M9 complete locally: owner/catalog/media/stock screens, storefront galleries/cart, commerce operations/reports, isolated checkout/copying, final mobile/history acceptance and owner handoff.
 - **Database State**: Development migrations have been applied through `f27b6d91c083`. Disposable `_test` databases hold migration and concurrency evidence. No production deployment has been performed.
 
 Direct owner dashboard: `http://localhost:13000/admin` for the local port profile.
@@ -39,6 +39,8 @@ The storefront displays managed media, variant galleries, product details and li
 Orders, bank handoff/funds review, original/replacement COD settlement, returns/refunds, RTO, private access recovery and reports are documented in the [M7 operations guide](.context/m7_operations_runbook.md). Operational browser fixtures stay in the isolated test database.
 
 **Open local checkout:** `docker compose -f compose.checkout-lab.yml up --build --wait -d`, then visit **http://127.0.0.1:13001** (admin: `/admin`). Create your separate lab login with `docker compose -f compose.checkout-lab.yml exec api python scripts/provision_owner.py YOUR_LAB_USERNAME`. The lab has independent DB/media storage, isolated cookies and simulated payments. Normal/public checkout remains closed. See the [M8 copy/start/payment guide](.context/m8_checkout_lab_runbook.md).
+
+Start with the [final owner handoff](.context/m9_owner_handoff.md) for your first real product, startup, backups and payment walkthroughs. M9 passed 260 backend tests, 108 frontend tests and 228 actual browser checks, plus migration/restart/image checks. Vite 7.3.7/esbuild 0.28.2 resolve the reported npm advisories; native frontend work requires Node 20.19+ or 22.12+ (Docker uses Node 22).
 
 ---
 

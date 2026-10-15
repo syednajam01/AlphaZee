@@ -1,0 +1,28 @@
+{
+  "phase": "M9",
+  "checked_at_utc": "2026-10-15T15:42:37.605998+00:00",
+  "npm_before": {
+    "info": 0,
+    "low": 0,
+    "moderate": 1,
+    "high": 1,
+    "critical": 0,
+    "total": 2
+  },
+  "npm_after": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "versions": {
+    "vite": "7.3.7",
+    "esbuild": "0.28.2"
+  },
+  "audit_scope": "npm dependencies including development dependencies",
+  "source": "npm audit registry response",
+  "node_requirement": "Node 20.19+ or 22.12+; Docker uses Node 22",
+  "raw_final_artifact": ".local/m9-npm-audit-final.json"
+}

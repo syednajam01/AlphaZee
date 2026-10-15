@@ -13,11 +13,11 @@ sys.path.insert(0, str(ROOT / 'backend'))
 from app.config import settings
 
 
-def main():
+def main(phase='M3'):
     source = make_url(settings.database_url)
     if source.get_backend_name() != 'postgresql' or source.host not in {'localhost', '127.0.0.1', '::1'} or source.query:
         raise RuntimeError('Require loopback PostgreSQL without query overrides')
-    name = 'alphazee_m3_migration_' + uuid.uuid4().hex[:10] + '_test'
+    name = 'alphazee_'+phase.lower()+'_migration_' + uuid.uuid4().hex[:10] + '_test'
     admin = create_engine(source.set(database='postgres'), isolation_level='AUTOCOMMIT', hide_parameters=True)
     with admin.connect() as c: c.exec_driver_sql(f'CREATE DATABASE "{name}" TEMPLATE template0')
     admin.dispose()
@@ -51,12 +51,12 @@ def main():
     migrate('upgrade', 'head')
     migrate('check')
     engine.dispose()
-    report = {'phase': 'M3', 'checked_at_utc': datetime.now(timezone.utc).isoformat(), 'database': name,
+    report = {'phase': phase, 'checked_at_utc': datetime.now(timezone.utc).isoformat(), 'database': name,
               'prior_revision': 'e15a9c2b7046', 'head_revision': 'f27b6d91c083', 'upgrade_downgrade_reupgrade': 'passed',
               'nonempty_media_downgrade_refused': True, 'legacy_product_rows_and_urls_preserved': True,
               'alembic_check': 'passed', 'development_modified': False, 'database_retained': True}
-    (ROOT / '.context/m3_migration_verification.json').write_text(json.dumps(report, indent=2) + '\n')
+    (ROOT / ('.context/'+phase.lower()+'_migration_verification.json')).write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 
 
-if __name__ == '__main__': main()
+if __name__ == '__main__': main('M9' if '--phase-m9' in sys.argv else 'M3')

@@ -64,3 +64,7 @@
 .admin-operation-form { display: grid; gap: 12px; padding: 16px; margin-top: 16px; border: 1px solid rgba(255,255,255,.2); }
 .admin-order-evidence { min-width: 190px; max-width: 340px; color: #DDD; font-weight: 400; margin-top: 8px; }
 .admin-order-evidence li { margin: 8px 0; }
+@media (max-width: 640px) {
+  .admin-page .admin-report-summary,
+  .admin-page .admin-report-secondary { grid-template-columns: minmax(0, 1fr) !important; }
+}

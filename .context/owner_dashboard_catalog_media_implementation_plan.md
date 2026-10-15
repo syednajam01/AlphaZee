@@ -1,6 +1,6 @@
 # AlphaZee: owner dashboard, catalog and media implementation plan
 
-Date: 2026-10-14. Source: `next_target.txt`. Updated 2026-10-15: M0–M8 completed; M9 pending. See [M8 evidence](m8_checkout_lab_runbook.md) and `owner_catalog_phase_status.json`. The owner selected opening checkout only in the isolated lab.
+Date: 2026-10-14. Source: `next_target.txt`. Updated 2026-10-15: **M0–M9 completed for the local milestone**. See [final verification](m9_implementation_report.md), [owner handoff](m9_owner_handoff.md) and `owner_catalog_phase_status.json`. The owner selected opening checkout only in the isolated lab; production deployment/public launch remain separate.
 
 This plan was originally prepared at the owner's planning-only request. The owner has since authorized phase implementation. The target's explicit browser acceptance requirements supersede the earlier terminal-only verification approach for the relevant future phases; M0 is a terminal baseline with a private isolated backup restore.
 
@@ -214,6 +214,6 @@ Recommended order: **M0 → M1 → M2 → M3 → M4 → M5 → M6 → M7 → M8 
 | M6 Storefront | Completed | `m6_storefront_runbook.md`; 249 backend / 102 frontend tests, 83 Chrome checks |
 | M7 Operations/reports | Completed | `m7_operations_runbook.md`; 251 backend / 107 frontend tests, 65 isolated Chrome checks |
 | M8 Checkout lab | Completed | `m8_checkout_lab_runbook.md`; 260 backend / 107 frontend tests, 98 Chrome checks, selected media copy and restart proof |
-| M9 Acceptance/handoff | Pending | Actual tests/browser results and owner guide |
+| M9 Acceptance/handoff | Completed | `m9_implementation_report.md`, `m9_owner_handoff.md`; 260 backend / 108 frontend tests, 228 browser checks, migration/restart/dependency evidence |
 
 Final success means routine real-product management is possible through `/admin`, products and durable media appear correctly on the storefront, historical commerce data remains valid, and isolated checkout walkthroughs have documented execution evidence. Public ordering and production deployment remain outside this milestone.

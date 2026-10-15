@@ -13,7 +13,7 @@ ORIGIN='http://127.0.0.1:13001'
 def command(arguments,input=None):
     return subprocess.check_output(arguments,cwd=ROOT,input=input,stderr=subprocess.PIPE)
 
-def main():
+def main(phase='M8', additional_checks=None):
     sys.stdout.reconfigure(encoding='utf-8')
     token=secrets.token_hex(4);username='sample_m8_'+token;password=secrets.token_urlsafe(24)
     assert json.loads(wait_http(ORIGIN+'/api/v1/storefront/capabilities'))=={'checkout_enabled':True,'test_mode':True,'payment_methods':['cod','bank_transfer']}
@@ -29,7 +29,7 @@ def main():
     dry=json.loads(command(importer));assert dry['dry_run'] and dry['products'][0]['action']=='create_draft'
     applied=json.loads(command(importer+['--apply']));product_id=applied['products'][0]['id']
     repeated=json.loads(command(importer+['--apply']));assert repeated['products'][0]['action']=='skip_existing'
-    artifacts=ROOT/'.local/m8-browser'/token
+    artifacts=ROOT/('.local/'+phase.lower()+'-browser')/token
     with Browser(artifacts) as b:
         js=b.js;expect=b.expect;click=b.click;fill=b.fill;submit=b.submit
         def goto(path):b.goto(ORIGIN+path)
@@ -54,7 +54,7 @@ def main():
         js(f'''import('/src/utils/api.js').then(api=>api.transitionOwnerProduct({json.dumps(product_id)},'publish',{product['edit_version']}))''')
         b.checks.append('imported_draft_reviewed_then_published')
         slug=product['slug'];variant=product['variants'][0]['id']
-        def checkout(method,quantity=1,drop=False):
+        def checkout(method,quantity=1,drop=False,before_submit=None):
             goto('/');expect(f'!!document.querySelector(\'.product-card-btn[data-slug="{slug}"]\')','copied_product_on_storefront')
             click(f'.product-card-btn[data-slug="{slug}"]');expect('!!document.querySelector("#btn-modal-add-to-cart") && !document.querySelector("#btn-modal-add-to-cart").disabled','variant_purchasable')
             click('#btn-modal-add-to-cart');click('#btn-cart');expect('!!document.querySelector(".cart-item")','cart_contains_copied_variant')
@@ -67,6 +67,7 @@ def main():
             click('[name="payment_method"][value="'+method+'"]')
             assert js('document.querySelector("[name=payment_method]:checked").value')==method
             js('''(()=>{const original=window.fetch.bind(window);window.__m8attempts=[];window.__m8drop='''+str(drop).lower()+''';window.fetch=async(url,options)=>{const res=await original(url,options);if(String(url).endsWith('/orders')&&options?.method==='POST'&&res.ok){window.__m8created=await res.clone().json();window.__m8attempts.push({key:options.headers['Idempotency-Key'],id:window.__m8created.id});if(window.__m8drop){window.__m8drop=false;throw new TypeError('SAMPLE lost response');}}return res;};})()''')
+            if before_submit:before_submit()
             click('#btn-place-order')
             if drop:
                 expect('document.querySelector("#checkout-error-banner").style.display!=="none" && !document.querySelector("#btn-place-order").disabled','lost_response_preserves_checkout_for_retry');click('#btn-place-order')
@@ -84,7 +85,15 @@ def main():
         click('.btn-dispatch-order');fill('#dispatch-courier-code','manual');fill('#dispatch-tracking-number','SAMPLE-M8-'+token);fill('#dispatch-shipping-cost','1.25');fill('#dispatch-tracking-url','');submit('#admin-dispatch-form')
         expect('!!document.querySelector(".btn-mark-delivered")','checkout_order_dispatched');click('.btn-mark-delivered');expect('!!document.querySelector(".btn-remit-order")','checkout_order_delivered')
         click('.btn-remit-order');expect('document.querySelector("#admin-remittance-modal").style.display==="flex"','cod_settlement_dialog')
-        fill('#remit-amount-pkr',format(cod['total']/100,'.2f'));fill('#remit-ref','SAMPLE-M8-COD-'+token);fill('#remit-final-statement',True,True);submit('#admin-remittance-form')
+        remaining=cod['total']
+        if phase=='M9':
+            fill('#remit-amount-pkr','100.00');fill('#remit-ref','SAMPLE-M9-PARTIAL-'+token);submit('#admin-remittance-form')
+            expect('document.querySelector("#admin-remittance-modal").style.display==="none"','partial_cod_receipt_saved')
+            shipment=order_state(cod)['shipments'][0]
+            assert shipment['settlement_outstanding_minor']==cod['total']-10000 and shipment['cod_remittance_status']!='remitted'
+            click('.btn-remit-order');expect('document.querySelector("#admin-remittance-modal").style.display==="flex"','remaining_cod_balance_opened')
+            remaining-=10000
+        fill('#remit-amount-pkr',format(remaining/100,'.2f'));fill('#remit-ref','SAMPLE-M8-COD-'+token);fill('#remit-final-statement',True,True);submit('#admin-remittance-form')
         expect('document.querySelector("#admin-remittance-modal").style.display==="none"','customer_cod_settlement_saved')
         assert order_state(cod)['shipments'][0]['cod_remittance_status']=='remitted'
         def tracking(order):
@@ -127,6 +136,7 @@ def main():
         expect('document.querySelector("tbody tr").innerText.toLowerCase().includes("cancelled")','lab_expiry_release_after_review')
         goto('/admin/reports');expect('document.body.innerText.toLowerCase().includes("estimated contribution")','lab_reports_from_checkout_orders')
         (artifacts/'reports.png').write_bytes(base64.b64decode(b.cdp('Page.captureScreenshot',{'format':'png'})['data']))
+        if additional_checks:additional_checks(b,locals())
         # A valid non-lab session and lab session coexist on the same cookie host.
         jar=http.cookiejar.CookieJar();client=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
         request=urllib.request.Request('http://127.0.0.1:18003/api/v1/auth/login',data=json.dumps({'username':username,'password':password}).encode(),headers={'Origin':'http://127.0.0.1:13003','Content-Type':'application/json'})
@@ -151,14 +161,23 @@ def main():
         assert js('fetch("/api/v1/admin/orders").then(r=>r.status)')==401
         assert any(c['name']=='alphazee_owner_session' and c['value']==source_cookie.value for c in b.cdp('Network.getCookies',{'urls':[ORIGIN]})['cookies'])
         b.checks.append('lab_logout_preserves_non_lab_session')
-        goto('/');expect('!!document.querySelector(".product-card-btn")','lab_storefront_reload')
+        goto('/')
+        if phase=='M9':expect(f'!!document.querySelector("#site-header") && !document.querySelector(\'.product-card-btn[data-slug="{slug}"]\')','archived_storefront_reload')
+        else:expect('!!document.querySelector(".product-card-btn")','lab_storefront_reload')
         b.cdp('Emulation.setDeviceMetricsOverride',{'width':390,'height':844,'deviceScaleFactor':1,'mobile':True})
         expect('document.documentElement.scrollWidth<=innerWidth+1','mobile_lab_no_page_overflow')
         assert not b.errors,b.errors
-        report={'phase':'M8','checked_at_utc':datetime.now(timezone.utc).isoformat(),'origin':ORIGIN,'database':'alphazee_checkout_test',
+        if phase=='M9':
+            allowed_missing={'/api/v1/products/'+slug,'/api/v1/catalog/products/'+product_id}
+            unexpected=[e for e in b.http_errors if not (e['status']==401 and e['path'] in {'/api/v1/auth/session','/api/v1/admin/orders'}) and not (e['status']==404 and e['path'] in allowed_missing)]
+            assert not unexpected,unexpected
+            assert not [e for e in b.network_failures if e['error']!='net::ERR_INTERNET_DISCONNECTED'],b.network_failures
+            b.checks.append('network_errors_limited_to_expected_security_archive_and_offline_checks')
+        report={'phase':phase,'checked_at_utc':datetime.now(timezone.utc).isoformat(),'origin':ORIGIN,'database':'alphazee_checkout_test',
             'checks':b.checks,'checks_passed':len(b.checks),'unexpected_browser_errors':b.errors,'normal_development_modified':False,
-            'lab_checkout_enabled':True,'public_checkout_enabled':False,'artifacts':str(artifacts.relative_to(ROOT))}
-    (ROOT/'.context/m8_browser_verification.json').write_text(json.dumps(report,indent=2)+'\n')
+            'lab_checkout_enabled':True,'public_checkout_enabled':False,'artifacts':str(artifacts.relative_to(ROOT)),
+            'http_error_observations':b.http_errors,'network_failure_observations':b.network_failures}
+    (ROOT/('.context/'+phase.lower()+'_browser_verification.json')).write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report,indent=2))
 
 if __name__=='__main__':main()

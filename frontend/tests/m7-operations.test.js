@@ -9,6 +9,17 @@ function install(){const doc=createMockElement('document');doc.body=createMockEl
 const sample={id:'sample-order',order_number:'SAMPLE-7',customer_name:'SAMPLE',total:{formatted:'PKR 12.34'},order_status:'confirmed',payment_method:'bank_transfer',payment_status:'pending',lines:[],receipts:[{id:'receipt-7',receipt_image_url:'javascript:alert(1)',bank_reference:'<script>bad</script>'}],shipments:[]};
 const response=data=>({ok:true,status:200,json:async()=>data});
 
+test('replacement RTO offers inspection only while pending and reconciled',async()=>{
+  install();const base={order_id:'SAMPLE-order',order_line_id:'SAMPLE-line',return_type:'size_exchange',status:'completed',quantity:1,received_quantity:1,sellable_quantity:1,damaged_quantity:0,refund_amount:{formatted:'PKR 0'},refund_paid:{formatted:'PKR 0'},refund_outstanding:{minor:0,formatted:'PKR 0'},replacement_shipment_id:'SAMPLE-shipment',replacement_shipment_status:'rto_delivered'};
+  globalThis.fetch=async url=>response(url.endsWith('/auth/session')?{csrf_token:'SAMPLE'}:[
+    {...base,id:'pending',replacement_stock_reconciliation_status:'reconciled'},
+    {...base,id:'done',replacement_rto_inspected_at:'2026-10-15T00:00:00Z'},
+    {...base,id:'legacy',replacement_stock_reconciliation_status:'legacy_review'}]);
+  const admin=createAdminConsoleModal({page:true,initialTab:'returns'});await admin.open();
+  assert.deepEqual(admin.element.querySelectorAll('.btn-inspect-replacement-rto').map(node=>node.dataset.retId),['pending']);
+  assert.match(admin.element.querySelector('#admin-tab-content').innerHTML,/Replacement RTO inspection completed/);admin.destroy();
+});
+
 test('successful coupon deletion accepts an empty 204 response',async()=>{
   install();globalThis.fetch=async()=>({ok:true,status:204,json:async()=>{throw new Error('No response body');}});
   assert.equal(await deleteAdminCoupon('SAMPLE-coupon'),null);

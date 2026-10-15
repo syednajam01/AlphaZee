@@ -15,7 +15,7 @@ from app.database import SessionLocal, engine
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--phase', choices=['M5','M6','M7','M8'], default='M5')
+    parser.add_argument('--phase', choices=['M5','M6','M7','M8','M9'], default='M5')
     phase = parser.parse_args().phase
     url = make_url(settings.database_url)
     assert settings.is_development and url.host == 'db' and url.database == 'alphazee_dev'

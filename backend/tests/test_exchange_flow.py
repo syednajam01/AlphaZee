@@ -304,10 +304,18 @@ def test_approve_exchange_creates_replacement_reservation_and_shipment(
         'status': 'rto_delivered', 'received_lines': [
             {'order_line_id': str(res_record.order_line_id), 'received_quantity': 1}]})
     assert received.status_code == 200, received.text
+    pending = next(row for row in client.get('/api/v1/admin/returns').json() if row['id'] == return_id)
+    assert pending['replacement_rto_inspected_at'] is None
+    assert pending['replacement_stock_reconciliation_status'] != 'legacy_review'
     inspected = client.post(f'/api/v1/admin/shipments/{shipment_id}/inspect-rto', json={
         'lines': [{'order_line_id': str(res_record.order_line_id), 'sellable_quantity': 1,
                    'damaged_quantity': 0}], 'notes': 'Returned unopened'})
     assert inspected.status_code == 200, inspected.text
+    # The test shares one session across HTTP calls; emulate a new request's
+    # relationship load after the independent shipment mutation.
+    db_session.expire_all()
+    completed = next(row for row in client.get('/api/v1/admin/returns').json() if row['id'] == return_id)
+    assert completed['replacement_rto_inspected_at'] is not None
     db_session.refresh(bal_l)
     assert bal_l.on_hand == initial_l_on_hand
     assert order.order_status == 'delivered'

@@ -90,6 +90,8 @@ class OrderReturnResponseSchema(BaseModel):
     replacement_charge: CurrencyAmount = Field(default_factory=lambda: CurrencyAmount.from_minor(0))
     replacement_shipment_id: Optional[uuid.UUID] = None
     replacement_shipment_status: Optional[str] = None
+    replacement_rto_inspected_at: Optional[datetime] = None
+    replacement_stock_reconciliation_status: Optional[str] = None
     replacement_line_id: Optional[uuid.UUID] = None
     refund_amount: CurrencyAmount
     refund_paid: CurrencyAmount = Field(default_factory=lambda: CurrencyAmount.from_minor(0))
@@ -114,6 +116,8 @@ class OrderReturnResponseSchema(BaseModel):
             replacement_charge=CurrencyAmount.from_minor(ret.replacement_charge_minor),
             replacement_shipment_id=shipment.id if shipment else None,
             replacement_shipment_status=shipment.status if shipment else None,
+            replacement_rto_inspected_at=shipment.rto_restocked_at if shipment else None,
+            replacement_stock_reconciliation_status=shipment.stock_reconciliation_status if shipment else None,
             replacement_line_id=replacement_line.id if replacement_line else None,
             inspection_notes=ret.inspection_notes, inspected_at=ret.inspected_at,
             refund_amount=CurrencyAmount.from_minor(ret.refund_amount_minor),

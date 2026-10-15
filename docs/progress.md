@@ -3,7 +3,7 @@
 Updated: 2026-10-09. Owner: Syed Najam.
 
 Historical milestone log through 2026-10-09. The current verification status and
-release decision are in [the repair verification report](../.context/repair_verification_report.md).
+release decision are in [the phase register](../.context/owner_catalog_phase_status.json) and [owner handoff](../.context/m9_owner_handoff.md).
 The older test counts and launch-blocker language below describe their dated
 milestones, not current launch readiness.
 
