@@ -11,7 +11,7 @@ Tracking implementation of [.context/frontend_design_implementation_guide.md](fi
 | **U2** | Header/home layout, 3:4 catalog cards, image hover crossfades, filters & full-result set sort | **Completed** | `.local/frontend-redesign/run_u2_catalog/` | All 7 automated browser checks passed: sticky white header, Newsreader hero, 3:4 aspect ratio, 4/3/2 col responsive grid, immediate touch tap, full-dataset sorting, single-row category tabs |
 | **U3** | Product detail page layout (58/42 desktop split, mobile stack & sticky purchase bar), gallery swipe/zoom/video | **Completed** | `.local/frontend-redesign/run_u3_gallery/` | All 7 automated browser checks passed: 58/42 split, prev/next controls, counter, lightbox zoom, keyboard arrows, live variant price/stock, mobile bar obstruction safety |
 | **U4** | Cart drawer & Checkout view refinements, accessibility (dialog focus trap, Escape, Tab wrap), validation & honest state | **Completed** | `.local/frontend-redesign/run_u4_checkout/` | All 7 browser checks passed: cart drawer empty state & Escape dismiss, 3:4 thumbnails, stepper controls, desktop 2-column layout (57/43 split), inline field validation, lab COD order & copyable access code, order tracking 4-step stepper, bank transfer journey |
-| **U5** | Breakpoint matrix (360/390/768/1280/1440), 200% browser zoom, reduced motion, slow network & admin console smoke check | Not Started | — | Final polish |
+| **U5** | Breakpoint matrix (360/390/768/1280/1440), 200% browser zoom, reduced motion, slow network & admin console smoke check | **Completed** | `.local/frontend-redesign/run_u5_matrix/` | All 7 browser checks passed: 5 viewports (360/390/768/1280/1440), 200% page scale zoom, focus trapping & Tab wrap, reduced motion zeroing, slow network loading, media fallback, admin smoke check |
 
 ---
 
@@ -269,3 +269,85 @@ Per owner instruction and `.agent/AGENTS.md` framework flexibility, evaluated mi
   - JSON evidence: `.local/frontend-redesign/run_u4_checkout/u4_verification.json`
 - **Next Step**:
   - Proceed to Phase U5: Multi-breakpoint matrix (360/390/768/1280/1440px), 200% desktop browser zoom test, reduced motion simulation, slow network loading states, and owner console smoke check.
+
+### Phase U5: Visual Polish, Multi-Breakpoint Matrix & Targeted Regression
+- **Scope**:
+  - **Multi-Breakpoint Matrix (360/390/768/1280/1440px)**:
+    - 360px (Compact Phone): Zero horizontal scrollbar breakout (`document.documentElement.scrollWidth <= 360px`), 2-column catalog grid, compact touch controls >=44px, clean product details stack.
+    - 390px (Modern Mobile): Standard 2-column catalog grid, editorial hero layout, single-row category tabs with smooth horizontal scroll, responsive sticky mobile purchase bar on product page.
+    - 768px (Tablet): 3-column catalog grid (`repeat(3, 1fr)`), comfortable gutters (`--gutter-tablet: 24px`), readable typographic hierarchy.
+    - 1280px (Small Desktop / Laptop): 4-column catalog grid, 58% gallery / 42% sticky details split.
+    - 1440px (Standard Desktop): 4-column catalog grid, max-container constrained (1280px max width, centered with 40px gutters).
+  - **Desktop 200% Browser Zoom**:
+    - Actual 200% page scale factor zoom verified via CDP (`Emulation.setPageScaleFactor` at 2.0).
+    - Text remains fully legible without overflowing or breaking layout boundaries.
+    - All interactive buttons and inputs (`#btn-cart`, `#btn-add-to-cart`, `#nav-shop`) remain clickable and reachable.
+  - **Keyboard Boundaries & Accessibility**:
+    - Dialog focus trapping: when `#cart-drawer` opens, focus is directed inside the dialog.
+    - Tab wrapping forward: pressing Tab on the last element wraps focus back to the first element (`#cart-close-btn`).
+    - Shift+Tab reverse wrapping: pressing Shift+Tab on the first element wraps focus back to the last element (`#btn-cart-explore`).
+    - Escape key dismiss: pressing Escape dismisses the drawer and restores focus directly to the opener (`#btn-cart`).
+    - Background inertness: background elements receive `inert` and `aria-hidden="true"`.
+  - **Reduced Motion Simulation**:
+    - Emulated `prefers-reduced-motion: reduce` via CDP (`Emulation.setEmulatedMedia`).
+    - Computed CSS animation and transition durations confirmed zeroed out (`1e-05s` / instant) per WCAG 2.2 accessibility standard.
+  - **Slow Network Simulation**:
+    - Emulated slow network throttling via CDP (`Network.emulateNetworkConditions` with 600ms latency, 40 KB/s download).
+    - Honest loading indicators displayed without layout shift or flashes of unstyled content; successfully renders full details and active CTA once fetched.
+  - **Media Failure Handling & Neutral Fallback**:
+    - Broken image loads safely intercepted by `createSafeImageElement`'s error listener.
+    - Replaced with neutral SVG placeholder (`data:image/svg+xml...`) with "AZ - IMAGE COMING SOON" badge, maintaining exact 3:4 aspect ratio without collapsing or showing broken browser icons.
+  - **Owner Console Smoke Check**:
+    - Verified `/admin` dashboard across both Lab (`http://127.0.0.1:13001/admin`) and Development (`http://localhost:13000/admin`).
+    - Page title confirmed: "AlphaZee — Owner dashboard".
+    - Owner sign-in form is present and operational with Username and Password fields.
+    - Scoped dark styling (`background: #141715`, color: `#fff`) intact without contamination from storefront ivory or light tokens.
+    - Zero console exceptions.
+- **Changed Files**:
+  - `frontend/src/styles/layout.css`
+  - `scratch/verify_u5_gate.py`
+  - `.context/frontend_redesign_progress.md`
+- **Checks Actually Run**:
+  - Frontend unit tests: `npm.cmd test` (123 passed, 0 failures across 16 test suites).
+  - Production build: `npm.cmd run build` (successful, 35 modules in 3.55s).
+  - Web container build & restart: `docker compose -f compose.checkout-lab.yml up --build -d web`.
+  - Browser CDP automated gate (7/7 checks passed):
+    1. Multi-Breakpoint Matrix (360/390/768/1280/1440) -> PASS.
+    2. Desktop 200% Browser Zoom -> PASS (text legible, CTA reachable, controls operational).
+    3. Keyboard Boundaries & Tab Wrapping -> PASS (focus trapped, forward wrap, reverse wrap, Escape dismiss, focus restored).
+    4. Reduced Motion Simulation -> PASS (transition & animation zeroed to instant `1e-05s`).
+    5. Slow Network Simulation & Honest Loading -> PASS (smooth load under 600ms latency without layout breaks).
+    6. Media Failure Handling & Neutral Fallback -> PASS (broken image safely replaced with neutral SVG placeholder, 3:4 ratio maintained).
+    7. Owner Console Smoke Check (Lab & Dev) -> PASS (both lab and dev `/admin` render dark login console cleanly).
+- **Evidence Screenshots**:
+  - 360px Compact Phone Home: `.local/frontend-redesign/run_u5_matrix/u5_viewport_360_home.png`
+  - 360px Compact Phone Product: `.local/frontend-redesign/run_u5_matrix/u5_viewport_360_product.png`
+  - 390px Modern Mobile Home: `.local/frontend-redesign/run_u5_matrix/u5_viewport_390_home.png`
+  - 390px Product Mobile Sticky Bar: `.local/frontend-redesign/run_u5_matrix/u5_viewport_390_product_mobile_bar.png`
+  - 768px Tablet Home: `.local/frontend-redesign/run_u5_matrix/u5_viewport_768_home.png`
+  - 1280px Small Desktop Product: `.local/frontend-redesign/run_u5_matrix/u5_viewport_1280_product.png`
+  - 1440px Standard Desktop Home: `.local/frontend-redesign/run_u5_matrix/u5_viewport_1440_home.png`
+  - Desktop 200% Zoom Home: `.local/frontend-redesign/run_u5_matrix/u5_zoom_200pct_desktop.png`
+  - Desktop 200% Zoom Product: `.local/frontend-redesign/run_u5_matrix/u5_zoom_200pct_product.png`
+  - Keyboard Focus Trap & Wrap: `.local/frontend-redesign/run_u5_matrix/u5_keyboard_trap_and_wrap.png`
+  - Reduced Motion Simulation: `.local/frontend-redesign/run_u5_matrix/u5_reduced_motion.png`
+  - Slow Network Loading: `.local/frontend-redesign/run_u5_matrix/u5_slow_network_loading.png`
+  - Media Failure Neutral Fallback: `.local/frontend-redesign/run_u5_matrix/u5_media_failure_fallback.png`
+  - Owner Console Lab Smoke: `.local/frontend-redesign/run_u5_matrix/u5_admin_smoke_lab.png`
+  - Owner Console Dev Smoke: `.local/frontend-redesign/run_u5_matrix/u5_admin_smoke_dev.png`
+  - JSON evidence: `.local/frontend-redesign/run_u5_matrix/u5_verification.json`
+
+---
+
+## Redesign Completion Summary (Phases U0–U5)
+
+All six phases specified in [.context/frontend_design_implementation_guide.md](file:///f:/AlphaZee/.context/frontend_design_implementation_guide.md) have been systematically implemented, unit-tested, container-built, and browser-verified with automated Chrome CDP browser gates and real visual screenshot evidence:
+
+1. **U0 (Tokens & Foundations)**: Editorial warm commerce tokens (Ivory `#F7F7F2`, forest green `#145C44`, surface `#FFFFFF`), Manrope + Newsreader serif typography, 48px controls, accessible focus rings.
+2. **U1 (Product Routing & Page Shell)**: Direct `/products/:slug` SPA routing, deep link reload, query variant synchronization (`?variant=<id>`), honest 404/unavailable piece screen, back/forward history navigation.
+3. **U2 (Header, Editorial Hero & 3:4 Catalog Grid)**: High-contrast sticky white header, Newsreader serif hero with single CTA, 3:4 product frames with contain fit, 4/3/2 column responsive grid, immediate touch tap navigation, full-dataset sorting, single-row scrollable category tabs, 180ms fine-pointer hover crossfade.
+4. **U3 (Product Gallery, Lightbox Zoom, Video & Purchase Controls)**: 58/42 desktop split, floating 44px round controls, slide counter pill, touch swipe gesture with horizontal dominance, full-screen lightbox image zoom, stage keyboard arrow navigation, controlled video playback (pause on slide/route/tab hide), size/color option chips with live variant price/stock updates, sizing guide, garment care, and mobile sticky purchase bar with obstruction safety.
+5. **U4 (Cart Drawer, 2-Column Checkout & Order Tracking Stepper)**: Slide-over drawer with 3:4 thumbnails, quantity stepper, Newsreader empty bag state; 2-column desktop checkout layout (57% form / 43% summary); persistent floating labels; standard HTML5 autocomplete tokens; inline field validation with `aria-invalid` highlights; lab COD order flow; copyable private access code with clipboard fallback; 4-step order tracking progress stepper (`Placed` -> `Confirmed` -> `Dispatched` -> `Delivered`); and bank transfer supplier confirmation guidance.
+6. **U5 (Visual Polish, Multi-Breakpoint Matrix & Targeted Regression)**: 5-viewport matrix (360/390/768/1280/1440px) without horizontal scrollbar overflow, actual desktop 200% page scale zoom without content truncation, full keyboard focus trap and forward/reverse Tab wrapping with Escape dismiss, `prefers-reduced-motion` instantaneous transitions, slow network resilience, broken image neutral SVG fallback, and owner console `/admin` smoke test verified across both lab and dev environments without style interference.
+
+**All 123 frontend unit tests pass. Production bundle builds cleanly in ~3.5s. All backend commerce contracts, integer paisas, and strict checkout isolation (open strictly in local lab `127.0.0.1:13001`, closed in dev and prod) are preserved.**
