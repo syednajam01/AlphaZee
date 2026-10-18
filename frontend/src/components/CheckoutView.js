@@ -18,9 +18,9 @@ export function createCheckoutView(onClose) {
 
   modal.innerHTML = `
     <div class="drawer-backdrop" style="z-index: 1;"></div>
-    <div class="modal-content" style="z-index: 2; max-width: 680px; padding: 0; overflow: hidden;">
+    <div class="modal-content checkout-modal-content" style="z-index: 2;">
       <!-- Checkout Header -->
-      <div class="checkout-header" style="display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--color-border); background: var(--color-surface);">
+      <div class="checkout-header">
         <div id="checkout-logo-slot"></div>
         <div style="display: flex; align-items: center; gap: 12px;">
           <span class="badge badge-accent" id="checkout-badge" style="font-weight: 600;">
@@ -36,120 +36,142 @@ export function createCheckoutView(onClose) {
       </div>
 
       <!-- Checkout Body Container -->
-      <div id="checkout-body-content" style="padding: 24px; max-height: 75vh; overflow-y: auto;">
+      <div id="checkout-body-content" class="checkout-body">
         <!-- Error Banner Container -->
-        <div id="checkout-error-banner" style="display: none; padding: 12px 16px; background-color: #FEF2F2; border: 1px solid #FCA5A5; border-left: 4px solid #DC2626; border-radius: var(--radius-sm); margin-bottom: 20px; font-size: 0.875rem; color: #991B1B;">
-        </div>
+        <div id="checkout-error-banner" role="alert" aria-live="assertive" class="checkout-error-banner" style="display: none;"></div>
 
-        <h2 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 14px;">Order Summary</h2>
-        <div id="checkout-items-list" style="margin-bottom: 20px;"></div>
-        <p id="checkout-catalog-status" role="status" aria-live="polite"></p>
-
-        <!-- Promo Code Box -->
-        <div style="margin-bottom: 20px; padding: 14px; background: #F8FAFC; border: 1px dashed var(--color-border); border-radius: var(--radius-btn);">
-          <label for="input-promo-code" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; color: var(--color-text-muted);">
-            Have a Promo / Voucher Code?
-          </label>
-          <div style="display: flex; gap: 8px;">
-            <input type="text" id="input-promo-code" placeholder="e.g. LAUNCH10" style="flex: 1; padding: 8px 12px; text-transform: uppercase; font-weight: 600; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
-            <button type="button" id="btn-apply-coupon" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.8125rem; font-weight: 600;">
-              Apply
-            </button>
-          </div>
-          <div id="coupon-feedback-msg" style="display: none; font-size: 0.75rem; margin-top: 6px; font-weight: 600;"></div>
-        </div>
-
-        <h2 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 14px;">Shipping & Contact Information</h2>
-        <p id="checkout-capability-message" role="status"></p>
-        <form id="checkout-form" style="display: flex; flex-direction: column; gap: 14px;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div>
-              <label for="input-customer-name" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Full Name *</label>
-              <input type="text" id="input-customer-name" required placeholder="Zainab Ahmed" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
-            </div>
-            <div>
-              <label for="input-customer-phone" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Pakistan Mobile Number *</label>
-              <input type="tel" id="input-customer-phone" required placeholder="0300-1234567" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
-            </div>
-          </div>
-
-          <div>
-            <label for="input-customer-email" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Email Address (Optional)</label>
-            <input type="email" id="input-customer-email" placeholder="zainab@example.com" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
-          </div>
-
-          <div>
-            <label for="input-shipping-address-1" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Delivery Address *</label>
-            <input type="text" id="input-shipping-address-1" required placeholder="House / Apartment #, Street address" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
-            <div>
-              <label for="input-shipping-city" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">City *</label>
-              <input type="text" id="input-shipping-city" required placeholder="Karachi" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
-            </div>
-            <div>
-              <label for="input-shipping-province" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Province *</label>
-              <input type="text" id="input-shipping-province" required placeholder="Sindh" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
-            </div>
-            <div>
-              <label for="input-shipping-postal" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Postal Code</label>
-              <input type="text" id="input-shipping-postal" placeholder="75600" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />
-            </div>
-          </div>
-
-          <div>
-            <label for="input-customer-notes" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Special Delivery Instructions (Optional)</label>
-            <textarea id="input-customer-notes" rows="2" placeholder="e.g. Please deliver between 2 PM and 6 PM" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem; resize: vertical;"></textarea>
-          </div>
-
-          <!-- Payment Method Selection -->
-          <div style="margin-top: 6px;">
-            <label style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 6px;">Select Payment Method *</label>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-              <label id="label-method-cod" style="padding: 12px; border: 2px solid var(--color-accent); border-radius: var(--radius-btn); background: rgba(20, 92, 68, 0.05); font-size: 0.8125rem; cursor: pointer; display: flex; align-items: flex-start; gap: 8px;">
-                <input type="radio" name="payment_method" value="cod" checked style="margin-top: 2px;" />
-                <div>
-                  <strong>Cash on Delivery (COD)</strong>
-                  <div style="font-size: 0.7rem; color: var(--color-text-muted);">Pay in cash when order arrives</div>
+        <form id="checkout-form" class="checkout-layout-grid" novalidate>
+          <!-- Left Column: Shipping & Payment (approx 58%) -->
+          <div class="checkout-col-main">
+            <section class="checkout-section">
+              <h2 class="checkout-section-title">Shipping & Contact Information</h2>
+              <p id="checkout-capability-message" role="status" class="checkout-capability-notice"></p>
+              
+              <div class="checkout-form-fields">
+                <div class="form-row-2">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="input-customer-name" class="form-label">Full Name <span class="required-star">*</span></label>
+                    <input type="text" id="input-customer-name" name="name" autocomplete="name" required placeholder="Zainab Ahmed" class="form-input" />
+                    <span id="error-customer-name" class="form-error" style="display: none;"></span>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="input-customer-phone" class="form-label">Pakistan Mobile Number <span class="required-star">*</span></label>
+                    <input type="tel" id="input-customer-phone" name="tel" autocomplete="tel" required placeholder="0300-1234567" class="form-input" />
+                    <span id="error-customer-phone" class="form-error" style="display: none;"></span>
+                  </div>
                 </div>
-              </label>
-              <label id="label-method-bank" style="padding: 12px; border: 2px solid var(--color-border); border-radius: var(--radius-btn); background: #FAFAFA; font-size: 0.8125rem; cursor: pointer; display: flex; align-items: flex-start; gap: 8px;">
-                <input type="radio" name="payment_method" value="bank_transfer" style="margin-top: 2px;" />
-                <div>
-                  <strong>Bank Transfer</strong>
-                  <div style="font-size: 0.7rem; color: var(--color-text-muted);">Available after supplier confirmation</div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="input-customer-email" class="form-label">Email Address <span class="form-label-optional">(Optional)</span></label>
+                  <input type="email" id="input-customer-email" name="email" autocomplete="email" placeholder="zainab@example.com" class="form-input" />
                 </div>
-              </label>
-            </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="input-shipping-address-1" class="form-label">Delivery Address <span class="required-star">*</span></label>
+                  <input type="text" id="input-shipping-address-1" name="street-address" autocomplete="street-address" required placeholder="House / Apartment #, Street address" class="form-input" />
+                  <span id="error-shipping-address-1" class="form-error" style="display: none;"></span>
+                </div>
+
+                <div class="form-row-3">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="input-shipping-city" class="form-label">City <span class="required-star">*</span></label>
+                    <input type="text" id="input-shipping-city" name="address-level2" autocomplete="address-level2" required placeholder="Karachi" class="form-input" />
+                    <span id="error-shipping-city" class="form-error" style="display: none;"></span>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="input-shipping-province" class="form-label">Province <span class="required-star">*</span></label>
+                    <input type="text" id="input-shipping-province" name="address-level1" autocomplete="address-level1" required placeholder="Sindh" class="form-input" />
+                    <span id="error-shipping-province" class="form-error" style="display: none;"></span>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="input-shipping-postal" class="form-label">Postal Code <span class="form-label-optional">(Optional)</span></label>
+                    <input type="text" id="input-shipping-postal" name="postal-code" autocomplete="postal-code" placeholder="75600" class="form-input" />
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="input-customer-notes" class="form-label">Special Delivery Instructions <span class="form-label-optional">(Optional)</span></label>
+                  <textarea id="input-customer-notes" name="notes" rows="2" placeholder="e.g. Please deliver between 2 PM and 6 PM" class="form-textarea"></textarea>
+                </div>
+              </div>
+            </section>
+
+            <!-- Payment Method Selection -->
+            <section class="checkout-section">
+              <h2 class="checkout-section-title">Select Payment Method</h2>
+              <div class="payment-methods-grid">
+                <label id="label-method-cod" class="payment-method-card is-selected">
+                  <input type="radio" name="payment_method" value="cod" checked class="payment-method-radio" />
+                  <div class="payment-method-content">
+                    <div class="payment-method-name">Cash on Delivery (COD)</div>
+                    <div class="payment-method-desc">Pay with cash upon courier delivery. Please have exact cash ready.</div>
+                  </div>
+                </label>
+                <label id="label-method-bank" class="payment-method-card">
+                  <input type="radio" name="payment_method" value="bank_transfer" class="payment-method-radio" />
+                  <div class="payment-method-content">
+                    <div class="payment-method-name">Online Bank Transfer</div>
+                    <div class="payment-method-desc">Official Meezan Bank account details sent after supplier confirmation. 4-hour window applies.</div>
+                  </div>
+                </label>
+              </div>
+            </section>
           </div>
 
-          <div style="padding: 16px; background-color: var(--color-bg); border-radius: var(--radius-btn); margin-top: 8px;">
-            <div style="display: flex; justify-content: space-between; font-size: 0.875rem; margin-bottom: 6px;">
-              <span>Subtotal</span>
-              <span id="checkout-subtotal" style="font-weight: 600;">PKR 0</span>
-            </div>
-            <div id="checkout-discount-row" style="display: none; justify-content: space-between; font-size: 0.875rem; margin-bottom: 6px; color: var(--color-accent); font-weight: 600;">
-              <span id="checkout-discount-label">Promotional Discount</span>
-              <span id="checkout-discount-amount">- PKR 0</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.875rem; margin-bottom: 8px; color: var(--color-text-muted);">
-              <span>Estimated Delivery (${escapeHtml(storeConfig.shippingInfo.standardTime)})</span>
-              <span id="checkout-shipping-label" style="font-weight: 500; color: var(--color-accent);">Free Delivery</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 1rem; font-weight: 700; border-top: 1px solid var(--color-border); padding-top: 8px;">
-              <span>Total Payable</span>
-              <span id="checkout-total">PKR 0</span>
+          <!-- Right Column: Order Summary & Place Order (approx 42%) -->
+          <div class="checkout-col-summary">
+            <div class="checkout-summary-card">
+              <h2 class="checkout-summary-title">Order Summary</h2>
+              <div id="checkout-items-list" class="checkout-items-list"></div>
+              <p id="checkout-catalog-status" role="status" aria-live="polite" style="font-size: 0.75rem; color: var(--color-text-muted); margin: 0;"></p>
+
+              <!-- Promo Code Box -->
+              <div class="checkout-promo-box">
+                <label for="input-promo-code" class="checkout-promo-label">
+                  Have a Promo / Voucher Code?
+                </label>
+                <div class="checkout-promo-input-row">
+                  <input type="text" id="input-promo-code" placeholder="e.g. LAUNCH10" class="form-input checkout-promo-input" />
+                  <button type="button" id="btn-apply-coupon" class="btn btn-secondary checkout-promo-btn">
+                    Apply
+                  </button>
+                </div>
+                <div id="coupon-feedback-msg" class="checkout-promo-feedback" style="display: none; font-size: 0.75rem; margin-top: 6px; font-weight: 600;"></div>
+              </div>
+
+              <!-- Price Breakdown -->
+              <div class="checkout-totals-block">
+                <div class="checkout-total-row">
+                  <span>Subtotal</span>
+                  <span id="checkout-subtotal" class="price-tabular font-medium">PKR 0</span>
+                </div>
+                <div id="checkout-discount-row" class="checkout-total-row checkout-discount-row" style="display: none;">
+                  <span id="checkout-discount-label">Promotional Discount</span>
+                  <span id="checkout-discount-amount" class="price-tabular font-medium">- PKR 0</span>
+                </div>
+                <div class="checkout-total-row">
+                  <span>Estimated Delivery (${escapeHtml(storeConfig.shippingInfo.standardTime)})</span>
+                  <span id="checkout-shipping-label" class="checkout-free-shipping">Free Delivery</span>
+                </div>
+                <div class="checkout-total-row checkout-grand-total">
+                  <span>Total Payable</span>
+                  <span id="checkout-total" class="price-tabular">PKR 0</span>
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                class="btn btn-primary btn-place-order" 
+                id="btn-place-order">
+                Place Order
+              </button>
+
+              <div class="checkout-security-notes">
+                <span>🔒 Direct Owner Verified Fulfillment</span>
+                <span>📦 7-Day Inspection & Exchange Policy</span>
+              </div>
             </div>
           </div>
-
-          <button 
-            type="submit" 
-            class="btn btn-primary" 
-            id="btn-place-order" 
-            style="width: 100%; min-height: 48px; margin-top: 8px; font-weight: 600;">
-            Place Order
-          </button>
         </form>
       </div>
     </div>
@@ -182,20 +204,35 @@ export function createCheckoutView(onClose) {
 
   function updateRadioStyle() {
     if (radCod.checked) {
-      labelCod.style.borderColor = 'var(--color-accent)';
-      labelCod.style.background = 'rgba(20, 92, 68, 0.05)';
-      labelBank.style.borderColor = 'var(--color-border)';
-      labelBank.style.background = '#FAFAFA';
+      labelCod.classList.add('is-selected');
+      labelBank.classList.remove('is-selected');
     } else {
-      labelBank.style.borderColor = 'var(--color-accent)';
-      labelBank.style.background = 'rgba(20, 92, 68, 0.05)';
-      labelCod.style.borderColor = 'var(--color-border)';
-      labelCod.style.background = '#FAFAFA';
+      labelBank.classList.add('is-selected');
+      labelCod.classList.remove('is-selected');
     }
   }
 
   radCod.addEventListener('change', updateRadioStyle);
   radBank.addEventListener('change', updateRadioStyle);
+
+  // Field validation helpers
+  function clearFieldError(input, errorId) {
+    input.removeAttribute('aria-invalid');
+    input.style.borderColor = '';
+    const errEl = modal.querySelector(errorId);
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.style.display = 'none';
+    }
+  }
+
+  ['#input-customer-name', '#input-customer-phone', '#input-shipping-address-1', '#input-shipping-city', '#input-shipping-province'].forEach(selector => {
+    const el = modal.querySelector(selector);
+    el?.addEventListener('input', () => {
+      const errSelector = selector.replace('#input-', '#error-');
+      clearFieldError(el, errSelector);
+    });
+  });
 
   function calculateTotals(subtotalMinor) {
     let discountMinor = 0;
@@ -283,21 +320,30 @@ export function createCheckoutView(onClose) {
         if (item.color) metaParts.push(`Color: ${escapeHtml(item.color)}`);
 
         return `
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem; padding: 8px 0; border-bottom: 1px solid var(--color-border-subtle);">
+          <div class="checkout-item-row" data-variant-id="${item.variant_id}">
             <span data-checkout-media="${item.variant_id}"></span>
-            <div>
-              <strong>${escapeHtml(item.title)}</strong> × ${item.quantity}
-              <div style="font-size: 0.75rem; color: var(--color-text-muted);">
-                ${metaParts.join(' • ')}
-              </div>
+            <div class="checkout-item-details">
+              <div class="checkout-item-title">${escapeHtml(item.title)} <span style="font-weight: 400; color: var(--color-text-muted);">× ${item.quantity}</span></div>
+              <div class="checkout-item-meta">${metaParts.join(' • ')}</div>
             </div>
-            <div style="font-weight: 600;">${itemTotal}</div>
+            <div class="checkout-item-line-total price-tabular">${itemTotal}</div>
           </div>
         `;
       }).join('');
-      state.items.forEach(item => itemsList.querySelector(`[data-checkout-media="${item.variant_id}"]`)?.appendChild(
-        createSafeImageElement({src:item.image_url, alt:item.title, className:'checkout-item-image', width:48, height:48})
-      ));
+      state.items.forEach(item => {
+        const slot = itemsList.querySelector(`[data-checkout-media="${item.variant_id}"]`);
+        if (slot) {
+          slot.appendChild(
+            createSafeImageElement({
+              src: item.image_url,
+              alt: item.title,
+              className: 'checkout-item-image checkout-item-img',
+              width: 48,
+              height: 64,
+            })
+          );
+        }
+      });
     }
   }
 
@@ -312,6 +358,7 @@ export function createCheckoutView(onClose) {
     const code = promoInput.value.trim();
     if (!code) return;
 
+    const errorBanner = modal.querySelector('#checkout-error-banner');
     const cartState = cart.getState();
     if (cartState.isReconciling || cartState.hasUnavailable) {
       errorBanner.textContent = 'Review your cart: prices and availability must be verified before ordering.';
@@ -345,7 +392,7 @@ export function createCheckoutView(onClose) {
     }
   });
 
-  // Form submit handler
+  // Form submit handler with inline field-level validation
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (recovering) return;
@@ -366,15 +413,83 @@ export function createCheckoutView(onClose) {
       return;
     }
 
-    const customerName = modal.querySelector('#input-customer-name').value.trim();
-    const customerPhone = modal.querySelector('#input-customer-phone').value.trim();
-    const customerEmail = modal.querySelector('#input-customer-email').value.trim() || null;
-    const address1 = modal.querySelector('#input-shipping-address-1').value.trim();
-    const city = modal.querySelector('#input-shipping-city').value.trim();
-    const province = modal.querySelector('#input-shipping-province').value.trim();
-    const postal = modal.querySelector('#input-shipping-postal').value.trim() || null;
-    const notes = modal.querySelector('#input-customer-notes').value.trim() || null;
+    // Inline field validation
+    const nameInput = modal.querySelector('#input-customer-name');
+    const phoneInput = modal.querySelector('#input-customer-phone');
+    const addressInput = modal.querySelector('#input-shipping-address-1');
+    const cityInput = modal.querySelector('#input-shipping-city');
+    const provinceInput = modal.querySelector('#input-shipping-province');
+
+    const customerName = (nameInput.value || '').trim();
+    const customerPhone = (phoneInput.value || '').trim();
+    const customerEmail = (modal.querySelector('#input-customer-email')?.value || '').trim() || null;
+    const address1 = (addressInput.value || '').trim();
+    const city = (cityInput.value || '').trim();
+    const province = (provinceInput.value || '').trim();
+    const postal = (modal.querySelector('#input-shipping-postal')?.value || '').trim() || null;
+    const notes = (modal.querySelector('#input-customer-notes')?.value || '').trim() || null;
     const paymentMethod = modal.querySelector('input[name="payment_method"]:checked')?.value || 'cod';
+
+    let hasValidationError = false;
+    let firstInvalidField = null;
+
+    function setFieldError(input, errorId, message) {
+      input.setAttribute('aria-invalid', 'true');
+      input.style.borderColor = 'var(--color-error)';
+      const errEl = modal.querySelector(errorId);
+      if (errEl) {
+        errEl.textContent = message;
+        errEl.style.display = 'block';
+      }
+      hasValidationError = true;
+      if (!firstInvalidField) firstInvalidField = input;
+    }
+
+    // Validate name
+    if (!customerName || customerName.length < 2) {
+      setFieldError(nameInput, '#error-customer-name', 'Please enter your full name.');
+    } else {
+      clearFieldError(nameInput, '#error-customer-name');
+    }
+
+    // Validate phone: Pakistan pattern
+    const pkPhoneRegex = /^((\+92)|(0092)|(92)|(0))?3[0-9]{2}[-\s]?[0-9]{7}$/;
+    if (!customerPhone) {
+      setFieldError(phoneInput, '#error-customer-phone', 'Please enter your mobile number.');
+    } else if (!pkPhoneRegex.test(customerPhone.replace(/\s+/g, ''))) {
+      setFieldError(phoneInput, '#error-customer-phone', 'Please enter a valid Pakistan phone (e.g. 0300-1234567).');
+    } else {
+      clearFieldError(phoneInput, '#error-customer-phone');
+    }
+
+    // Validate delivery address
+    if (!address1 || address1.length < 5) {
+      setFieldError(addressInput, '#error-shipping-address-1', 'Please enter your full delivery address.');
+    } else {
+      clearFieldError(addressInput, '#error-shipping-address-1');
+    }
+
+    // Validate city
+    if (!city) {
+      setFieldError(cityInput, '#error-shipping-city', 'Please enter your city.');
+    } else {
+      clearFieldError(cityInput, '#error-shipping-city');
+    }
+
+    // Validate province
+    if (!province) {
+      setFieldError(provinceInput, '#error-shipping-province', 'Please enter your province.');
+    } else {
+      clearFieldError(provinceInput, '#error-shipping-province');
+    }
+
+    if (hasValidationError) {
+      errorBanner.textContent = 'Please review the highlighted fields before placing your order.';
+      errorBanner.style.display = 'block';
+      firstInvalidField?.focus();
+      return;
+    }
+
     if (!capabilities.getState().paymentMethods.includes(paymentMethod)) {
       errorBanner.textContent = 'This payment method is unavailable. Choose Cash on Delivery.';
       errorBanner.style.display = 'block';
@@ -467,8 +582,8 @@ export function createCheckoutView(onClose) {
             Upload Proof of Payment (Receipt Screenshot)
           </h4>
           <form id="receipt-upload-form" style="display: flex; flex-direction: column; gap: 8px;">
-            <input type="url" id="receipt-url-input" required placeholder="https://storage.alphazee.pk/receipts/proof.png" style="width: 100%; padding: 8px 12px; border: 1px solid #86EFAC; border-radius: var(--radius-btn); font-size: 0.8125rem;" />
-            <input type="text" id="receipt-ref-input" placeholder="Bank Transaction Reference / ID (Optional)" style="width: 100%; padding: 8px 12px; border: 1px solid #86EFAC; border-radius: var(--radius-btn); font-size: 0.8125rem;" />
+            <input type="url" id="receipt-url-input" required placeholder="https://storage.alphazee.pk/receipts/proof.png" class="form-input" style="font-size: 0.8125rem;" />
+            <input type="text" id="receipt-ref-input" placeholder="Bank Transaction Reference / ID (Optional)" class="form-input" style="font-size: 0.8125rem;" />
             <button type="submit" id="btn-upload-receipt" class="btn btn-primary" style="align-self: flex-start; padding: 8px 16px; font-size: 0.8125rem;">
               Submit Receipt Proof
             </button>
@@ -488,14 +603,14 @@ export function createCheckoutView(onClose) {
     const linesHtml = order.lines.map(line => `
       <div style="display: flex; justify-content: space-between; font-size: 0.875rem; padding: 6px 0;">
         <span>${escapeHtml(line.product_title)} (${escapeHtml(line.size || '')} ${escapeHtml(line.color || '')}) × ${line.quantity}</span>
-        <span style="font-weight: 600;">${line.line_total.formatted}</span>
+        <span style="font-weight: 600;" class="price-tabular">${line.line_total.formatted}</span>
       </div>
     `).join('');
 
     const discountHtml = order.discount_amount && order.discount_amount.minor > 0 ? `
       <div style="display: flex; justify-content: space-between; font-size: 0.875rem; padding: 4px 0; color: var(--color-accent); font-weight: 600;">
         <span>Discount (${escapeHtml(order.coupon_code || 'Promo')})</span>
-        <span>- ${order.discount_amount.formatted}</span>
+        <span class="price-tabular">- ${order.discount_amount.formatted}</span>
       </div>
     ` : '';
 
@@ -506,15 +621,30 @@ export function createCheckoutView(onClose) {
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
         </div>
-        <h2 style="font-size: 1.375rem; font-weight: 800; margin-bottom: 4px;">Thank You for Your Order!</h2>
-        <div style="font-size: 0.9375rem; font-weight: 600; color: var(--color-accent); letter-spacing: 0.5px;">
+        <h2 style="font-family: var(--font-family-serif); font-size: 1.5rem; font-weight: 500; margin-bottom: 4px;">Thank You for Your Order!</h2>
+        <div style="font-size: 1rem; font-weight: 700; color: var(--color-accent); letter-spacing: 0.5px;">
           Order #${escapeHtml(order.order_number)}
         </div>
-        <p style="font-size: 0.8125rem; color: var(--color-text-muted); margin-top: 4px;">
-          A confirmation has been recorded for <strong>${escapeHtml(order.customer_phone)}</strong>.
+        <p style="font-size: 0.875rem; color: var(--color-text-muted); margin-top: 4px;">
+          Confirmation recorded for <strong>${escapeHtml(order.customer_phone)}</strong>.
         </p>
-        <p style="font-size: 0.8125rem; margin-top: 12px;">Save this private access code to track your order on another device. It is shown only here. If lost, contact the store for verified recovery.</p>
-        <code id="checkout-access-code" style="display: block; overflow-wrap: anywhere; user-select: all; padding: 10px; background: var(--color-bg);">${escapeHtml(order.access_code || '')}</code>
+
+        <!-- Access Code Guidance Box -->
+        <div class="checkout-access-box">
+          <span class="checkout-access-badge">Private Access Code</span>
+          <p class="checkout-access-instructions">
+            Save this private access code to track order status, review delivery updates, and request returns across any device. It is shown only here. If misplaced, contact AlphaZee verified support.
+          </p>
+          <div class="checkout-access-display">
+            <code id="checkout-access-code" class="access-code-val">${escapeHtml(order.access_code || '')}</code>
+            <button type="button" class="btn btn-secondary btn-copy-code" id="btn-copy-access-code">
+              Copy Code
+            </button>
+          </div>
+          <div id="copy-code-feedback" style="display: none; font-size: 0.75rem; color: var(--color-accent); font-weight: 600; margin-top: 6px;">
+            ✓ Access code copied to clipboard
+          </div>
+        </div>
       </div>
 
       <div style="background: var(--color-bg); border-radius: var(--radius-btn); padding: 16px;">
@@ -523,7 +653,7 @@ export function createCheckoutView(onClose) {
         ${discountHtml}
         <div style="display: flex; justify-content: space-between; font-size: 1rem; font-weight: 700; border-top: 1px solid var(--color-border); padding-top: 10px; margin-top: 10px;">
           <span>Total Amount</span>
-          <span>${order.total.formatted}</span>
+          <span class="price-tabular">${order.total.formatted}</span>
         </div>
       </div>
 
@@ -535,6 +665,35 @@ export function createCheckoutView(onClose) {
         </button>
       </div>
     `;
+
+    // Wire copy code button
+    const copyBtn = modal.querySelector('#btn-copy-access-code');
+    const feedback = modal.querySelector('#copy-code-feedback');
+    copyBtn?.addEventListener('click', async () => {
+      try {
+        if (navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(order.access_code || '');
+        } else {
+          throw new Error('Clipboard API unavailable');
+        }
+      } catch {
+        const codeEl = modal.querySelector('#checkout-access-code');
+        if (codeEl) {
+          const range = document.createRange();
+          range.selectNodeContents(codeEl);
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        }
+      } finally {
+        if (feedback) feedback.style.display = 'block';
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy Code';
+          if (feedback) feedback.style.display = 'none';
+        }, 3000);
+      }
+    });
 
     modal.querySelector('#btn-finish-checkout')?.addEventListener('click', close);
 
@@ -629,3 +788,4 @@ export function createCheckoutView(onClose) {
     close
   };
 }
+

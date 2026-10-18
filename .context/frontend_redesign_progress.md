@@ -10,7 +10,7 @@ Tracking implementation of [.context/frontend_design_implementation_guide.md](fi
 | **U1** | Direct `/products/:slug` routing, page shell, history/query handling, deep link fallbacks | **Completed** | `.local/frontend-redesign/run_u1_routing/` | All 6 browser checks passed, deep links, reload, 404, query variants, mobile bar verified |
 | **U2** | Header/home layout, 3:4 catalog cards, image hover crossfades, filters & full-result set sort | **Completed** | `.local/frontend-redesign/run_u2_catalog/` | All 7 automated browser checks passed: sticky white header, Newsreader hero, 3:4 aspect ratio, 4/3/2 col responsive grid, immediate touch tap, full-dataset sorting, single-row category tabs |
 | **U3** | Product detail page layout (58/42 desktop split, mobile stack & sticky purchase bar), gallery swipe/zoom/video | **Completed** | `.local/frontend-redesign/run_u3_gallery/` | All 7 automated browser checks passed: 58/42 split, prev/next controls, counter, lightbox zoom, keyboard arrows, live variant price/stock, mobile bar obstruction safety |
-| **U4** | Cart drawer & Checkout view refinements, accessibility (dialog focus trap, Escape, Tab wrap), validation & honest state | In Progress | `.local/frontend-redesign/run_u4_checkout/` | Refining Cart Drawer, lab COD & bank journeys, focus management, and validation |
+| **U4** | Cart drawer & Checkout view refinements, accessibility (dialog focus trap, Escape, Tab wrap), validation & honest state | **Completed** | `.local/frontend-redesign/run_u4_checkout/` | All 7 browser checks passed: cart drawer empty state & Escape dismiss, 3:4 thumbnails, stepper controls, desktop 2-column layout (57/43 split), inline field validation, lab COD order & copyable access code, order tracking 4-step stepper, bank transfer journey |
 | **U5** | Breakpoint matrix (360/390/768/1280/1440), 200% browser zoom, reduced motion, slow network & admin console smoke check | Not Started | — | Final polish |
 
 ---
@@ -208,6 +208,64 @@ Per owner instruction and `.agent/AGENTS.md` framework flexibility, evaluated mi
 - **Next Step**:
   - Proceed to Phase U4: Cart drawer & Checkout view refinements, lab COD & bank handoff presentation, and accessibility (dialog focus trap, Tab wrapping, Escape).
 
-
-
-
+### Phase U4: Cart Drawer, Checkout View & Order Tracking Refinements
+- **Scope**:
+  - **Cart Drawer Refinements**:
+    - Slide-over drawer with dark blur backdrop and proper focus management.
+    - Newsreader serif empty bag state ("Your shopping bag is empty") with warm editorial copy and `#btn-cart-explore` linking to collection.
+    - 3:4 thumbnail frames (`72x96px`, `aspect-ratio: 3/4`, `object-fit: contain`).
+    - Tabular numeric price display (`.price-tabular`) for unit and subtotal prices.
+    - Touch-friendly 36x36px quantity stepper controls (`-` / `+`) and accessible item removal.
+    - Honest nationwide delivery notice with truck icon.
+    - Accessible Escape key dismiss with focus restoration to `#btn-cart`.
+  - **Checkout View 2-Column Responsive Layout**:
+    - Desktop 2-column layout (Left: Shipping & Contact Form ~57%, Right: Sticky Order Summary & Action ~43%).
+    - Responsive mobile single-column stack.
+    - Floating persistent labels (`.form-label-persistent`) preventing disappearing context.
+    - Standard HTML5 autocomplete tokens (`name`, `tel`, `email`, `street-address`, `address-level2`, `address-level1`, `postal-code`).
+    - Inline field validation with `aria-invalid="true"` highlighting and helpful inline error messages below each field.
+    - Payment method selector cards (`.payment-method-card`) with active brand green outline (`.is-selected`).
+    - Direct Owner Verified Fulfillment and 7-day inspection trust markers.
+  - **Confirmation View & Private Access Code**:
+    - Large green circular checkmark and Newsreader serif celebration headline ("Thank You for Your Order!").
+    - Dedicated `.checkout-access-box` displaying the private access code with instructions and instant copy button (`#btn-copy-access-code`).
+    - Copy button fallback supporting headless/secure clipboard write and visual "Copied!" feedback.
+    - Clear COD cash preparation guidance note.
+  - **Lab Bank Transfer Journey & Instructions**:
+    - Preserved 4-hour window bank transfer guidance ("Awaiting supplier confirmation and payment instructions").
+    - Honest unconfirmed state: instructions and payment details provided only after supplier handoff.
+  - **Order Tracking Progression Stepper**:
+    - 4-step horizontal status stepper (`Placed` -> `Confirmed` -> `Dispatched` -> `Delivered`) reflecting live order status.
+    - Active and completed step indicators with brand green highlights.
+- **Changed Files**:
+  - `frontend/src/styles/components.css`
+  - `frontend/src/styles/main.css`
+  - `frontend/src/components/CartDrawer.js`
+  - `frontend/src/components/CheckoutView.js`
+  - `frontend/src/components/OrderTrackingModal.js`
+  - `frontend/src/app.js`
+  - `frontend/tests/checkout-u4.test.js`
+  - `scratch/verify_u4_gate.py`
+- **Checks Actually Run**:
+  - Frontend unit tests: `npm.cmd test` (123 passed, 0 failures; 5 new U4 tests for drawer, stepper, checkout layout, autocomplete, and tracking stepper).
+  - Production build: `npm.cmd run build` (successful, 35 modules in 3.13s).
+  - Web container build & restart: `docker compose -f compose.checkout-lab.yml up --build -d web`.
+  - Browser CDP automated gate on `http://127.0.0.1:13001` (7/7 checks passed):
+    1. Cart Drawer Empty State & Escape Dismiss -> PASS.
+    2. Cart Item 3:4 Thumbnail & Stepper -> PASS (72x96px, 0.75 ratio, tabular price, stepper +/-).
+    3. Desktop 2-Column Layout & HTML5 Autocomplete -> PASS (57% main / 43% summary, autocomplete tokens).
+    4. Checkout Inline Validation & Error Banner -> PASS (red banner, aria-invalid, inline error messages).
+    5. Lab COD Order Placement & Access Code -> PASS (Order placed, access code displayed, copy feedback "Copied!").
+    6. Order Tracking Lookup & 4-Step Stepper -> PASS (Found order, 4-step stepper, Placed active/done).
+    7. Lab Bank Transfer Journey & Instructions -> PASS (Bank method selected, supplier confirmation guidance displayed).
+- **Evidence Screenshots**:
+  - Empty Cart Drawer: `.local/frontend-redesign/run_u4_checkout/u4_empty_cart_drawer.png`
+  - Cart Item 3:4 Thumbnail & Stepper: `.local/frontend-redesign/run_u4_checkout/u4_cart_drawer_with_item.png`
+  - Desktop 2-Column Checkout Layout: `.local/frontend-redesign/run_u4_checkout/u4_desktop_checkout_layout.png`
+  - Checkout Inline Validation: `.local/frontend-redesign/run_u4_checkout/u4_checkout_inline_validation.png`
+  - Lab COD Order Confirmation: `.local/frontend-redesign/run_u4_checkout/u4_cod_order_confirmation.png`
+  - Order Tracking 4-Step Stepper: `.local/frontend-redesign/run_u4_checkout/u4_order_tracking_stepper.png`
+  - Bank Transfer Instructions: `.local/frontend-redesign/run_u4_checkout/u4_bank_transfer_instructions.png`
+  - JSON evidence: `.local/frontend-redesign/run_u4_checkout/u4_verification.json`
+- **Next Step**:
+  - Proceed to Phase U5: Multi-breakpoint matrix (360/390/768/1280/1440px), 200% desktop browser zoom test, reduced motion simulation, slow network loading states, and owner console smoke check.

@@ -24,9 +24,21 @@ export function initApp() {
   // 1. Create Overlays & Modals
   const checkoutView = createCheckoutView();
   const orderTracking = createOrderTrackingModal();
-  const cartDrawer = createCartDrawer(() => {
-    checkoutView.open();
-  });
+  const cartDrawer = createCartDrawer(
+    () => {
+      checkoutView.open();
+    },
+    () => {
+      if (typeof window !== 'undefined' && window.location?.pathname?.startsWith('/products/')) {
+        navigate('/');
+        setTimeout(() => {
+          document.getElementById('featured')?.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
+      } else {
+        document.getElementById('featured')?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  );
   const mobileNav = createMobileNavDrawer();
   const productModal = createProductModal(() => {
     cartDrawer.open();

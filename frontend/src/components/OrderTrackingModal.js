@@ -76,8 +76,8 @@ export function createOrderTrackingModal(onClose) {
     errorBanner.style.display = 'none';
     resultsArea.style.display = 'none';
 
-    const orderNum = modal.querySelector('#tracking-order-num').value.trim();
-    const code = modal.querySelector('#tracking-code').value.trim();
+    const orderNum = (modal.querySelector('#tracking-order-num')?.value || '').trim();
+    const code = (modal.querySelector('#tracking-code')?.value || '').trim();
 
     if (!orderNum) return;
 
@@ -203,6 +203,38 @@ export function createOrderTrackingModal(onClose) {
           </div>
         </div>
 
+        ${(() => {
+          const stepOrder = ['placed', 'confirmed', 'dispatched', 'delivered'];
+          const currentStepIdx = stepOrder.indexOf(order.order_status);
+          if (order.order_status === 'cancelled') {
+            return `
+              <div style="padding: 10px 14px; background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: var(--radius-sm); color: #991B1B; font-weight: 600; font-size: 0.8125rem; margin: 12px 0;">
+                This order has been cancelled.
+              </div>
+            `;
+          }
+          return `
+            <div class="tracking-stepper" aria-label="Order status progression">
+              <div class="tracking-step ${currentStepIdx > 0 ? 'is-done' : currentStepIdx === 0 ? 'is-active' : ''}">
+                <div class="tracking-step-circle">${currentStepIdx > 0 ? '✓' : '1'}</div>
+                <div class="tracking-step-label">Placed</div>
+              </div>
+              <div class="tracking-step ${currentStepIdx > 1 ? 'is-done' : currentStepIdx === 1 ? 'is-active' : ''}">
+                <div class="tracking-step-circle">${currentStepIdx > 1 ? '✓' : '2'}</div>
+                <div class="tracking-step-label">Confirmed</div>
+              </div>
+              <div class="tracking-step ${currentStepIdx > 2 ? 'is-done' : currentStepIdx === 2 ? 'is-active' : ''}">
+                <div class="tracking-step-circle">${currentStepIdx > 2 ? '✓' : '3'}</div>
+                <div class="tracking-step-label">Dispatched</div>
+              </div>
+              <div class="tracking-step ${currentStepIdx >= 3 ? 'is-done is-active' : ''}">
+                <div class="tracking-step-circle">${currentStepIdx >= 3 ? '✓' : '4'}</div>
+                <div class="tracking-step-label">Delivered</div>
+              </div>
+            </div>
+          `;
+        })()}
+
         <div style="font-size: 0.8125rem; color: var(--color-text-muted); margin-bottom: 14px; line-height: 1.4;">
           <div><strong>Recipient:</strong> ${escapeHtml(order.customer_name)} (${escapeHtml(order.customer_phone)})</div>
           <div><strong>Destination:</strong> ${escapeHtml(order.shipping_address_line1)}, ${escapeHtml(order.shipping_city)}, ${escapeHtml(order.shipping_province)}</div>
@@ -216,7 +248,7 @@ export function createOrderTrackingModal(onClose) {
 
         <div style="display: flex; justify-content: space-between; font-size: 1rem; font-weight: 700; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--color-border);">
           <span>Total Amount</span>
-          <span>${order.total.formatted}</span>
+          <span class="price-tabular">${order.total.formatted}</span>
         </div>
 
         ${order.shipments?.map(shipment => `

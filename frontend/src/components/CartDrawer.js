@@ -5,7 +5,7 @@ import { storeConfig } from '../data/store-config.js';
 import { formatPkr } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
 
-export function createCartDrawer(onCheckout) {
+export function createCartDrawer(onCheckout, onExplore) {
   const backdrop = document.createElement('div');
   backdrop.className = 'drawer-backdrop';
   backdrop.id = 'cart-drawer-backdrop';
@@ -35,17 +35,23 @@ export function createCartDrawer(onCheckout) {
     </div>
 
     <div class="drawer-footer" id="cart-footer">
-      <div id="cart-availability-alert" style="display: none; margin-bottom: 12px; padding: 10px 12px; background: #FFF5F5; border: 1px solid #FED7D7; border-radius: var(--radius-sm); font-size: 0.75rem; color: #C53030;">
+      <div id="cart-availability-alert" style="display: none; margin-bottom: 12px; padding: 10px 12px; background: var(--color-error-bg); border: 1px solid rgba(180, 35, 24, 0.3); border-radius: var(--radius-sm); font-size: 0.75rem; color: var(--color-error);">
         Some items in your cart are currently out of stock or unavailable. Please adjust before checkout.
       </div>
       <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
         <span style="font-weight: 500;">Subtotal</span>
-        <span style="font-size: 1.25rem; font-weight: 700;" id="cart-subtotal">PKR 0</span>
+        <span style="font-size: 1.25rem; font-weight: 700;" class="price-tabular" id="cart-subtotal">PKR 0</span>
       </div>
-      <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 16px;">
-        Shipping calculated at checkout (${escapeHtml(storeConfig.shippingInfo.standardTime)}).
+      <p class="cart-delivery-note">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0;">
+          <rect x="1" y="3" width="15" height="13"></rect>
+          <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+          <circle cx="5.5" cy="18.5" r="2.5"></circle>
+          <circle cx="18.5" cy="18.5" r="2.5"></circle>
+        </svg>
+        <span>Free nationwide delivery across Pakistan (${escapeHtml(storeConfig.shippingInfo.standardTime)}).</span>
       </p>
-      <p id="checkout-availability" role="status"></p>
+      <p id="checkout-availability" role="status" class="cart-sample-notice"></p>
       <button class="btn btn-primary" id="btn-checkout" disabled style="width: 100%; min-height: 48px;">
         Proceed to Checkout
       </button>
@@ -65,19 +71,31 @@ export function createCartDrawer(onCheckout) {
 
     if (state.items.length === 0) {
       itemsContainer.innerHTML = `
-        <div style="text-align: center; padding: 48px 16px; color: var(--color-text-muted);">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 16px; opacity: 0.5;">
+        <div class="drawer-empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 16px; opacity: 0.35;">
             <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
             <line x1="3" y1="6" x2="21" y2="6"></line>
             <path d="M16 10a4 4 0 0 1-8 0"></path>
           </svg>
-          <p style="font-weight: 600; font-size: 1.125rem; color: var(--color-text); margin-bottom: 4px;">Your cart is empty</p>
-          <p style="font-size: 0.875rem;">Discover our latest pieces and build your minimalist wardrobe.</p>
+          <h3 class="drawer-empty-title">Your shopping bag is empty</h3>
+          <p class="drawer-empty-desc">Discover our latest pieces, crafted for everyday comfort and clean silhouettes.</p>
+          <button type="button" class="btn btn-secondary" id="btn-cart-explore" style="min-width: 160px;">
+            Explore Collection
+          </button>
         </div>
       `;
       footer.style.opacity = '0.5';
       checkoutBtn.disabled = true;
       alertBox.style.display = 'none';
+
+      itemsContainer.querySelector('#btn-cart-explore')?.addEventListener('click', () => {
+        close();
+        if (onExplore) {
+          onExplore();
+        } else {
+          document.getElementById('featured')?.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
     } else {
       footer.style.opacity = '1';
 
@@ -118,18 +136,18 @@ export function createCartDrawer(onCheckout) {
               <div class="cart-item-title">${safeTitle}</div>
               <div class="cart-item-meta">${metaParts.join(' • ')}</div>
               ${!item.is_available ? `
-                <span class="badge badge-neutral" style="color: ${item.availability === 'unverified' ? '#B45309' : '#C53030'}; background: ${item.availability === 'unverified' ? '#FEF3C7' : '#FFF5F5'}; font-size: 0.7rem; align-self: flex-start; margin: 4px 0;">
+                <span class="badge ${item.availability === 'unverified' ? 'badge-neutral' : 'badge-out-of-stock'}" style="margin: 4px 0; align-self: flex-start; font-size: 0.7rem;">
                   ${item.availability === 'unverified' ? 'Availability Unverified (Offline)' : 'Currently Unavailable'}
                 </span>
               ` : ''}
-              <div class="cart-item-price">${formattedItemPrice}</div>
+              <div class="cart-item-price price-tabular">${formattedItemPrice}</div>
               <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
                 <div class="cart-qty-ctrl">
-                  <button class="cart-qty-btn btn-qty-dec" aria-label="Decrease quantity">−</button>
-                  <span class="cart-qty-num">${item.quantity}</span>
-                  <button class="cart-qty-btn btn-qty-inc" aria-label="Increase quantity">+</button>
+                  <button class="cart-qty-btn btn-qty-dec" aria-label="Decrease quantity of ${safeTitle}">−</button>
+                  <span class="cart-qty-num price-tabular">${item.quantity}</span>
+                  <button class="cart-qty-btn btn-qty-inc" aria-label="Increase quantity of ${safeTitle}">+</button>
                 </div>
-                <button class="btn-remove-item" style="font-size: 0.75rem; color: #b3261e; text-decoration: underline; background: none; border: none; cursor: pointer;">
+                <button class="btn-remove-item" type="button" aria-label="Remove ${safeTitle} from cart">
                   Remove
                 </button>
               </div>
