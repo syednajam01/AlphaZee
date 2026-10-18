@@ -1,4 +1,4 @@
-import { fetchProductBySlug } from '../utils/api.js';
+import { fetchProductBySlug, fetchProducts } from '../utils/api.js';
 import { cart } from '../utils/cart.js';
 import { extractPriceMinor, formatDisplayPrice } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
@@ -10,6 +10,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
   container.className = 'product-page-container container';
 
   let currentProduct = null;
+  let relatedProducts = [];
   let selectedSize = null;
   let selectedColor = null;
   let quantity = 1;
@@ -260,6 +261,34 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
         </div>
       </div>
 
+      <!-- Related Pieces Section -->
+      ${relatedProducts && relatedProducts.length > 0 ? `
+        <section class="product-related-section">
+          <div class="product-related-header">
+            <div class="product-related-eyebrow">Curated Pieces</div>
+            <h2 class="product-related-title">Complete the Silhouette</h2>
+          </div>
+          <div class="product-related-grid">
+            ${relatedProducts.map(p => {
+              const pPrice = extractPriceMinor(p.min_price_minor ?? p.min_price);
+              const pDisplayPrice = formatDisplayPrice(pPrice);
+              const pImg = sanitizeMediaUrl(p.image_url, '');
+              return `
+                <a href="/products/${encodeURIComponent(p.slug)}" data-nav="/products/${encodeURIComponent(p.slug)}" class="product-related-card">
+                  <div class="product-related-media">
+                    ${pImg ? `<img src="${pImg}" alt="${escapeHtml(p.title)}" class="product-related-img" loading="lazy" />` : '<div class="product-gallery-neutral-fallback"><span>AZ</span></div>'}
+                  </div>
+                  <div class="product-related-meta">
+                    <h3 class="product-related-card-title">${escapeHtml(p.title)}</h3>
+                    <span class="product-related-price price-tabular">${pDisplayPrice}</span>
+                  </div>
+                </a>
+              `;
+            }).join('')}
+          </div>
+        </section>
+      ` : ''}
+
       <!-- Mobile Sticky Purchase Bar -->
       <div class="mobile-purchase-bar" id="mobile-purchase-bar" aria-hidden="true">
         <div class="mobile-bar-info">
@@ -287,7 +316,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
     // Attach Add to Cart
     attachAddToCartHandlers();
 
-    // Attach breadcrumb links
+    // Attach breadcrumb and related links
     attachNavLinks();
 
     // Setup Mobile Bar Intersection Observer
@@ -405,12 +434,26 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
     }, { threshold: 0.1 });
 
     ctaObserver.observe(mainBtn);
+
+    // Suppress mobile bar when input / keyboard is active
+    container.addEventListener('focusin', (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) {
+        mobileBar?.classList.add('is-suppressed');
+      }
+    });
+
+    container.addEventListener('focusout', (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) {
+        mobileBar?.classList.remove('is-suppressed');
+      }
+    });
   }
 
   async function load(slug, variantIdQuery = null) {
     isLoading = true;
     errorMessage = null;
     currentProduct = null;
+    relatedProducts = [];
     quantity = 1;
     render();
 
@@ -435,6 +478,17 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
         selectedSize = null;
         selectedColor = null;
       }
+
+      // Fetch related products in background
+      fetchProducts({ collectionId: prod.collection_id || null, pageSize: 5 })
+        .then(res => {
+          const raw = res?.products || [];
+          relatedProducts = raw.filter(p => p.id !== prod.id && p.slug !== prod.slug).slice(0, 4);
+          render();
+        })
+        .catch(() => {
+          // Non-blocking: related products failure does not block primary product view
+        });
 
       isLoading = false;
       updateMetadata(prod);

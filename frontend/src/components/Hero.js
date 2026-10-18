@@ -164,8 +164,6 @@ export function createHero(onProductClick) {
     section.appendChild(overlay);
     section.appendChild(motif);
     section.appendChild(container);
-
-    startAutoPlay();
   }
 
   function goToSlide(index) {

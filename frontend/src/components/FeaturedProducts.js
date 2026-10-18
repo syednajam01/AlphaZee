@@ -1,5 +1,5 @@
 import { fetchProducts, fetchCollections } from '../utils/api.js';
-import { formatDisplayPrice } from '../utils/money.js';
+import { formatDisplayPrice, extractPriceMinor } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
 
 export function createFeaturedProducts(onOpenProductModal) {
@@ -8,6 +8,14 @@ export function createFeaturedProducts(onOpenProductModal) {
   section.id = 'featured';
 
   let activeCategory = 'all';
+  let activeSort = 'featured';
+  try {
+    const savedFilter = window?.sessionStorage?.getItem('alphazee_catalog_filter');
+    if (savedFilter) activeCategory = savedFilter;
+    const savedSort = window?.sessionStorage?.getItem('alphazee_catalog_sort');
+    if (savedSort) activeSort = savedSort;
+  } catch {}
+
   let currentPage = 1;
   const pageSize = 12;
   let totalProducts = 0;
@@ -24,13 +32,24 @@ export function createFeaturedProducts(onOpenProductModal) {
   container.innerHTML = `
     <div class="section-header" style="display: flex; flex-direction: column; gap: 16px;">
       <div>
-        <h2 class="section-title">Featured Products</h2>
-        <p class="section-subtitle">Minimalist designs crafted with premium materials.</p>
+        <h2 class="section-title">Featured Pieces</h2>
+        <p class="section-subtitle">Architectural streetwear crafted with heavyweight fabrics in Karachi, Pakistan.</p>
       </div>
       
-      <!-- Category Filter Tabs -->
-      <div class="filter-tabs" id="filter-tabs-container" role="tablist" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
-        <button class="option-pill is-selected" data-filter="all" role="tab" aria-selected="true">All Products</button>
+      <!-- Category Filter Tabs & Sorting Controls -->
+      <div class="catalog-controls-bar">
+        <div class="filter-tabs" id="filter-tabs-container" role="tablist">
+          <button class="option-pill is-selected" data-filter="all" role="tab" aria-selected="true">All Products</button>
+        </div>
+        <div class="catalog-sort-group">
+          <label for="catalog-sort" class="form-label" style="margin: 0; font-size: 0.85rem; color: var(--color-text-muted);">Sort By</label>
+          <select id="catalog-sort" class="form-select sort-select" aria-label="Sort catalog pieces">
+            <option value="featured">Featured</option>
+            <option value="price-asc">Price: Low to High</option>
+            <option value="price-desc">Price: High to Low</option>
+            <option value="name-asc">Name: A to Z</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -48,6 +67,35 @@ export function createFeaturedProducts(onOpenProductModal) {
   const grid = container.querySelector('#products-grid-container');
   const tabsContainer = container.querySelector('#filter-tabs-container');
   const paginationContainer = container.querySelector('#pagination-container');
+  const sortSelect = container.querySelector('#catalog-sort');
+  if (sortSelect) {
+    sortSelect.value = activeSort;
+    sortSelect.addEventListener('change', () => {
+      activeSort = sortSelect.value;
+      try { window?.sessionStorage?.setItem('alphazee_catalog_sort', activeSort); } catch {}
+      renderGrid();
+    });
+  }
+
+  function sortProducts(items, sortKey) {
+    const list = [...items];
+    if (sortKey === 'price-asc') {
+      list.sort((a, b) => {
+        const pa = extractPriceMinor(a.min_price ?? a.min_price_minor) ?? 0;
+        const pb = extractPriceMinor(b.min_price ?? b.min_price_minor) ?? 0;
+        return pa - pb;
+      });
+    } else if (sortKey === 'price-desc') {
+      list.sort((a, b) => {
+        const pa = extractPriceMinor(a.min_price ?? a.min_price_minor) ?? 0;
+        const pb = extractPriceMinor(b.min_price ?? b.min_price_minor) ?? 0;
+        return pb - pa;
+      });
+    } else if (sortKey === 'name-asc') {
+      list.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    }
+    return list;
+  }
 
   function renderTabs() {
     tabsContainer.innerHTML = `
@@ -64,6 +112,7 @@ export function createFeaturedProducts(onOpenProductModal) {
         const filter = btn.dataset.filter;
         if (activeCategory === filter) return;
         activeCategory = filter;
+        try { window?.sessionStorage?.setItem('alphazee_catalog_filter', activeCategory); } catch {}
         renderTabs();
         loadProducts({ reset: true });
       });
@@ -143,7 +192,9 @@ export function createFeaturedProducts(onOpenProductModal) {
       return;
     }
 
-    grid.innerHTML = products.map(product => {
+    const displayProducts = sortProducts(products, activeSort);
+
+    grid.innerHTML = displayProducts.map(product => {
       const safeTitle = escapeHtml(product.title);
       const safeBadge = product.badge ? escapeHtml(product.badge) : null;
       const formattedPrice = formatDisplayPrice(product.min_price ?? product.min_price_minor);
@@ -177,21 +228,34 @@ export function createFeaturedProducts(onOpenProductModal) {
       `;
     }).join('');
 
-    // Prepend safe images via DOM properties
-    products.forEach(product => {
+    // Prepend safe images with 3:4 aspect ratio and hover crossfade via DOM properties
+    displayProducts.forEach(product => {
       const card = grid.querySelector(`#product-${product.id}`);
       const wrapper = card?.querySelector('.product-card-img-wrapper');
       if (wrapper && !wrapper.querySelector('.product-card-img')) {
-        wrapper.appendChild(
-          createSafeImageElement({
-            src: product.image_url,
-            alt: product.image_alt || product.title || 'Product',
-            className: 'product-card-img',
+        const secondaryUrl = product.secondary_image_url || product.secondary_image || (Array.isArray(product.media) && product.media.find(m => m.kind === 'image' && m.role !== 'primary')?.url) || null;
+
+        const primaryImg = createSafeImageElement({
+          src: product.image_url,
+          alt: product.image_alt || product.title || 'Product',
+          className: 'product-card-img product-card-img-primary' + (secondaryUrl ? ' has-secondary' : ''),
+          loading: 'lazy',
+          width: 320,
+          height: 426,
+        });
+        wrapper.appendChild(primaryImg);
+
+        if (secondaryUrl) {
+          const secondaryImg = createSafeImageElement({
+            src: secondaryUrl,
+            alt: `${product.title} alternate view`,
+            className: 'product-card-img product-card-img-secondary',
             loading: 'lazy',
             width: 320,
-            height: 320,
-          })
-        );
+            height: 426,
+          });
+          wrapper.appendChild(secondaryImg);
+        }
       }
     });
 

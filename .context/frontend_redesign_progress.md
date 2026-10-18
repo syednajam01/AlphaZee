@@ -8,9 +8,9 @@ Tracking implementation of [.context/frontend_design_implementation_guide.md](fi
 |---|---|---|---|---|
 | **U0** | Baseline capture, visual tokens (`variables.css`, `components.css`), shared controls & component reference | **Completed** | `.local/frontend-redesign/run_u0_baseline/` | Verified tokens, typography (Manrope/Newsreader), controls, 108 tests pass, build pass |
 | **U1** | Direct `/products/:slug` routing, page shell, history/query handling, deep link fallbacks | **Completed** | `.local/frontend-redesign/run_u1_routing/` | All 6 browser checks passed, deep links, reload, 404, query variants, mobile bar verified |
-| **U2** | Header/home layout, 3:4 catalog cards, image hover crossfades, filters & full-result set sort | In Progress | `.local/frontend-redesign/run_u2_catalog/` | Evaluating Next.js migration tradeoffs per owner instruction |
-| **U3** | Product detail page layout (58/42 desktop split, mobile stack & sticky purchase bar), gallery swipe/zoom/video | Not Started | — | Depends on U2 |
-| **U4** | Cart drawer & Checkout view refinements, accessibility (dialog focus trap, Escape, Tab wrap), validation & honest state | Not Started | — | Depends on U3 |
+| **U2** | Header/home layout, 3:4 catalog cards, image hover crossfades, filters & full-result set sort | **Completed** | `.local/frontend-redesign/run_u2_catalog/` | All 7 automated browser checks passed: sticky white header, Newsreader hero, 3:4 aspect ratio, 4/3/2 col responsive grid, immediate touch tap, full-dataset sorting, single-row category tabs |
+| **U3** | Product detail page layout (58/42 desktop split, mobile stack & sticky purchase bar), gallery swipe/zoom/video | **Completed** | `.local/frontend-redesign/run_u3_gallery/` | All 7 automated browser checks passed: 58/42 split, prev/next controls, counter, lightbox zoom, keyboard arrows, live variant price/stock, mobile bar obstruction safety |
+| **U4** | Cart drawer & Checkout view refinements, accessibility (dialog focus trap, Escape, Tab wrap), validation & honest state | In Progress | `.local/frontend-redesign/run_u4_checkout/` | Refining Cart Drawer, lab COD & bank journeys, focus management, and validation |
 | **U5** | Breakpoint matrix (360/390/768/1280/1440), 200% browser zoom, reduced motion, slow network & admin console smoke check | Not Started | — | Final polish |
 
 ---
@@ -110,5 +110,104 @@ Per owner instruction and `.agent/AGENTS.md` framework flexibility, evaluated mi
   - Initial click handler on product card media links called `e.preventDefault()` for modal; fixed to allow direct pushState navigation to `/products/:slug` while keeping `.product-card-btn` for quick view.
 - **Next Step**:
   - Proceed to Phase U2: Header, Editorial Hero, and Responsive 3:4 Catalog Grid with full-dataset filtering, sorting, and image hover crossfade.
+
+### Phase U2: Header, Editorial Hero & Responsive 3:4 Catalog Grid
+- **Scope**:
+  - **Header & Logo Contrast**: Updated `header.css` and `logo.css` to `position: sticky; top: 0;`, solid white surface (`#FFFFFF`), high-contrast dark text (`#171717`), and un-inverted logo filter (`filter: none`). Eliminates contrast clash and breadcrumb overlap on deep links.
+  - **Editorial Hero**: Updated `Hero.js` and `hero.css` with Newsreader serif headings, calm layout, and eliminated auto-rotation per brief ("no automatic hero carousel"). Streamlined height (55–65vh) ensuring catalog items are immediately reachable.
+  - **3:4 Aspect Ratio Catalog Frames**: Enforced exact 3:4 aspect ratio (`ratio: 0.75`, e.g. 280x373px) with `object-fit: contain` and clean borders, preventing layout shifts and distortion.
+  - **Responsive Catalog Grid**: 4 columns on desktop (>=1024px), 3 columns on tablet (>=640px), 2 columns on mobile (<=640px), 1 column on extra narrow (<350px).
+  - **Immediate Touch Navigation**: Direct pushState navigation on image/title click without requiring hover activation.
+  - **Single-Row Horizontal Category Tabs**: Updated `grid.css` with `flex-wrap: nowrap; overflow-x: auto;` so 28 collection pills stay on a sleek single scrollable row instead of wrapping into 28 vertical rows.
+  - **Full-Dataset Sorting & Filter Memory**: Added `#catalog-sort` (Featured, Price: Low to High, Price: High to Low, Name: A to Z) applying across the full product catalog, with `sessionStorage` filter/sort preservation.
+  - **Image Hover Swap & Neutral Fallback**: 180ms hover transition for fine pointers (`@media (hover: hover) and (pointer: fine)`), with neutral fallback when no secondary image exists.
+- **Changed Files**:
+  - `frontend/src/styles/header.css`
+  - `frontend/src/styles/logo.css`
+  - `frontend/src/styles/hero.css`
+  - `frontend/src/styles/grid.css`
+  - `frontend/src/components/Hero.js`
+  - `frontend/src/components/FeaturedProducts.js`
+  - `scratch/verify_u2_gate.py`
+- **Checks Actually Run**:
+  - Frontend unit tests: `npm.cmd test` (113 passed, 0 failures).
+  - Production build: `npm.cmd run build` (successful, 35 modules in 3.15s).
+  - Web container build & restart: `docker compose -f compose.checkout-lab.yml up --build -d web`.
+  - Browser CDP automated gate on `http://127.0.0.1:13001` (7/7 checks passed):
+    1. Header contrast & Editorial Hero -> PASS.
+    2. 3:4 aspect ratio crops on catalog cards -> PASS (exact 0.75 ratio).
+    3. Responsive grid breakpoints (4 desktop / 3 tablet / 2 phone) -> PASS.
+    4. Mobile touch navigation immediate tap -> PASS.
+    5. Full-dataset sorting -> PASS.
+    6. Category tabs & filter switching -> PASS.
+    7. Secondary image hover swap & neutral fallback -> PASS.
+- **Evidence Screenshots**:
+  - Header & Editorial Hero: `.local/frontend-redesign/run_u2_catalog/u2_desktop_header_and_hero.png`
+  - Catalog Grid (3:4 ratio): `.local/frontend-redesign/run_u2_catalog/u2_desktop_catalog_grid_3_4.png`
+  - Tablet 3-column Grid: `.local/frontend-redesign/run_u2_catalog/u2_tablet_3col.png`
+  - Mobile 2-column Grid: `.local/frontend-redesign/run_u2_catalog/u2_mobile_2col.png`
+  - Sorted Price Ascending: `.local/frontend-redesign/run_u2_catalog/u2_sorted_price_asc.png`
+  - Filtered Category: `.local/frontend-redesign/run_u2_catalog/u2_filtered_category.png`
+  - JSON evidence: `.local/frontend-redesign/run_u2_catalog/u2_verification.json`
+- **Next Step**:
+  - Proceed to Phase U3: Full product gallery, details, variant selection, and purchase controls.
+
+### Phase U3: Product Detail Page Layout, Gallery & Purchase Controls
+- **Scope**:
+  - **Desktop 58% Gallery / 42% Details Split**: Implemented responsive editorial product grid with sticky purchase summary on desktop (`position: sticky; top: calc(var(--header-height) + 24px)`), breadcrumbs (`Home / [Collection] / [Product]`), Newsreader/Manrope typography, tabular price, and stock badge.
+  - **ProductGallery Upgrades**:
+    - Floating round 44px navigation controls (`#gallery-prev-btn`, `#gallery-next-btn`) with subtle backdrop blur, hover states, and disabled handling for single-media pieces.
+    - Slide counter badge (`.gallery-counter`) showing active index and total (`1 / N`).
+    - Touch gesture swipe navigation (`touchstart`, `touchmove`, `touchend`) with 40px delta threshold and dominant horizontal intent preservation.
+    - Keyboard arrow navigation (`ArrowRight`, `ArrowLeft`, `Home`, `End`) on stage carousel.
+    - Lightbox image enlargement zoom modal (`#gallery-lightbox`) with dark blur backdrop, full-resolution unconstrained image, close button, focus trap, and Escape key dismiss.
+    - Video lifecycle management: `playsinline`, `preload="none"`, `controls`, and automatic pause on slide change, modal/lightbox open, route change, and `visibilitychange` (tab hide).
+    - Neutral fallback placeholder when product has no media.
+  - **Live Variant Selection & Invariants**:
+    - Interactive size and color chips with radio accessibility roles (`role="radiogroup"`, `role="radio"`, `aria-checked`).
+    - Dynamic variant matching updating live price (`#product-detail-price`), stock badge ("In Stock" vs "Currently Unavailable"), and Add to Shopping Bag CTA state without page reloads.
+    - Dynamic URL query parameter synchronization (`?variant=<id>`) via `history.replaceState`.
+    - Variant-specific image selection upon option chip click.
+    - 48px Quantity stepper (- / +) with numeric boundaries (1 to 99).
+  - **Mobile Sticky Purchase Bar & Obstruction Safety**:
+    - `#mobile-purchase-bar` slides into view only when the inline `#btn-add-to-cart` scrolls past the top of the viewport.
+    - Reflects selected variant title, price, and active Add to Bag button.
+    - Obstruction safety: automatically suppressed (`display: none !important`) whenever an overlay, cart drawer, or lightbox is open (`body.has-overlay`, `body.lightbox-open`), or when virtual keyboard inputs (`input`, `textarea`, `select`) receive focus (`.is-suppressed`).
+  - **Authentic Editorial Accordions & Related Pieces**:
+    - Material & Garment Care details (100% combed cotton 240 GSM, preshrunk, wash care).
+    - Sizing Guide measurement table (Chest, Length, Shoulder across S, M, L, XL).
+    - Nationwide Delivery & Returns (24–48h dispatch from Karachi hub, 3–5 days transit, COD and bank transfer, 7-day inspection policy).
+    - Curated Related Pieces section rendering 3:4 aspect ratio cards.
+- **Changed Files**:
+  - `frontend/src/components/ProductGallery.js`
+  - `frontend/src/components/ProductPage.js`
+  - `frontend/src/utils/overlay.js`
+  - `frontend/src/styles/product-page.css`
+  - `frontend/tests/product-gallery-u3.test.js`
+  - `scratch/verify_u3_gate.py`
+  - `.local/frontend-redesign/browser_util.py`
+- **Checks Actually Run**:
+  - Frontend unit tests: `npm.cmd test` (118 passed, 0 failures; 5 new U3 tests for gallery controls, keyboard, zoom, touch, and video lifecycle).
+  - Production build: `npm.cmd run build` (successful, 35 modules in 2.77s).
+  - Web container build & restart: `docker compose -f compose.checkout-lab.yml up --build -d web`.
+  - Browser CDP automated gate on `http://127.0.0.1:13001` (7/7 checks passed):
+    1. Desktop 58/42 Layout & Content -> PASS (58% gallery / 42% details, breadcrumbs, accordions, size table).
+    2. Gallery Controls & Counter -> PASS (prev/next buttons, slide counter pill `1 / 2` to `2 / 2`).
+    3. Image Lightbox Zoom & Dismiss -> PASS (opens `#gallery-lightbox`, locks body scroll, dismisses on Escape).
+    4. Keyboard Navigation on Stage -> PASS (stage focused, ArrowRight / ArrowLeft cycle slides).
+    5. Variant Selection & Live State -> PASS (clicking 'L' updates price, stock badge, and syncs URL `?variant=52`).
+    6. Mobile Sticky Bar & Obstruction Safety -> PASS (appears on scroll; suppressed on cart drawer open and input focus).
+    7. Video Lifecycle Invariants -> PASS (video controls, pause on change, tab visibility pause).
+- **Evidence Screenshots**:
+  - Desktop Product Details: `.local/frontend-redesign/run_u3_gallery/u3_desktop_product_details.png`
+  - Gallery Slide Navigation: `.local/frontend-redesign/run_u3_gallery/u3_gallery_slide_navigation.png`
+  - Lightbox Zoom: `.local/frontend-redesign/run_u3_gallery/u3_gallery_lightbox_zoom.png`
+  - Variant Selection & Live Price: `.local/frontend-redesign/run_u3_gallery/u3_variant_selection_live_price.png`
+  - Mobile Sticky Purchase Bar: `.local/frontend-redesign/run_u3_gallery/u3_mobile_sticky_purchase_bar.png`
+  - JSON evidence: `.local/frontend-redesign/run_u3_gallery/u3_verification.json`
+- **Next Step**:
+  - Proceed to Phase U4: Cart drawer & Checkout view refinements, lab COD & bank handoff presentation, and accessibility (dialog focus trap, Tab wrapping, Escape).
+
+
 
 

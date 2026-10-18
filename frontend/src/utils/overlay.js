@@ -48,6 +48,7 @@ export function createOverlay({ element, backdrop = null, onClose = () => {}, on
     setOpen(true);
     activeOverlay = controller;
     document.body.style.overflow = 'hidden';
+    document.body?.classList?.add('has-overlay');
     document.addEventListener?.('keydown', onKeyDown);
     (focusableElements()[0] || element).focus?.();
   }
@@ -59,6 +60,7 @@ export function createOverlay({ element, backdrop = null, onClose = () => {}, on
     activeOverlay = null;
     document.removeEventListener?.('keydown', onKeyDown);
     document.body.style.overflow = previousOverflow;
+    document.body?.classList?.remove('has-overlay');
     onClose();
     if (opener?.isConnected !== false) opener?.focus?.();
   }
