@@ -1,19 +1,19 @@
 {
   "phase": "M9",
-  "checked_at_utc": "2026-10-15T15:54:21.409255+00:00",
+  "checked_at_utc": "2026-10-18T16:25:14.273525+00:00",
   "snapshot": {
-    "product_id": "lab-710cde2480b504ea41ceb54f52ca50b7",
+    "product_id": "lab-41a473d6ec088aa2c251679770fb80f5",
     "status": "archived",
     "media": [
       {
-        "id": "499f029951c5374563f0d3e0fa1b8e71",
+        "id": "093276ac449fc501e5a612e938746881",
         "checksum": "56c41ec19ddbcbd9e4feb424b9eac1db91de0e51266d1970cd7babd35f8c73b2",
         "poster_id": null
       },
       {
-        "id": "593ac605f4b9042a721ea108eab5529c",
+        "id": "7ba6cba482a17b1f38eb5742718304b5",
         "checksum": "e272caf03fd40eafb3a8148a97cb791decae765eea75c15a618e801e6f1981d7",
-        "poster_id": "499f029951c5374563f0d3e0fa1b8e71"
+        "poster_id": "093276ac449fc501e5a612e938746881"
       }
     ],
     "stock": [

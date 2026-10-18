@@ -1,4 +1,4 @@
-﻿# AlphaZee: agent operating guide
+# AlphaZee: agent operating guide
 
 Owner: Syed Najam. Updated: 2026-10-15, through M9.
 This is the canonical project agent guide. Read it at the start of each task. Keep it under 1,200 words; put detailed plans, verification and operating instructions in `.context/`.
@@ -46,13 +46,19 @@ The owner explicitly selected **open checkout only in the isolated local lab**. 
 
 ## Technical and verification defaults
 
-Preserve Vite/plain JavaScript/CSS and Python 3.13/FastAPI/synchronous SQLAlchemy/Alembic/Pydantic/PostgreSQL. Use same-origin `/api/v1`. Avoid framework rewrites or duplicate business logic.
+The owner authorizes React or another suitable frontend framework, styling/component libraries and necessary container changes for the redesign. Migration is optional; preserve completed work and document the rationale in `.context/frontend_redesign_progress.md`. Follow the framework guidance in `.context/frontend_design_implementation_guide.md`; verify development, production and lab packaging after migration. Preserve Python 3.13/FastAPI/synchronous SQLAlchemy/Alembic/Pydantic/PostgreSQL, same-origin `/api/v1`, existing commerce contracts and authentication. Avoid duplicate business logic.
 
 Handle loading, empty, failure, retry, stale responses and unavailable products honestly. Escape dynamic text, validate URLs and reconcile stored carts against authoritative backend data. Owner APIs enforce sessions, Origin and CSRF server-side.
 
 Use `rg` first for searches and `npm.cmd` in PowerShell. Native frontend work requires Node 20.19+ or 22.12+; Docker uses Node 22. Run meaningful focused tests, relevant regressions and builds. Use a fresh workspace `.local/` pytest basetemp when old temp directories have ACL problems; do not delete protected artifacts. Report actual checks and material limitations.
 
 ## Project memory
+
+The 2026-10-19 `.context/frontend_design_implementation_guide.md` is the Antigravity storefront redesign brief: visual tokens, product URLs, responsive media/purchase flows and U0–U5 browser gates. Expected progress file: `.context/frontend_redesign_progress.md`. The brief is not implementation evidence; preserve checkout/data boundaries. It supersedes the testing-only handoff for the requested design work.
+
+Antigravity's v2 report and `.local/antigravity-browser/run_20261018_pass2/` were reviewed on 2026-10-19: JSON records 33 PASS/1 NOT TESTED, but some claims exceed assertions. Read `.context/browser_acceptance_v2_review.md` for keyboard/zoom/security-negative/coverage limits and next priorities. Treat this as partial evidence, not completed acceptance or production certification. Preserve reports; `.context/next_target.md` contains second-pass instructions and `.context/next_target.txt` is older.
+
+The 2026-10-18 guidance is `.context/next_priorities_and_browser_testing.md`: baseline acceptance, commercial decisions, mobile buying-journey UX, launch/staging verification and a controlled pilot. It includes current automated runner prerequisites plus manual/device/usability checks; it is guidance, not newly executed evidence or implementation authorization.
 
 The 2026-10-15 readiness assessment is `.context/production_readiness_summary.md`. Core workflows are implemented, but public checkout release, Azure acceptance and business setup remain. Vendor payable/payout accounting is absent; customer checkout currently defaults to zero shipping. Treat these as assessed gaps/decisions, not newly authorized implementation phases.
 

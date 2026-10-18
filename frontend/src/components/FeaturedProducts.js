@@ -147,25 +147,31 @@ export function createFeaturedProducts(onOpenProductModal) {
       const safeTitle = escapeHtml(product.title);
       const safeBadge = product.badge ? escapeHtml(product.badge) : null;
       const formattedPrice = formatDisplayPrice(product.min_price ?? product.min_price_minor);
+      const productHref = `/products/${encodeURIComponent(product.slug)}`;
 
       return `
         <article class="product-card" id="product-${escapeHtml(product.id)}">
-          <div class="product-card-img-wrapper">
-            ${safeBadge ? `<span class="badge badge-neutral product-card-badge">${safeBadge}</span>` : ''}
-          </div>
+          <a href="${productHref}" data-slug="${escapeHtml(product.slug)}" class="product-card-media-link" aria-label="View ${safeTitle}">
+            <div class="product-card-img-wrapper">
+              ${safeBadge ? `<span class="badge badge-neutral product-card-badge">${safeBadge}</span>` : ''}
+            </div>
+          </a>
           <div class="product-card-info">
-            <h3 class="product-card-title">${safeTitle}</h3>
+            <h3 class="product-card-title">
+              <a href="${productHref}" data-slug="${escapeHtml(product.slug)}" class="product-card-title-link">${safeTitle}</a>
+            </h3>
             <div class="product-card-price-row">
-              <span class="product-card-price">${formattedPrice}</span>
+              <span class="product-card-price price-tabular">${formattedPrice}</span>
               ${product.availability === 'unavailable' ? '<span class="badge badge-neutral">Currently unavailable</span>' : ''}
             </div>
-            <button 
+            <a 
+              href="${productHref}"
               class="btn btn-secondary product-card-btn" 
               data-slug="${escapeHtml(product.slug)}"
               data-id="${escapeHtml(product.id)}"
               aria-label="View options for ${safeTitle}">
               View Options
-            </button>
+            </a>
           </div>
         </article>
       `;
@@ -189,12 +195,14 @@ export function createFeaturedProducts(onOpenProductModal) {
       }
     });
 
-    // Attach card click handlers
-    grid.querySelectorAll('.product-card-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const slug = btn.dataset.slug;
+    // Attach quick view modal only to .product-card-btn; title and media links navigate to /products/:slug
+    grid.querySelectorAll('.product-card-btn').forEach(link => {
+      link.addEventListener('click', (e) => {
+        if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return;
+        const slug = link.dataset?.slug || (link.getAttribute ? link.getAttribute('data-slug') : null);
         const prod = products.find(p => p.slug === slug);
         if (onOpenProductModal) {
+          if (e?.preventDefault) e.preventDefault();
           onOpenProductModal(prod || slug);
         }
       });

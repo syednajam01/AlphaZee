@@ -1,6 +1,6 @@
 {
   "phase": "M9",
-  "checked_at_utc": "2026-10-15T15:49:56.535647+00:00",
+  "checked_at_utc": "2026-10-18T16:24:12.673689+00:00",
   "origin": "http://127.0.0.1:13001",
   "database": "alphazee_checkout_test",
   "checks": [
@@ -155,18 +155,18 @@
   "normal_development_modified": false,
   "lab_checkout_enabled": true,
   "public_checkout_enabled": false,
-  "artifacts": ".local\\m9-browser\\62a7b168",
+  "artifacts": ".local\\m9-browser\\ea3179b2",
   "http_error_observations": [
     {
       "path": "/api/v1/auth/session",
       "status": 401
     },
     {
-      "path": "/api/v1/products/sample-m8-62a7b168",
+      "path": "/api/v1/products/sample-m8-ea3179b2",
       "status": 404
     },
     {
-      "path": "/api/v1/catalog/products/lab-710cde2480b504ea41ceb54f52ca50b7",
+      "path": "/api/v1/catalog/products/lab-41a473d6ec088aa2c251679770fb80f5",
       "status": 404
     },
     {
