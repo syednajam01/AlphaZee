@@ -54,6 +54,8 @@ Use `rg` first for searches and `npm.cmd` in PowerShell. Native frontend work re
 
 ## Project memory
 
+The 2026-10-19 `.context/business_and_architecture_review.md` reviews redesign evidence and defines B0–B5 priorities. Next.js remains unimplemented; resolve product-content correctness and verification gaps before launch. Recommendations are not implementation authorization.
+
 The 2026-10-19 `.context/frontend_design_implementation_guide.md` is the Antigravity storefront redesign brief: visual tokens, product URLs, responsive media/purchase flows and U0–U5 browser gates. Expected progress file: `.context/frontend_redesign_progress.md`. The brief is not implementation evidence; preserve checkout/data boundaries. It supersedes the testing-only handoff for the requested design work.
 
 Antigravity's v2 report and `.local/antigravity-browser/run_20261018_pass2/` were reviewed on 2026-10-19: JSON records 33 PASS/1 NOT TESTED, but some claims exceed assertions. Read `.context/browser_acceptance_v2_review.md` for keyboard/zoom/security-negative/coverage limits and next priorities. Treat this as partial evidence, not completed acceptance or production certification. Preserve reports; `.context/next_target.md` contains second-pass instructions and `.context/next_target.txt` is older.
