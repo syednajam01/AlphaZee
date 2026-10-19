@@ -41,11 +41,14 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
       }
     } else {
       document.title = 'Piece Unavailable — AlphaZee';
+      document.querySelector('meta[name="description"]')?.setAttribute('content', 'This product is currently unavailable. Browse the AlphaZee catalog.');
+      document.querySelector('link[rel="canonical"]')?.remove();
     }
   }
 
   function getSelectedVariant() {
     if (!currentProduct?.variants || currentProduct.variants.length === 0) return null;
+    if (currentProduct.variants.some(v => v.size) && !selectedSize) return null;
     return currentProduct.variants.find(v => {
       const sizeMatch = !selectedSize || v.size === selectedSize;
       const colorMatch = !selectedColor || v.color === selectedColor;
@@ -115,9 +118,15 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
     const colors = variants.some(v => v.color) ? [...new Set(variants.map(v => v.color || '').filter(Boolean))] : [];
     const activeVariant = getSelectedVariant();
 
-    const priceMinor = extractPriceMinor(activeVariant?.price_minor ?? activeVariant?.price ?? product.min_price ?? product.min_price_minor);
+    const candidates = variants.filter(v => !selectedColor || v.color === selectedColor);
+    const availableCandidates = candidates.filter(v => v.availability === 'available');
+    const candidatePrices = availableCandidates.map(v => extractPriceMinor(v.price_minor ?? v.price)).filter(p => p !== null);
+    const needsSize = sizes.length > 0 && !selectedSize;
+    const priceMinor = activeVariant
+      ? extractPriceMinor(activeVariant.price_minor ?? activeVariant.price)
+      : needsSize && candidatePrices.length ? Math.min(...candidatePrices) : null;
     const displayPrice = formatDisplayPrice(priceMinor);
-    const isAvailable = activeVariant ? (activeVariant.availability === 'available') : (product.availability === 'available');
+    const isAvailable = activeVariant ? activeVariant.availability === 'available' : needsSize && availableCandidates.length > 0;
 
     const safeTitle = escapeHtml(product.title);
     const safeCollection = product.collection_name ? escapeHtml(product.collection_name) : null;
@@ -272,10 +281,10 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
             </div>
 
             <div class="product-info-block">
-              <h3 class="product-info-title">Nationwide Delivery & Returns</h3>
+              <h3 class="product-info-title">Delivery & Returns</h3>
               <div class="product-info-content">
                 <p style="margin: 0 0 6px 0;">
-                  <strong>Dispatch:</strong> Orders dispatch within ${escapeHtml(storeConfig.shippingInfo.dispatchTime)}.
+                  <strong>Dispatch:</strong> ${escapeHtml(storeConfig.shippingInfo.dispatchTime)}.
                 </p>
                 <p style="margin: 0 0 6px 0;">
                   <strong>Transit:</strong> ${escapeHtml(storeConfig.shippingInfo.standardTime)} (${escapeHtml(storeConfig.shippingInfo.standardRate)}).
@@ -301,10 +310,12 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
               const pPrice = extractPriceMinor(p.min_price_minor ?? p.min_price);
               const pDisplayPrice = formatDisplayPrice(pPrice);
               const pImg = sanitizeMediaUrl(p.image_url, '');
+              const pHoverImg = sanitizeMediaUrl(p.hover_image_url || p.secondary_image_url, '');
               return `
                 <a href="/products/${encodeURIComponent(p.slug)}" data-nav="/products/${encodeURIComponent(p.slug)}" class="product-related-card">
-                  <div class="product-related-media">
-                    ${pImg ? `<img src="${pImg}" alt="${escapeHtml(p.title)}" class="product-related-img" loading="lazy" />` : '<div class="product-gallery-neutral-fallback"><span>AZ</span></div>'}
+                  <div class="product-related-media ${pHoverImg ? 'has-hover' : ''}">
+                    ${pImg ? `<img src="${pImg}" alt="${escapeHtml(p.title)}" class="product-related-img product-related-img-primary ${pHoverImg ? 'has-hover' : ''}" loading="lazy" />` : '<div class="product-gallery-neutral-fallback"><span>AZ</span></div>'}
+                    ${pHoverImg ? `<img src="${pHoverImg}" alt="${escapeHtml(p.title)} alternate view" class="product-related-img product-related-img-hover" loading="lazy" />` : ''}
                   </div>
                   <div class="product-related-meta">
                     <h3 class="product-related-card-title">${escapeHtml(p.title)}</h3>
@@ -387,9 +398,10 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
 
   function onVariantOptionsChanged() {
     const active = getSelectedVariant();
-    if (active && typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
-      url.searchParams.set('variant', String(active.id));
+      if (active) url.searchParams.set('variant', String(active.id));
+      else url.searchParams.delete('variant');
       window.history.replaceState(null, '', url.pathname + url.search);
     }
     render();
@@ -442,6 +454,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
     if (priceMinor === null) return;
 
     const img = variantImage(currentProduct, active.id);
+    const resolvedImageUrl = typeof img === 'string' ? img : (img?.url || currentProduct.image_url || '');
 
     cart.addItem({
       product_id: currentProduct.id,
@@ -452,7 +465,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
       price_minor: priceMinor,
       size: active.size,
       color: active.color,
-      image_url: img ? img.url : (currentProduct.image_url || ''),
+      image_url: resolvedImageUrl,
     }, {}, quantity);
 
     if (onAddedToCart) {
@@ -484,19 +497,15 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
 
     ctaObserver.observe(mainBtn);
 
-    // Suppress mobile bar when input / keyboard is active
-    container.addEventListener('focusin', (e) => {
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) {
-        mobileBar?.classList.add('is-suppressed');
-      }
-    });
-
-    container.addEventListener('focusout', (e) => {
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) {
-        mobileBar?.classList.remove('is-suppressed');
-      }
-    });
   }
+
+  // Bind once: rendering options must not accumulate container listeners.
+  container.addEventListener('focusin', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) mobileBar?.classList.add('is-suppressed');
+  });
+  container.addEventListener('focusout', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) mobileBar?.classList.remove('is-suppressed');
+  });
 
   async function load(slug, variantIdQuery = null) {
     const currentGen = ++loadGeneration;
@@ -568,6 +577,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
       }
       container.innerHTML = '';
       currentProduct = null;
+      mobileBar = null;
     }
   };
 }

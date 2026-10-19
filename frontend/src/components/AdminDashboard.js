@@ -1,7 +1,7 @@
 import { createAdminConsoleModal } from './AdminConsole.js';
 
 const sections = new Set(['overview', 'products', 'collections', 'media', 'inventory',
-  'suppliers', 'orders', 'returns', 'coupons', 'reports']);
+  'suppliers', 'orders', 'returns', 'coupons', 'expenses', 'reports']);
 
 export function adminSection(pathname) {
   const path = pathname.replace(/\/+$/, '');

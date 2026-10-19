@@ -223,9 +223,24 @@ describe('Hero Carousel Component & Media Streaming', () => {
     originalFetch = global.fetch;
     originalMatchMedia = global.window ? global.window.matchMedia : undefined;
 
+    const docListeners = {};
     global.document = {
       createElement: (tag) => createMockElement(tag),
       body: createMockElement('body'),
+      hidden: false,
+      addEventListener: (type, fn) => {
+        if (!docListeners[type]) docListeners[type] = [];
+        docListeners[type].push(fn);
+      },
+      removeEventListener: (type, fn) => {
+        if (docListeners[type]) {
+          docListeners[type] = docListeners[type].filter(f => f !== fn);
+        }
+      },
+      dispatchEvent: (event) => {
+        const type = typeof event === 'string' ? event : event.type;
+        (docListeners[type] || []).forEach(fn => fn(event));
+      },
     };
 
     global.window = {
@@ -348,6 +363,170 @@ describe('Hero Carousel Component & Media Streaming', () => {
     assert.ok(slide1Cta);
     slide1Cta.click();
     assert.strictEqual(clickedSlug, 'architectural-hoodie');
+    heroSection.destroy();
+  });
+
+  it('advances to next slide when active video fires ended event in multi-item playlist', async () => {
+    const mockHeroItems = [
+      {
+        id: 'hero-1',
+        title: 'Clip One',
+        video_url: 'https://cdn.alphazee.pk/clip1.mp4',
+        poster_url: 'https://cdn.alphazee.pk/clip1.jpg',
+      },
+      {
+        id: 'hero-2',
+        title: 'Clip Two',
+        video_url: 'https://cdn.alphazee.pk/clip2.mp4',
+        poster_url: 'https://cdn.alphazee.pk/clip2.jpg',
+      },
+    ];
+
+    global.fetch = async (url) => {
+      if (url.includes('/api/v1/hero/slides')) {
+        return { ok: true, status: 200, json: async () => ({ slides: mockHeroItems }) };
+      }
+      return { ok: false, status: 404 };
+    };
+
+    const heroSection = createHero();
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const videos = heroSection.querySelectorAll('video');
+    assert.strictEqual(videos.length, 2);
+    assert.strictEqual(videos[0].loop, false, 'Multi-video hero elements must not loop individually');
+    assert.strictEqual(videos[1].loop, false);
+
+    const indicator = heroSection.querySelector('#hero-indicator');
+    assert.strictEqual(indicator.textContent, '1 / 2');
+
+    // Simulate active video 0 ending
+    videos[0].dispatchEvent('ended');
+
+    // Should have advanced to slide 2
+    assert.strictEqual(indicator.textContent, '2 / 2');
+    assert.strictEqual(videos[1].classList.contains('is-active'), true);
+    assert.strictEqual(videos[1].paused, false);
+    assert.strictEqual(videos[0].classList.contains('is-active'), false);
+    assert.strictEqual(videos[0].paused, true);
+
+    // Simulate active video 1 ending (wraps around to slide 1)
+    videos[1].dispatchEvent('ended');
+    assert.strictEqual(indicator.textContent, '1 / 2');
+    assert.strictEqual(videos[0].classList.contains('is-active'), true);
+
+    heroSection.destroy();
+  });
+
+  it('enables loop on video when playlist contains only a single video item', async () => {
+    const mockHeroItems = [
+      {
+        id: 'hero-single',
+        title: 'Continuous Loop Piece',
+        video_url: 'https://cdn.alphazee.pk/single-loop.mp4',
+        poster_url: 'https://cdn.alphazee.pk/single-loop.jpg',
+      },
+    ];
+
+    global.fetch = async (url) => {
+      if (url.includes('/api/v1/hero/slides')) {
+        return { ok: true, status: 200, json: async () => ({ slides: mockHeroItems }) };
+      }
+      return { ok: false, status: 404 };
+    };
+
+    const heroSection = createHero();
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const videos = heroSection.querySelectorAll('video');
+    assert.strictEqual(videos.length, 1);
+    assert.strictEqual(videos[0].loop, true, 'Single video hero playlist must loop continuously');
+
+    // Navigation buttons should be omitted for single item
+    assert.strictEqual(heroSection.querySelector('#hero-prev'), null);
+    assert.strictEqual(heroSection.querySelector('#hero-next'), null);
+
+    // But play/pause control must still be present and accessible
+    const playPauseBtn = heroSection.querySelector('#hero-play-pause');
+    assert.ok(playPauseBtn, 'Play/pause button must be available even for a single video');
+
+    heroSection.destroy();
+  });
+
+  it('toggles pause and play via play/pause button', async () => {
+    const mockHeroItems = [
+      {
+        id: 'hero-1',
+        title: 'Clip One',
+        video_url: 'https://cdn.alphazee.pk/clip1.mp4',
+      },
+    ];
+
+    global.fetch = async (url) => {
+      if (url.includes('/api/v1/hero/slides')) {
+        return { ok: true, status: 200, json: async () => ({ slides: mockHeroItems }) };
+      }
+      return { ok: false, status: 404 };
+    };
+
+    const heroSection = createHero();
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const video = heroSection.querySelector('video');
+    const playPauseBtn = heroSection.querySelector('#hero-play-pause');
+    assert.ok(playPauseBtn);
+
+    // Initially playing
+    assert.strictEqual(video.paused, false);
+    assert.strictEqual(playPauseBtn.textContent.trim(), '⏸');
+
+    // Click pause
+    playPauseBtn.click();
+    assert.strictEqual(video.paused, true, 'Video must pause when pause button is clicked');
+    assert.strictEqual(playPauseBtn.textContent.trim(), '▶');
+    assert.strictEqual(playPauseBtn.getAttribute('aria-label'), 'Resume hero playback');
+
+    // Click resume
+    playPauseBtn.click();
+    assert.strictEqual(video.paused, false, 'Video must resume when play button is clicked');
+    assert.strictEqual(playPauseBtn.textContent.trim(), '⏸');
+    assert.strictEqual(playPauseBtn.getAttribute('aria-label'), 'Pause hero playback');
+
+    heroSection.destroy();
+  });
+
+  it('pauses playing video when document visibility changes to hidden and resumes when visible', async () => {
+    const mockHeroItems = [
+      {
+        id: 'hero-1',
+        title: 'Clip One',
+        video_url: 'https://cdn.alphazee.pk/clip1.mp4',
+      },
+    ];
+
+    global.fetch = async (url) => {
+      if (url.includes('/api/v1/hero/slides')) {
+        return { ok: true, status: 200, json: async () => ({ slides: mockHeroItems }) };
+      }
+      return { ok: false, status: 404 };
+    };
+
+    const heroSection = createHero();
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const video = heroSection.querySelector('video');
+    assert.strictEqual(video.paused, false);
+
+    // Switch tab to hidden
+    global.document.hidden = true;
+    global.document.dispatchEvent('visibilitychange');
+    assert.strictEqual(video.paused, true, 'Video must pause when tab becomes hidden');
+
+    // Switch tab back to visible
+    global.document.hidden = false;
+    global.document.dispatchEvent('visibilitychange');
+    assert.strictEqual(video.paused, false, 'Video must resume when tab becomes visible');
+
     heroSection.destroy();
   });
 

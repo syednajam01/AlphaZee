@@ -83,6 +83,7 @@ class SupplierResponseSchema(BaseModel):
     name: str
     slug: str
     status: str
+    supplier_type: str = "external_vendor"
     notes: Optional[str] = None
 
 

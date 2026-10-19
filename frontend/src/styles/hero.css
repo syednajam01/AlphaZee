@@ -42,6 +42,11 @@
   opacity: 1;
 }
 
+.hero-bg-media.hero-video-media {
+  filter: brightness(0.75);
+  transform: none;
+}
+
 .hero-overlay {
   position: absolute;
   inset: 0;
@@ -247,6 +252,23 @@
 
 .hero-ctrl-btn:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.hero-controls {
+  position: relative;
+  z-index: 15;
+  margin-top: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hero-slide-indicator {
+  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  padding: 0 var(--space-2);
 }
 
 .hero-motion-toggle {

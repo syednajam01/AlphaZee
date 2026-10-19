@@ -33,6 +33,8 @@ def _utcnow() -> datetime:
 
 
 ALLOWED_SUPPLIER_STATUSES = {"active", "inactive", "suspended"}
+ALLOWED_SUPPLIER_TYPES = {"external_vendor", "alphazee_internal"}
+INTERNAL_SUPPLIER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 class UserAccount(Base):
@@ -103,7 +105,12 @@ class Supplier(Base):
             "status IN ('active', 'inactive', 'suspended')",
             name="ck_suppliers_status",
         ),
+        CheckConstraint(
+            "supplier_type IN ('external_vendor', 'alphazee_internal')",
+            name="ck_suppliers_supplier_type",
+        ),
         Index("idx_suppliers_status", "status"),
+        Index("idx_suppliers_type", "supplier_type"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -125,6 +132,14 @@ class Supplier(Base):
         default="active",
         server_default=text("'active'"),
     )
+
+    supplier_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="external_vendor",
+        server_default=text("'external_vendor'"),
+    )
+    """'external_vendor' for third-party shops; 'alphazee_internal' for internal inventory source."""
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Private owner notes (payment arrangements, contact info, WhatsApp number)."""
@@ -163,8 +178,41 @@ class Supplier(Base):
             )
         return value
 
+    @validates("supplier_type")
+    def validate_supplier_type(self, key: str, value: str) -> str:
+        if value not in ALLOWED_SUPPLIER_TYPES:
+            raise ValueError(
+                f"Invalid supplier type {value!r}. Must be one of {sorted(ALLOWED_SUPPLIER_TYPES)}."
+            )
+        return value
+
     def __repr__(self) -> str:
-        return f"<Supplier id={self.id} slug={self.slug!r} status={self.status!r}>"
+        return f"<Supplier id={self.id} slug={self.slug!r} status={self.status!r} type={self.supplier_type!r}>"
+
+
+def get_or_create_internal_supplier(db) -> Supplier:
+    """Return the designated internal inventory supplier for AlphaZee-managed stock."""
+    from sqlalchemy import select
+    sup = db.scalar(select(Supplier).where(Supplier.supplier_type == "alphazee_internal"))
+    if sup is not None:
+        return sup
+    sup = db.scalar(select(Supplier).where(Supplier.slug == "alphazee-internal"))
+    if sup is not None:
+        sup.supplier_type = "alphazee_internal"
+        db.flush()
+        return sup
+    sup = Supplier(
+        id=INTERNAL_SUPPLIER_ID,
+        name="AlphaZee In-House",
+        slug="alphazee-internal",
+        status="active",
+        supplier_type="alphazee_internal",
+        notes="Internal inventory source for AlphaZee-managed catalog stock",
+    )
+    db.add(sup)
+    db.flush()
+    return sup
+
 
 
 class SupplierMembership(Base):

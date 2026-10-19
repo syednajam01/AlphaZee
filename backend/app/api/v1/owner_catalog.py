@@ -46,7 +46,8 @@ def list_products(db: Session = Depends(get_db), search: str = Query(default='',
         query = query.where(or_(Product.title.icontains(term, autoescape=True), Product.slug.icontains(term, autoescape=True),
                                Product.variants.any(Variant.sku.icontains(term, autoescape=True))))
     if status: query = query.where(Product.status == status)
-    if collection_id: query = query.where(Product.collection_id == collection_id)
+    if collection_id == 'unassigned': query = query.where(Product.collection_id.is_(None))
+    elif collection_id: query = query.where(Product.collection_id == collection_id)
     total = db.scalar(select(func.count()).select_from(query.subquery()))
     products = db.scalars(query.options(selectinload(Product.variants), selectinload(Product.collection), selectinload(Product.media_links))
                          .order_by(Product.created_at.desc(), Product.id).offset((page-1)*page_size).limit(page_size)).all()

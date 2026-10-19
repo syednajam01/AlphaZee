@@ -52,6 +52,8 @@ import { formatPkr, parseCatalogPkr } from '../utils/money.js';
 import { mountCatalogSection } from './admin/CatalogWorkspace.js';
 import { mountStockHolds } from './admin/StockHolds.js';
 import {orderEvidence, returnEvidence, mountFundsReview, mountAccessRecovery} from './admin/OrderEvidence.js';
+import { createSupplierFinanceView } from './admin/SupplierFinance.js';
+import { renderBusinessExpenses } from './admin/BusinessExpenses.js';
 
 export function createAdminConsoleModal({ page = false, initialTab = 'overview', onNavigate = () => {} } = {}) {
   const modal = document.createElement('div');
@@ -95,7 +97,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         </div>
 
         <!-- Sidebar Navigation -->
-        <nav aria-label="Owner sections" style="flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px;">
+        <nav aria-label="Owner sections" style="flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto;">
           <button type="button" class="admin-tab-btn" data-tab="overview" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: rgba(20, 92, 68, 0.4); color: #FFFFFF; border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -103,13 +105,42 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             <span class="admin-nav-label">Overview</span>
           </button>
 
-          <button type="button" class="admin-tab-btn" data-tab="orders" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+          <button type="button" class="admin-tab-btn" data-tab="products" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="9" cy="21" r="1"></circle>
-              <circle cx="20" cy="21" r="1"></circle>
-              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+              <line x1="7" y1="7" x2="7.01" y2="7"></line>
             </svg>
-            <span class="admin-nav-label">Orders & Logistics</span>
+            <span class="admin-nav-label">Products & Catalog</span>
+          </button>
+
+          <button type="button" class="admin-tab-btn" data-tab="collections" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="admin-nav-label">Collections</span>
+          </button>
+
+          <button type="button" class="admin-tab-btn" data-tab="hero" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+              <line x1="7" y1="2" x2="7" y2="22"></line>
+              <line x1="17" y1="2" x2="17" y2="22"></line>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <line x1="2" y1="7" x2="7" y2="7"></line>
+              <line x1="2" y1="17" x2="7" y2="17"></line>
+              <line x1="17" y1="17" x2="22" y2="17"></line>
+              <line x1="17" y1="7" x2="22" y2="7"></line>
+            </svg>
+            <span class="admin-nav-label">Homepage Hero</span>
+          </button>
+
+          <button type="button" class="admin-tab-btn" data-tab="media" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <span class="admin-nav-label">Media Library</span>
           </button>
 
           <button type="button" class="admin-tab-btn" data-tab="inventory" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
@@ -121,12 +152,23 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             <span class="admin-nav-label">Inventory & Stock</span>
           </button>
 
-          <button type="button" class="admin-tab-btn" data-tab="coupons" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+          <button type="button" class="admin-tab-btn" data-tab="suppliers" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-              <line x1="7" y1="7" x2="7.01" y2="7"></line>
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
-            <span class="admin-nav-label">Coupons & Promos</span>
+            <span class="admin-nav-label">Suppliers</span>
+          </button>
+
+          <button type="button" class="admin-tab-btn" data-tab="orders" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="9" cy="21" r="1"></circle>
+              <circle cx="20" cy="21" r="1"></circle>
+              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+            </svg>
+            <span class="admin-nav-label">Orders & Logistics</span>
           </button>
 
           <button type="button" class="admin-tab-btn" data-tab="returns" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
@@ -137,14 +179,19 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             <span class="admin-nav-label">Returns & Refunds</span>
           </button>
 
-          <button type="button" class="admin-tab-btn" data-tab="suppliers" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+          <button type="button" class="admin-tab-btn" data-tab="coupons" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-              <circle cx="9" cy="7" r="4"></circle>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+              <line x1="7" y1="7" x2="7.01" y2="7"></line>
             </svg>
-            <span class="admin-nav-label">Suppliers</span>
+            <span class="admin-nav-label">Coupons & Promos</span>
+          </button>
+
+          <button type="button" class="admin-tab-btn" data-tab="expenses" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            <span class="admin-nav-label">Business Expenses</span>
           </button>
 
           <button type="button" class="admin-tab-btn" data-tab="analytics" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
@@ -265,10 +312,14 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
 
   if (page) {
     const nav = modal.querySelector('nav');
-    const labels = [['overview', 'Overview'], ['products', 'Products'], ['collections', 'Collections'],
-      ['media', 'Media'], ['inventory', 'Inventory'], ['suppliers', 'Suppliers'],
-      ['orders', 'Orders and payments'], ['returns', 'Returns and exchanges'],
-      ['coupons', 'Coupons'], ['analytics', 'Reports']];
+    const labels = [
+      ['overview', 'Overview'], ['products', 'Products & Catalog'], ['collections', 'Collections'],
+      ['hero', 'Homepage Hero'], ['media', 'Media Library'], ['inventory', 'Inventory & Stock'],
+      ['suppliers', 'Suppliers'], ['orders', 'Orders and payments'],
+      ['returns', 'Returns and exchanges'], ['coupons', 'Coupons & Promos'],
+      ['expenses', 'Business Expenses'],
+      ['analytics', 'Reports & Analytics']
+    ];
     const icons = new Map([...nav.querySelectorAll('.admin-tab-btn')].map(button =>
       [button.getAttribute('data-tab'), button.querySelector('svg')?.outerHTML || '']));
     nav.innerHTML = labels.map(([tab, label]) => `<button type="button" class="admin-tab-btn" data-tab="${tab}">${icons.get(tab) || '<span aria-hidden="true">·</span>'}<span class="admin-nav-label">${label}</span></button>`).join('');
@@ -280,7 +331,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     modal.querySelector('#admin-close-btn').hidden = true;
     modal.querySelector('[data-tab="orders"] .admin-nav-label').textContent = 'Orders and payments';
     modal.querySelector('[data-tab="returns"] .admin-nav-label').textContent = 'Returns and exchanges';
-    modal.querySelector('[data-tab="analytics"] .admin-nav-label').textContent = 'Reports';
+    modal.querySelector('[data-tab="analytics"] .admin-nav-label').textContent = 'Reports & Analytics';
     returnLink.addEventListener('click', event => { if (!canLeave()) event.preventDefault(); });
     for (const type of ['input', 'change']) modal.addEventListener(type, event => {
       const form = event.target?.closest?.('form');
@@ -325,9 +376,12 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   const viewTitle = modal.querySelector('#admin-view-title');
 
   function updateNavigation() {
-    const titles = { overview: 'Store overview', products: 'Products', collections: 'Collections',
-      media: 'Media', orders: 'Orders and payments', inventory: 'Inventory and stock',
-      coupons: 'Coupons', returns: 'Returns and exchanges', suppliers: 'Suppliers', analytics: 'Reports' };
+    const titles = {
+      overview: 'Store overview', products: 'Products & Catalog', collections: 'Collections',
+      hero: 'Homepage Hero Playlist', media: 'Media Library', orders: 'Orders and payments',
+      inventory: 'Inventory and stock', coupons: 'Coupons & Promos', returns: 'Returns and exchanges',
+      suppliers: 'Suppliers', expenses: 'Business Expenses & Freight', analytics: 'Reports & Analytics'
+    };
     viewTitle.textContent = titles[activeTab] || 'Section not found';
     tabBtns.forEach(button => {
       const selected = button.getAttribute('data-tab') === activeTab;
@@ -370,6 +424,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         coupons: 'Promotional Coupons & Voucher Codes',
         returns: 'Customer Returns & Size Exchanges',
         suppliers: 'Approved Suppliers & Cost Mapping',
+        expenses: 'Operating Costs & Transport Expenses',
         analytics: 'Gross Profit, COGS & Attribution',
       };
       if (viewTitle) viewTitle.textContent = titles[tab] || 'Store Management';
@@ -487,13 +542,20 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         await renderReturnsTab(contentArea, view);
       } else if (activeTab === 'suppliers') {
         await renderSuppliersTab(contentArea, view);
+      } else if (activeTab === 'expenses') {
+        await renderBusinessExpenses(contentArea, view);
       } else if (activeTab === 'analytics') {
         await renderAnalyticsTab(contentArea, view);
-      } else if (['products', 'collections', 'media'].includes(activeTab)) {
+      } else if (['products', 'collections', 'media', 'hero'].includes(activeTab)) {
         catalogView = mountCatalogSection(activeTab, contentArea, {
           isCurrent: () => view === viewGeneration && authenticated,
           setDirty: value => { if (view === viewGeneration) dirty = value; },
           canLeave,
+          onNavigate: (tab, payload) => {
+            activeTab = tab;
+            updateNavigation();
+            renderTab();
+          },
         });
         await catalogView.ready;
       } else {
@@ -1432,6 +1494,11 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           </span>
         </td>
         <td style="padding: 12px 8px; color: rgba(255, 255, 255, 0.6);">${escapeHtml(s.notes || '—')}</td>
+        <td style="padding: 12px 8px; text-align: right;">
+          <button type="button" class="btn btn-manage-finance" data-supplier-id="${s.id}" style="background: rgba(20, 92, 68, 0.4); border: 1px solid #145C44; color: #FFF; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+            Finance &amp; Ledger
+          </button>
+        </td>
       </tr>
     `).join('');
 
@@ -1447,9 +1514,10 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
                   <th style="padding: 8px;">Identifier Slug</th>
                   <th style="padding: 8px;">Status</th>
                   <th style="padding: 8px;">Terms / Notes</th>
+                  <th style="padding: 8px; text-align: right;">Ledger</th>
                 </tr>
               </thead>
-              <tbody>${rowsHtml.length ? rowsHtml : '<tr><td colspan="4" style="padding: 20px 8px; text-align: center; color: rgba(255,255,255,0.4);">No suppliers registered yet.</td></tr>'}</tbody>
+              <tbody>${rowsHtml.length ? rowsHtml : '<tr><td colspan="5" style="padding: 20px 8px; text-align: center; color: rgba(255,255,255,0.4);">No suppliers registered yet.</td></tr>'}</tbody>
             </table>
           </div>
         </div>
@@ -1536,6 +1604,22 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         supError.textContent = err.message || 'Failed to create supplier.';
         supError.style.display = 'block';
       }
+    });
+
+    // Wire Finance & Ledger modal buttons
+    container.querySelectorAll('.btn-manage-finance').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const supId = btn.getAttribute('data-supplier-id');
+        const sup = suppliers.find(s => String(s.id) === String(supId));
+        if (sup) {
+          const financeModal = createSupplierFinanceView(sup, {
+            onClose: () => {
+              if (activeTab === 'suppliers') renderSuppliersTab(container, viewGeneration);
+            }
+          });
+          document.body.appendChild(financeModal);
+        }
+      });
     });
   }
 

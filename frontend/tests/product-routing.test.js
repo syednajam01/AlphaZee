@@ -440,6 +440,97 @@ describe('Product Page & Routing Invariants', () => {
     page.destroy();
   });
 
+  it('keeps a purchasable size discoverable when the first variant is sold out', async () => {
+    const product = { ...sampleProduct, variants: [
+      { ...sampleProduct.variants[0], availability: 'unavailable' },
+      { ...sampleProduct.variants[0], id: 204, size: 'L', price_minor: 390000 },
+    ] };
+    globalThis.fetch = async () => ({ ok: true, json: async () => product });
+    const page = createProductPage({});
+    await page.load(product.slug);
+    assert.equal(page.element.querySelector('#btn-add-to-cart').disabled, false);
+    assert.match(page.element.querySelector('#product-detail-price').textContent, /3,900/);
+    page.element.querySelector('#btn-add-to-cart').click();
+    assert.equal(cart.getState().items.length, 0);
+    page.element.querySelector('[data-option-size="L"]').click();
+    page.element.querySelector('#btn-add-to-cart').click();
+    assert.equal(cart.getState().items[0].variant_id, 204);
+    page.destroy();
+  });
+
+  it('does not advertise or add a nonexistent color and size combination', async () => {
+    globalThis.fetch = async () => ({ ok: true, json: async () => sampleProduct });
+    const page = createProductPage({});
+    await page.load(sampleProduct.slug, '201');
+    page.element.querySelector('[data-option-color="Olive"]').click();
+    assert.equal(page.element.querySelector('#btn-add-to-cart').disabled, true);
+    page.element.querySelector('#btn-add-to-cart').click();
+    assert.equal(cart.getState().items.length, 0);
+    page.destroy();
+  });
+
+  it('does not accumulate focus listeners across option renders or reloads', async () => {
+    globalThis.fetch = async () => ({ ok: true, json: async () => sampleProduct });
+    const page = createProductPage({});
+    await page.load(sampleProduct.slug);
+    page.element.querySelector('[data-option-size="M"]').click();
+    page.element.querySelector('[data-option-size="XL"]').click();
+    await page.load(sampleProduct.slug);
+    assert.equal(page.element._listeners.focusin.length, 1);
+    assert.equal(page.element._listeners.focusout.length, 1);
+    page.destroy();
+  });
+
+  it('clears a previously valid variant URL when options no longer identify a variant', async () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = {
+      location: { href: 'http://localhost/products/tee?variant=201&ref=campaign' },
+      history: { replaceState(_state, _title, path) { globalThis.window.location.href = `http://localhost${path}`; } },
+    };
+    const page = createProductPage({});
+    try {
+      globalThis.fetch = async () => ({ ok: true, json: async () => sampleProduct });
+      await page.load(sampleProduct.slug, '201');
+      page.element.querySelector('[data-option-color="Olive"]').click();
+      const url = new URL(window.location.href);
+      assert.equal(url.searchParams.has('variant'), false);
+      assert.equal(url.searchParams.get('ref'), 'campaign');
+    } finally {
+      page.destroy();
+      globalThis.window = originalWindow;
+    }
+  });
+
+  it('clears previous product metadata when the next product is unavailable', async () => {
+    const description = createMockElement('meta');
+    const canonical = createMockElement('link');
+    let canonicalRemoved = false;
+    canonical.remove = () => { canonicalRemoved = true; };
+    document.querySelector = selector => selector.includes('description') ? description : canonical;
+    globalThis.fetch = async () => ({ ok: true, json: async () => sampleProduct });
+    const page = createProductPage({});
+    await page.load(sampleProduct.slug);
+    globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({ detail: 'Not found' }) });
+    await page.load('missing');
+    assert.equal(canonicalRemoved, true);
+    assert.match(description.getAttribute('content'), /currently unavailable/);
+    assert.equal(document.title, 'Piece Unavailable — AlphaZee');
+    page.destroy();
+  });
+
+  it('ignores a pending product response after leaving the page', async () => {
+    let resolveResponse;
+    globalThis.fetch = () => new Promise(resolve => { resolveResponse = resolve; });
+    const page = createProductPage({});
+    const loading = page.load(sampleProduct.slug);
+    page.destroy();
+    document.title = 'Home';
+    resolveResponse({ ok: true, json: async () => sampleProduct });
+    await loading;
+    assert.equal(page.element.innerHTML, '');
+    assert.equal(document.title, 'Home');
+  });
+
   it('E4: guards against stale out-of-order route responses overwriting current product', async () => {
     let resolveFirst;
     const firstPromise = new Promise(resolve => { resolveFirst = resolve; });

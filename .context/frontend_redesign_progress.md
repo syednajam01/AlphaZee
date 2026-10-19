@@ -1,5 +1,7 @@
 # AlphaZee Storefront Redesign: Progress & Verification Register
 
+> 2026-10-19 Codex follow-up & Antigravity browser acceptance: Codex resolved variant availability, stale query retention, event listener accumulation, and removed unapproved commercial promises (132 unit tests passing). Antigravity rebuilt the lab web service and completed the 5-domain focused browser acceptance run (`ALL SECTIONS PASSED` in [b1_followup_results.json](file:///F:/AlphaZee/.local/frontend-redesign/run_b1_followup/b1_followup_results.json)). Full evidence, multi-breakpoint geometry, and redacted lifecycle screenshots are documented in [b1_followup_browser_report.md](b1_followup_browser_report.md). Commercial policies remain guarded and **BLOCKED ON OWNER**.
+
 Tracking implementation of [.context/frontend_design_implementation_guide.md](file:///f:/AlphaZee/.context/frontend_design_implementation_guide.md) across phases U0–U5.
 
 ## Phase Register

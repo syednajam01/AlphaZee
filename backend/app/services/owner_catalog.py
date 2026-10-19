@@ -59,10 +59,12 @@ def product_response(product):
     return {field: getattr(product, field) for field in (
         'id', 'title', 'slug', 'collection_id', 'status', 'edit_version', 'archived_at',
         'description', 'short_description', 'material', 'care', 'sizing', 'badge',
-        'is_hero', 'hero_order', 'hero_benefit', 'image_url', 'hero_image_url',
-        'hero_video_url', 'hero_poster_url', 'created_at', 'updated_at')} | {
+        'is_hero', 'hero_order', 'hero_benefit', 'image_url', 'hover_image_url', 'hero_image_url',
+        'hero_video_url', 'hero_poster_url', 'stock_management_source', 'vendor_id',
+        'created_at', 'updated_at')} | {
         'publication_requirements': publication_requirements(product),
         'media': links_response(product),
+        'vendor_name': product.vendor.name if getattr(product, 'vendor', None) else None,
         'variants': [{'id': v.id, 'sku': v.sku, 'size': v.size, 'color': v.color,
                       'price_minor': v.price_minor, 'is_active': v.is_active,
                       'availability': v.availability.value} for v in sorted(product.variants, key=lambda v: v.id)],
@@ -79,6 +81,45 @@ def apply_product(db: Session, product, data):
     data = dict(data)
     variants = data.pop('variants', None)
     data.pop('expected_version', None)
+
+    # Stock responsibility & vendor validation
+    new_source = data.get('stock_management_source')
+    new_vendor_id = data.get('vendor_id')
+
+    if new_source == 'vendor_managed':
+        if not new_vendor_id:
+            raise CatalogError('vendor_required', 'An active vendor must be selected for vendor-managed stock', 422,
+                               fields=[{'field': 'vendor_id', 'code': 'required', 'message': 'Choose an active shop'}])
+        from app.models.suppliers import Supplier
+        vendor = db.get(Supplier, new_vendor_id)
+        if not vendor or vendor.status != 'active':
+            raise CatalogError('invalid_vendor', 'Selected vendor does not exist or is not active', 422,
+                               fields=[{'field': 'vendor_id', 'code': 'invalid', 'message': 'Choose an active shop'}])
+    elif new_source == 'alphazee_managed':
+        data['vendor_id'] = None
+
+    # Reassignment guard: if product already has an id and stock responsibility changes
+    current_source = getattr(product, 'stock_management_source', None)
+    current_vendor_id = getattr(product, 'vendor_id', None)
+    is_reassignment = current_source is not None and (
+        (new_source is not None and new_source != current_source) or
+        (new_vendor_id is not None and new_vendor_id != current_vendor_id)
+    )
+    if is_reassignment and product.id:
+        from app.models.inventory import StockReservation, SupplierVariant
+        from app.queries.stock_rules import holding_predicate
+        from sqlalchemy import func
+        v_ids = [v.id for v in product.variants if v.id]
+        if v_ids:
+            active_holds = db.scalar(
+                select(func.count(StockReservation.id))
+                .join(SupplierVariant, SupplierVariant.id == StockReservation.supplier_variant_id)
+                .where(SupplierVariant.variant_id.in_(v_ids), holding_predicate())
+            )
+            if active_holds and active_holds > 0:
+                raise CatalogError('reassignment_blocked',
+                                   'Cannot reassign product stock responsibility while open holds exist. Fulfill or cancel open reservations first.', 409)
+
     if 'collection_id' in data and data['collection_id'] is not None:
         collection = db.scalar(select(Collection).where(Collection.id == data['collection_id']).with_for_update(read=True))
         if collection is None: raise CatalogError('invalid_collection', 'Collection does not exist')
@@ -104,11 +145,59 @@ def apply_product(db: Session, product, data):
         if not variant.sku: raise CatalogError('invalid_variant', 'SKU cannot be cleared')
         if variant.is_active and variant.price_minor is None:
             raise CatalogError('invalid_variant', 'Enter a price before activating the variant', fields=[{'field': 'variants.price_minor', 'code': 'required', 'message': 'An active variant requires a price'}])
+
+    # Auto-synchronize variant supplier mappings to agree with product stock responsibility
+    from app.models.inventory import InventoryBalance, SupplierVariant
+    from app.models.suppliers import get_or_create_internal_supplier
+    target_supplier_id = None
+    if product.stock_management_source == 'alphazee_managed':
+        internal_sup = get_or_create_internal_supplier(db)
+        target_supplier_id = internal_sup.id
+    elif product.stock_management_source == 'vendor_managed' and product.vendor_id:
+        target_supplier_id = product.vendor_id
+
+    if target_supplier_id:
+        db.flush()
+        for v in product.variants:
+            if not v.id:
+                continue
+            active_sv = db.scalar(select(SupplierVariant).where(
+                SupplierVariant.variant_id == v.id,
+                SupplierVariant.active.is_(True)
+            ))
+            if not active_sv:
+                sv = SupplierVariant(
+                    supplier_id=target_supplier_id,
+                    variant_id=v.id,
+                    active=True,
+                    supplier_cost_minor=0
+                )
+                db.add(sv)
+                db.flush()
+                db.add(InventoryBalance(supplier_variant_id=sv.id, on_hand=0))
+            elif is_reassignment and active_sv.supplier_id != target_supplier_id:
+                active_sv.active = False
+                new_sv = db.scalar(select(SupplierVariant).where(
+                    SupplierVariant.variant_id == v.id,
+                    SupplierVariant.supplier_id == target_supplier_id
+                ))
+                if new_sv:
+                    new_sv.active = True
+                else:
+                    new_sv = SupplierVariant(
+                        supplier_id=target_supplier_id,
+                        variant_id=v.id,
+                        active=True,
+                        supplier_cost_minor=active_sv.supplier_cost_minor
+                    )
+                    db.add(new_sv)
+                    db.flush()
+                    db.add(InventoryBalance(supplier_variant_id=new_sv.id, on_hand=0))
+
     gaps = publication_requirements(product) if product.status == 'published' else []
     new_gaps = [item for item in gaps if item['field'] not in existing_gaps]
     if new_gaps:
         raise CatalogError('publication_invalid', 'Unpublish before clearing required product fields', fields=new_gaps)
-    # Flush once after all options have been updated; never delete omitted rows.
     db.flush()
 
 

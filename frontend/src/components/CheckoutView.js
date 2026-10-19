@@ -151,7 +151,7 @@ export function createCheckoutView(onClose) {
                 </div>
                 <div class="checkout-total-row">
                   <span>Estimated Delivery (${escapeHtml(storeConfig.shippingInfo.standardTime)})</span>
-                  <span id="checkout-shipping-label" class="checkout-free-shipping">Free Delivery</span>
+                  <span id="checkout-shipping-label" class="checkout-free-shipping">PKR 0 (test checkout)</span>
                 </div>
                 <div class="checkout-total-row checkout-grand-total">
                   <span>Total Payable</span>
@@ -168,7 +168,7 @@ export function createCheckoutView(onClose) {
 
               <div class="checkout-security-notes">
                 <span>🔒 Direct Owner Verified Fulfillment</span>
-                <span>📦 7-Day Inspection & Exchange Policy</span>
+                <span>${escapeHtml(storeConfig.shippingInfo.returnPolicy)}.</span>
               </div>
             </div>
           </div>

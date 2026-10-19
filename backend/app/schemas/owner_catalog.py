@@ -2,6 +2,7 @@
 from typing import Annotated, Literal
 import re
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+import uuid
 from app.schemas.media import MediaLink
 
 Minor = Annotated[int, Field(strict=True, ge=0, le=2147483647)]
@@ -39,6 +40,8 @@ class ProductFields(Command):
     is_hero: bool = False
     hero_order: int | None = Field(default=None, ge=0, le=2147483647)
     hero_benefit: str | None = Field(default=None, max_length=2000)
+    stock_management_source: Literal['alphazee_managed', 'vendor_managed'] | None = 'alphazee_managed'
+    vendor_id: uuid.UUID | None = None
     variants: list[VariantEdit] | None = Field(default=None, max_length=200)
 
     @field_validator('title', 'collection_id', 'description', 'short_description', 'material', 'care', 'sizing', 'badge', 'hero_benefit', mode='before')

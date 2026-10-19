@@ -150,6 +150,28 @@ def get_hero_products(db: Session) -> list[Product]:
     return list(db.scalars(stmt).all())
 
 
+def get_active_hero_slides(db: Session):
+    """
+    Return active enabled hero slides ordered by display_order ASC, then id ASC.
+    """
+    from app.models.media import HeroSlide
+    from sqlalchemy.orm import selectinload
+    stmt = (
+        select(HeroSlide)
+        .where(HeroSlide.is_enabled.is_(True))
+        .options(
+            selectinload(HeroSlide.video).selectinload(MediaAsset.poster),
+            selectinload(HeroSlide.poster),
+            selectinload(HeroSlide.image),
+            selectinload(HeroSlide.product).selectinload(Product.variants),
+            selectinload(HeroSlide.product).selectinload(Product.media_links).selectinload(ProductMedia.asset),
+            selectinload(HeroSlide.collection),
+        )
+        .order_by(HeroSlide.display_order.asc(), HeroSlide.id.asc())
+    )
+    return list(db.scalars(stmt).all())
+
+
 # ── Price helpers ─────────────────────────────────────────────────────────────
 
 

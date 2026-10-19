@@ -157,7 +157,12 @@ export function initApp() {
       if (descMeta) {
         descMeta.setAttribute('content', 'Minimalist streetwear crafted in Pakistan. Premium cotton, structured fits, and zero compromises.');
       }
-      const canonical = document.querySelector('link[rel="canonical"]');
+      let canonical = document.querySelector('link[rel="canonical"]');
+      if (!canonical && typeof document !== 'undefined' && document.head) {
+        canonical = document.createElement('link');
+        canonical.setAttribute('rel', 'canonical');
+        document.head.appendChild(canonical);
+      }
       if (canonical && typeof window !== 'undefined') {
         canonical.setAttribute('href', `${window.location.origin}/`);
       }
@@ -194,19 +199,15 @@ export function initApp() {
       event.preventDefault();
       mobileNav.close();
       navigate('/');
-    } else if (href === '#featured' || href === '#collections' || href === '#reassurance' || href === '#faq' || href === '#policies') {
+    } else if (href === '#featured' || href === '#collections' || href === '#reassurance' || href === '#faq') {
       if (typeof window !== 'undefined' && window.location?.pathname?.startsWith('/products/')) {
         event.preventDefault();
         mobileNav.close();
         navigate('/');
-        const targetId = href === '#policies' ? '#reassurance' : href;
+        const targetId = href;
         setTimeout(() => {
           document.querySelector(targetId)?.scrollIntoView({ behavior: 'smooth' });
         }, 50);
-      } else if (href === '#policies') {
-        event.preventDefault();
-        mobileNav.close();
-        document.querySelector('#reassurance')?.scrollIntoView({ behavior: 'smooth' });
       }
     }
   };

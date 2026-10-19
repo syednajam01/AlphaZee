@@ -1,9 +1,16 @@
 import { sanitizeMediaUrl } from './dom.js';
 
 export function mediaForVariant(product, variantId) {
-  const media = (product.media || []).filter(m => ['primary','gallery'].includes(m.role)
-    && (m.variant_id === null || m.variant_id === undefined || m.variant_id === variantId)
-    && sanitizeMediaUrl(m.url, '') && ['image','video'].includes(m.kind));
+  const seenAssets = new Set();
+  const media = (product.media || []).filter(m => {
+    if (!['primary', 'gallery', 'hover_image'].includes(m.role)) return false;
+    if (m.variant_id !== null && m.variant_id !== undefined && m.variant_id !== variantId) return false;
+    if (!sanitizeMediaUrl(m.url, '') || !['image', 'video'].includes(m.kind)) return false;
+    const key = m.asset_id || m.id || m.url;
+    if (seenAssets.has(key)) return false;
+    seenAssets.add(key);
+    return true;
+  });
   return media.length ? media : [{kind:'image', url:product.image_url, alt_text:product.title, role:'primary'}];
 }
 

@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies.auth import require_owner_session, OwnerPrincipal
 from app.models.media import MediaAsset
-from app.schemas.media import ProductMediaCommand, CollectionMediaCommand, PosterCommand, StrictCommand
+from app.schemas.media import (
+    ProductMediaCommand, CollectionMediaCommand, PosterCommand, StrictCommand,
+    AttachMediaCommand, DetachMediaCommand, ReorderMediaCommand, SetRolesCommand,
+    HeroSlideCreateCommand, HeroSlideUpdateCommand, HeroSlideReorderCommand
+)
 from app.services import media as service
 from app.services import media_storage as storage
 from app.services.owner_catalog import CatalogError, product_response, collection_response
@@ -68,9 +72,54 @@ def library(db: Session = Depends(get_db), page: int = Query(1, ge=1), page_size
     return {'assets': [service.owner_asset(a, db) for a in rows], 'total': total, 'page': page, 'page_size': page_size}
 
 
+@router.get('/hero/slides')
+def get_hero_slides(db: Session = Depends(get_db)):
+    return {'slides': service.list_hero_slides(db, include_disabled=True)}
+
+
+@router.post('/hero/slides', status_code=201)
+def create_hero_slide(payload: HeroSlideCreateCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.create_hero_slide(db, payload), service.hero_slide_response)
+
+
+@router.post('/hero/slides/reorder')
+def reorder_hero_slides(payload: HeroSlideReorderCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.reorder_hero_slides(db, payload), lambda res: {'slides': res})
+
+
+@router.post('/hero/slides/{slide_id}')
+def update_hero_slide(slide_id: str, payload: HeroSlideUpdateCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.update_hero_slide(db, slide_id, payload), service.hero_slide_response)
+
+
+@router.post('/hero/slides/{slide_id}/delete')
+def delete_hero_slide(slide_id: str, payload: StrictCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.delete_hero_slide(db, slide_id, payload), lambda res: res)
+
+
 @router.post('/products/{product_id}')
 def product_media(product_id: str, payload: ProductMediaCommand, db: Session = Depends(get_db)):
     return persist(db, lambda: service.replace_product_media(db, product_id, payload), product_response)
+
+
+@router.post('/products/{product_id}/attach')
+def attach_product_media(product_id: str, payload: AttachMediaCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.attach_product_media(db, product_id, payload), product_response)
+
+
+@router.post('/products/{product_id}/detach')
+def detach_product_media(product_id: str, payload: DetachMediaCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.detach_product_media(db, product_id, payload), product_response)
+
+
+@router.post('/products/{product_id}/reorder')
+def reorder_product_media(product_id: str, payload: ReorderMediaCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.reorder_product_media(db, product_id, payload), product_response)
+
+
+@router.post('/products/{product_id}/roles')
+def set_product_roles(product_id: str, payload: SetRolesCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.set_product_roles(db, product_id, payload), product_response)
 
 
 @router.post('/collections/{collection_id}')

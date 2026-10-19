@@ -133,9 +133,22 @@ export function fetchOwnerMedia(params = {}) {
 }
 export function fetchOwnerMediaAsset(id) { return request(`/admin/media/${encodeURIComponent(id)}`); }
 export function saveProductMedia(id, payload) { return ownerCatalogWrite(`/admin/media/products/${encodeURIComponent(id)}`, payload); }
+export function attachProductMedia(id, payload) { return ownerCatalogWrite(`/admin/media/products/${encodeURIComponent(id)}/attach`, payload); }
+export function detachProductMedia(id, payload) { return ownerCatalogWrite(`/admin/media/products/${encodeURIComponent(id)}/detach`, payload); }
+export function reorderProductMedia(id, payload) { return ownerCatalogWrite(`/admin/media/products/${encodeURIComponent(id)}/reorder`, payload); }
+export function setProductRoles(id, payload) { return ownerCatalogWrite(`/admin/media/products/${encodeURIComponent(id)}/roles`, payload); }
 export function saveCollectionMedia(id, payload) { return ownerCatalogWrite(`/admin/media/collections/${encodeURIComponent(id)}`, payload); }
 export function saveMediaPoster(id, payload) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/poster`, payload); }
 export function deleteOwnerMedia(id, expectedVersion) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/delete`, { expected_version: expectedVersion }); }
+
+export function fetchHeroSlides({ signal = null } = {}) {
+  return request('/hero/slides', { cache: 'no-store', signal: signal || undefined });
+}
+export function fetchAdminHeroSlides() { return request('/admin/media/hero/slides'); }
+export function createAdminHeroSlide(payload) { return ownerCatalogWrite('/admin/media/hero/slides', payload); }
+export function updateAdminHeroSlide(id, payload) { return ownerCatalogWrite(`/admin/media/hero/slides/${encodeURIComponent(id)}`, payload); }
+export function reorderAdminHeroSlides(payload) { return ownerCatalogWrite('/admin/media/hero/slides/reorder', payload); }
+export function deleteAdminHeroSlide(id, expectedVersion) { return ownerCatalogWrite(`/admin/media/hero/slides/${encodeURIComponent(id)}/delete`, { expected_version: expectedVersion }); }
 
 // Let the browser set multipart boundaries; transport completion still awaits server acceptance.
 export function uploadOwnerMedia(file, { signal, onProgress } = {}) {
@@ -566,6 +579,203 @@ export async function assignSupplierVariant(supplierId, payload) {
 }
 
 /**
+ * Fetch supplier agreement terms.
+ * @param {string} supplierId
+ */
+export async function fetchSupplierAgreement(supplierId) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/agreement`);
+}
+
+/**
+ * Update supplier agreement terms.
+ * @param {string} supplierId
+ * @param {Object} payload { payable_trigger, payment_terms_days, notes }
+ */
+export async function updateSupplierAgreement(supplierId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/agreement`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Fetch supplier ledger entries and summary.
+ * @param {string} supplierId
+ * @param {number} page
+ * @param {number} pageSize
+ */
+export async function fetchSupplierLedger(supplierId, page = 1, pageSize = 50) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger?page=${page}&page_size=${pageSize}`);
+}
+
+/**
+ * Fetch real-time supplier liability and ledger summary.
+ * @param {string} supplierId
+ */
+export async function fetchSupplierLedgerSummary(supplierId) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/summary`);
+}
+
+/**
+ * Manually post an approved supplier charge.
+ * @param {string} supplierId
+ * @param {Object} payload { amount_minor, reference, effective_date, notes }
+ */
+export async function postSupplierManualCharge(supplierId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/charge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Manually post an acknowledged vendor credit note.
+ * @param {string} supplierId
+ * @param {Object} payload { amount_minor, reference, effective_date, notes }
+ */
+export async function postSupplierCreditNote(supplierId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/credit-note`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Immutably reverse a posted ledger entry.
+ * @param {string} supplierId
+ * @param {string} entryId
+ * @param {string} reason
+ */
+export async function reverseSupplierLedgerEntry(arg1, arg2, arg3) {
+  let supplierId = null;
+  let entryId = null;
+  let reason = '';
+  if (arg3 !== undefined && arg3 !== null) {
+    if (typeof arg2 === 'string' && typeof arg3 === 'string') {
+      supplierId = arg1;
+      entryId = arg2;
+      reason = arg3;
+    } else {
+      entryId = arg1;
+      reason = arg2;
+      supplierId = arg3;
+    }
+  } else {
+    entryId = arg1;
+    reason = arg2;
+  }
+  const url = supplierId
+    ? `/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/${encodeURIComponent(entryId)}/reverse`
+    : `/admin/suppliers/ledger/${encodeURIComponent(entryId)}/reverse`;
+  return request(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
+}
+
+/**
+ * Preview opening balance calculation.
+ * @param {string} supplierId
+ * @param {Object} payload { amount_minor, direction, as_of_date, reference, notes }
+ */
+export async function previewSupplierOpeningBalance(supplierId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/opening-balance/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Commit opening balance entry.
+ * @param {string} supplierId
+ * @param {Object} payload { amount_minor, direction, as_of_date, reference, notes }
+ */
+export async function applySupplierOpeningBalance(supplierId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/opening-balance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Record a supplier payment and allocate against charges (VF2).
+ * @param {string} supplierId
+ * @param {Object} payload { amount_minor, payment_method, reference, effective_date, notes, auto_allocate_fifo, allocations }
+ */
+export async function postSupplierPayment(supplierId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/payment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Disburse an unallocated advance payment to a supplier (VF2).
+ * @param {string} supplierId
+ * @param {Object} payload { amount_minor, payment_method, reference, effective_date, notes }
+ */
+export async function postSupplierAdvance(supplierId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/advance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Allocate unallocated payment/advance funds against a charge (VF2).
+ * @param {string} supplierId
+ * @param {string} paymentId
+ * @param {Object} payload { charge_entry_id, amount_minor }
+ */
+export async function allocateSupplierPayment(supplierId, paymentId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/payments/${encodeURIComponent(paymentId)}/allocate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Record cash refund received from a supplier (VF2).
+ * @param {string} supplierId
+ * @param {Object} payload { amount_minor, refund_method, reference, effective_date, notes }
+ */
+export async function postSupplierRefund(supplierId, payload) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/refund`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Get unpaid charges and unallocated advances for allocation (VF2).
+ * @param {string} supplierId
+ */
+export async function fetchSupplierUnpaidAndAdvances(supplierId) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/ledger/unpaid-and-advances`);
+}
+
+/**
+ * Get supplier period statement with opening, movement, and closing reconciliation (VF2).
+ * @param {string} supplierId
+ * @param {string} startDate
+ * @param {string} endDate
+ */
+export async function fetchSupplierStatement(supplierId, startDate, endDate) {
+  return request(`/admin/suppliers/${encodeURIComponent(supplierId)}/statement?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`);
+}
+
+
+/**
  * Dispatch an order with courier tracking information.
  * @param {string} orderId
  * @param {Object} payload { courier_code, tracking_number, shipping_cost_minor, tracking_url }
@@ -778,6 +988,49 @@ export async function rejectAdminReturn(returnId) {
 export async function fetchAdminMarketingAnalytics() {
   return request('/admin/analytics/marketing');
 }
+
+/**
+ * Record a new business expense.
+ * @param {Object} payload { category, amount_minor, incurred_date, paid_date, payee, reference, payment_method, linked_shipment_id, linked_return_id, linked_courier_settlement_id, notes }
+ */
+export async function createBusinessExpense(payload) {
+  return request('/admin/expenses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Fetch list of business expenses with filters.
+ * @param {Object} params { start_date, end_date, category, payment_method, is_paid, limit, offset }
+ */
+export async function fetchBusinessExpenses(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== null && val !== '') {
+      query.append(key, val);
+    }
+  }
+  const qStr = query.toString();
+  return request(`/admin/expenses${qStr ? `?${qStr}` : ''}`);
+}
+
+/**
+ * Fetch business expense summary aggregates and category breakdown.
+ * @param {Object} params { start_date, end_date }
+ */
+export async function fetchBusinessExpenseSummary(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== null && val !== '') {
+      query.append(key, val);
+    }
+  }
+  const qStr = query.toString();
+  return request(`/admin/expenses/summary${qStr ? `?${qStr}` : ''}`);
+}
+
 
 
 

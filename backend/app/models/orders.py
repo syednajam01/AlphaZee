@@ -370,6 +370,7 @@ class OrderLine(Base):
         CheckConstraint("(fulfillment_kind = 'original' AND replacement_return_id IS NULL) OR "
                         "(fulfillment_kind = 'replacement' AND replacement_return_id IS NOT NULL)",
                         name='ck_order_lines_replacement_link'),
+        CheckConstraint("ownership_source IN ('vendor_consignment', 'alphazee_owned')", name='ck_order_lines_ownership_source'),
         Index('uq_order_lines_replacement_return', 'replacement_return_id', unique=True,
               postgresql_where=text('replacement_return_id IS NOT NULL')),
     )
@@ -389,6 +390,8 @@ class OrderLine(Base):
 
     fulfillment_kind: Mapped[str] = mapped_column(String(20), nullable=False, default='original',
                                                    server_default=text("'original'"))
+    ownership_source: Mapped[str] = mapped_column(String(32), nullable=False, default='vendor_consignment',
+                                                   server_default=text("'vendor_consignment'"))
     replacement_return_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey('order_returns.id', ondelete='RESTRICT',
                                      use_alter=True, name='fk_order_lines_replacement_return'), nullable=True)

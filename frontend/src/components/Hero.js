@@ -1,4 +1,4 @@
-import { fetchHeroProducts } from '../utils/api.js';
+import { fetchHeroProducts, fetchHeroSlides } from '../utils/api.js';
 import { formatDisplayPrice } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
 
@@ -9,11 +9,18 @@ export function createHero(onProductClick) {
 
   let currentSlide = 0;
   let heroItems = [];
-  let autoAdvanceInterval = null;
-  let isPlaying = true;
-  let generation = 0, alive = true;
-  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const saveData = navigator.connection && navigator.connection.saveData;
+  let isUserPaused = false;
+  let isTabHidden = false;
+  let isIntersecting = true;
+  let imageTimer = null;
+  let generation = 0;
+  let alive = true;
+  let intersectionObserver = null;
+
+  const prefersReducedMotion = typeof window !== 'undefined' &&
+    window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const saveData = typeof navigator !== 'undefined' &&
+    navigator.connection && navigator.connection.saveData;
 
   function renderFallback(message = null) {
     const statusHtml = message ? `
@@ -55,43 +62,66 @@ export function createHero(onProductClick) {
     }
 
     section.innerHTML = '';
+    const isSingle = heroItems.length === 1;
 
     // 1. Media container
     const bgContainer = document.createElement('div');
     bgContainer.className = 'hero-bg-container';
 
     heroItems.forEach((item, index) => {
-      const posterUrl = sanitizeMediaUrl(item.hero_video_url ? (item.hero_poster_url || item.hero_image_url || item.image_url) : (item.hero_image_url || item.hero_poster_url || item.image_url), '');
-      const videoUrl = sanitizeMediaUrl(item.hero_video_url, '');
+      const posterUrl = sanitizeMediaUrl(item.poster_url || item.hero_poster_url || item.image_url || item.hero_image_url, '');
+      const videoUrl = sanitizeMediaUrl(item.video_url || item.hero_video_url, '');
+      const imageUrl = sanitizeMediaUrl(item.image_url || item.hero_image_url || posterUrl, '');
 
       if (videoUrl && !prefersReducedMotion && !saveData) {
         const video = document.createElement('video');
-        video.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
+        video.className = `hero-bg-media hero-video-media ${index === 0 ? 'is-active' : ''}`;
         if (posterUrl) video.poster = posterUrl;
         video.muted = true;
-        video.loop = true;
         video.playsInline = true;
         video.preload = 'none';
         video.setAttribute('aria-hidden', 'true');
         video.dataset.videoSrc = videoUrl;
+        video.dataset.slideIndex = String(index);
+
+        // Single video loops; multiple videos advance via ended event
+        video.loop = isSingle;
+
+        video.addEventListener('ended', () => {
+          if (!alive || isSingle || isUserPaused) return;
+          goToSlide(currentSlide + 1);
+        });
+
+        video.addEventListener('error', () => {
+          console.warn(`[Hero] Video playback failed for slide #${index + 1}`);
+          // If video fails, reveal poster and skip to next slide if multiple
+          video.style.display = 'none';
+          if (!isSingle && !isUserPaused) {
+            setTimeout(() => { if (alive) goToSlide(currentSlide + 1); }, 3000);
+          }
+        });
+
         if (index === 0) {
           video.src = videoUrl;
-          video.play().catch(() => {});
+          video.currentTime = 0;
+          if (!isUserPaused && isIntersecting && !isTabHidden) {
+            video.play().catch(handleAutoplayReject);
+          }
         }
         bgContainer.appendChild(video);
-      } else if (posterUrl) {
+      } else if (imageUrl) {
         const img = document.createElement('img');
         img.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
-        img.src = posterUrl;
-        img.alt = item.image_alt || item.title || 'AlphaZee featured piece';
+        img.src = imageUrl;
+        img.alt = item.title || 'AlphaZee featured piece';
         img.loading = index === 0 ? 'eager' : 'lazy';
-        img.dataset.slideIndex = index;
+        img.dataset.slideIndex = String(index);
         bgContainer.appendChild(img);
       } else {
         const fallbackBg = document.createElement('div');
         fallbackBg.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
         fallbackBg.style.background = 'radial-gradient(circle at 70% 30%, #1A2621 0%, #0D1310 100%)';
-        fallbackBg.dataset.slideIndex = index;
+        fallbackBg.dataset.slideIndex = String(index);
         bgContainer.appendChild(fallbackBg);
       }
     });
@@ -114,25 +144,27 @@ export function createHero(onProductClick) {
     heroItems.forEach((item, index) => {
       const slide = document.createElement('div');
       slide.className = `hero-slide ${index === 0 ? 'is-active' : ''}`;
-      slide.dataset.index = index;
+      slide.dataset.index = String(index);
       slide.setAttribute('role', 'group');
       slide.setAttribute('aria-roledescription', 'slide');
-      slide.setAttribute('aria-label', `${index + 1} of ${heroItems.length}: ${item.title}`);
+      slide.setAttribute('aria-label', `${index + 1} of ${heroItems.length}: ${item.title || 'Featured'}`);
 
-      const safeTitle = escapeHtml(item.title);
-      const safeBenefit = escapeHtml(item.hero_benefit || 'Engineered with premium materials and precision fits.');
-      const priceDisplay = formatDisplayPrice(item.min_price ?? item.min_price_minor);
-      const priceText = priceDisplay === 'Price unavailable' ? 'Price unavailable' : `From ${priceDisplay}`;
+      const safeTitle = escapeHtml(item.title || 'Architectural Drape');
+      const safeBenefit = escapeHtml(item.benefit || item.hero_benefit || 'Engineered with premium materials and precision fits.');
+      const priceDisplay = (item.min_price !== undefined || item.min_price_minor !== undefined)
+        ? formatDisplayPrice(item.min_price ?? item.min_price_minor)
+        : null;
+      const priceText = priceDisplay && priceDisplay !== 'Price unavailable' ? `From ${priceDisplay}` : '';
 
       slide.innerHTML = `
         <div class="hero-text-content">
           <span class="badge badge-accent hero-badge">Featured Piece</span>
           <h1 class="hero-title">${safeTitle}</h1>
           <p class="hero-desc">${safeBenefit}</p>
-          <div class="hero-price-tag">${priceText}</div>
+          ${priceText ? `<div class="hero-price-tag">${priceText}</div>` : ''}
           <div class="hero-cta-group">
             <button class="btn btn-hero hero-cta-btn" data-slug="${escapeHtml(item.slug || '')}" data-id="${escapeHtml(item.id || '')}">
-              View Product Details
+              ${item.slug || item.id ? 'View Product Details' : 'Explore Collection'}
             </button>
             <a href="#featured" class="btn btn-secondary" style="color: #FFFFFF; border-color: rgba(255,255,255,0.3);">
               Browse Catalog
@@ -142,8 +174,11 @@ export function createHero(onProductClick) {
       `;
 
       slide.querySelector('.hero-cta-btn')?.addEventListener('click', () => {
-        if (onProductClick) {
+        if (onProductClick && (item.slug || item.id)) {
           onProductClick(item.slug || item.id);
+        } else {
+          const featured = document.querySelector('#featured');
+          if (featured) featured.scrollIntoView({ behavior: 'smooth' });
         }
       });
 
@@ -152,29 +187,90 @@ export function createHero(onProductClick) {
 
     container.appendChild(track);
 
-    // 3. Navigation controls
-    if (heroItems.length > 1) {
-      const controls = document.createElement('div');
-      controls.className = 'hero-controls';
-      controls.innerHTML = `
-        <button class="hero-ctrl-btn" id="hero-prev" aria-label="Previous Slide">‹</button>
-        <span class="hero-slide-indicator" id="hero-indicator">1 / ${heroItems.length}</span>
-        <button class="hero-ctrl-btn" id="hero-next" aria-label="Next Slide">›</button>
-      `;
-      container.appendChild(controls);
+    // 3. Navigation & Accessible Playback controls
+    const controls = document.createElement('div');
+    controls.className = 'hero-controls';
+    controls.innerHTML = `
+      ${!isSingle ? '<button class="hero-ctrl-btn" id="hero-prev" aria-label="Previous Slide">‹</button>' : ''}
+      <button class="hero-ctrl-btn" id="hero-play-pause" aria-label="${isUserPaused ? 'Resume hero playback' : 'Pause hero playback'}" title="${isUserPaused ? 'Resume' : 'Pause'}">
+        ${isUserPaused ? '▶' : '⏸'}
+      </button>
+      <span class="hero-slide-indicator" id="hero-indicator">1 / ${heroItems.length}</span>
+      ${!isSingle ? '<button class="hero-ctrl-btn" id="hero-next" aria-label="Next Slide">›</button>' : ''}
+    `;
+    container.appendChild(controls);
 
-      controls.querySelector('#hero-prev')?.addEventListener('click', () => goToSlide(currentSlide - 1));
-      controls.querySelector('#hero-next')?.addEventListener('click', () => goToSlide(currentSlide + 1));
-    }
+    controls.querySelector('#hero-prev')?.addEventListener('click', () => goToSlide(currentSlide - 1));
+    controls.querySelector('#hero-next')?.addEventListener('click', () => goToSlide(currentSlide + 1));
+    controls.querySelector('#hero-play-pause')?.addEventListener('click', togglePlayPause);
 
     section.appendChild(bgContainer);
     section.appendChild(overlay);
     section.appendChild(motif);
     section.appendChild(container);
+
+    setupObserver();
+    scheduleImageSlide();
+  }
+
+  function handleAutoplayReject() {
+    // Autoplay policy prevented playback. Keep button in play state.
+    isUserPaused = true;
+    updatePlayPauseButton();
+  }
+
+  function updatePlayPauseButton() {
+    const btn = section.querySelector('#hero-play-pause');
+    if (!btn) return;
+    btn.textContent = isUserPaused ? '▶' : '⏸';
+    btn.setAttribute('aria-label', isUserPaused ? 'Resume hero playback' : 'Pause hero playback');
+    btn.title = isUserPaused ? 'Resume' : 'Pause';
+  }
+
+  function togglePlayPause() {
+    isUserPaused = !isUserPaused;
+    updatePlayPauseButton();
+
+    const activeMedia = section.querySelectorAll('.hero-bg-media')[currentSlide];
+    if (activeMedia && activeMedia.tagName === 'VIDEO') {
+      if (isUserPaused) {
+        activeMedia.pause();
+      } else {
+        activeMedia.play().catch(handleAutoplayReject);
+      }
+    } else {
+      if (isUserPaused) {
+        clearImageTimer();
+      } else {
+        scheduleImageSlide();
+      }
+    }
+  }
+
+  function clearImageTimer() {
+    if (imageTimer) {
+      clearTimeout(imageTimer);
+      imageTimer = null;
+    }
+  }
+
+  function scheduleImageSlide() {
+    clearImageTimer();
+    if (!alive || isUserPaused || heroItems.length <= 1) return;
+    const activeMedia = section.querySelectorAll('.hero-bg-media')[currentSlide];
+    if (activeMedia && activeMedia.tagName !== 'VIDEO') {
+      imageTimer = setTimeout(() => {
+        if (alive && !isUserPaused) goToSlide(currentSlide + 1);
+      }, 6000);
+      if (imageTimer && typeof imageTimer.unref === 'function') {
+        imageTimer.unref();
+      }
+    }
   }
 
   function goToSlide(index) {
     if (!heroItems || heroItems.length <= 1) return;
+    clearImageTimer();
     const count = heroItems.length;
     currentSlide = (index + count) % count;
 
@@ -186,8 +282,9 @@ export function createHero(onProductClick) {
           if (!media.src && media.dataset.videoSrc) {
             media.src = media.dataset.videoSrc;
           }
-          if (media.paused) {
-            media.play().catch(() => {});
+          media.currentTime = 0;
+          if (!isUserPaused && isIntersecting && !isTabHidden) {
+            media.play().catch(handleAutoplayReject);
           }
         } else {
           if (!media.paused) {
@@ -205,35 +302,84 @@ export function createHero(onProductClick) {
     if (indicator) {
       indicator.textContent = `${currentSlide + 1} / ${count}`;
     }
+
+    scheduleImageSlide();
   }
 
-  function startAutoPlay() {
-    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
-    if (!isPlaying || heroItems.length <= 1) return;
-    autoAdvanceInterval = setInterval(() => {
-      goToSlide(currentSlide + 1);
-    }, 6000);
-    if (autoAdvanceInterval && typeof autoAdvanceInterval.unref === 'function') {
-      autoAdvanceInterval.unref();
+  function setupObserver() {
+    if (typeof IntersectionObserver !== 'undefined' && !intersectionObserver) {
+      intersectionObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          isIntersecting = entry.isIntersecting;
+          const activeMedia = section.querySelectorAll('.hero-bg-media')[currentSlide];
+          if (activeMedia && activeMedia.tagName === 'VIDEO') {
+            if (!isIntersecting) {
+              if (!activeMedia.paused) activeMedia.pause();
+            } else if (!isUserPaused && !isTabHidden) {
+              activeMedia.play().catch(handleAutoplayReject);
+            }
+          }
+        }
+      }, { threshold: 0.2 });
+      intersectionObserver.observe(section);
     }
   }
 
-  // Load from API
+  function onVisibilityChange() {
+    isTabHidden = typeof document !== 'undefined' && document.hidden;
+    const activeMedia = section.querySelectorAll('.hero-bg-media')[currentSlide];
+    if (activeMedia && activeMedia.tagName === 'VIDEO') {
+      if (isTabHidden) {
+        if (!activeMedia.paused) activeMedia.pause();
+      } else if (!isUserPaused && isIntersecting) {
+        activeMedia.play().catch(handleAutoplayReject);
+      }
+    }
+  }
+
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+
+  // Load hero slides from API (dedicated playlist with legacy fallback)
   async function loadHero() {
     const request = ++generation;
     try {
-      const items = await fetchHeroProducts();
+      let items = [];
+      try {
+        const slidesRes = await fetchHeroSlides();
+        const slides = Array.isArray(slidesRes) ? slidesRes : (slidesRes?.slides || []);
+        if (slides.length > 0) {
+          items = slides.map(s => ({
+            id: s.target_product_id || s.id,
+            slug: s.product?.slug || null,
+            title: s.title || s.product?.title || 'Architectural Drape',
+            benefit: s.benefit || s.product?.hero_benefit || 'Structured fits with zero compromises.',
+            video_url: s.video_url,
+            poster_url: s.poster_url,
+            image_url: s.image_url,
+            min_price: s.product?.min_price ?? s.product?.min_price_minor,
+          }));
+        }
+      } catch {
+        // Fallback to legacy hero products route
+      }
+
+      if (!items.length) {
+        const legacyItems = await fetchHeroProducts();
+        items = Array.isArray(legacyItems) ? legacyItems : [];
+      }
+
       if (!alive || request !== generation) return;
-      if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+      clearImageTimer();
       section.querySelectorAll('video').forEach(video => video.pause?.());
       currentSlide = 0;
-      heroItems = Array.isArray(items) ? items : [];
+      heroItems = items;
       renderCarousel();
     } catch {
       if (!alive || request !== generation) return;
-      if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+      clearImageTimer();
       section.querySelectorAll('video').forEach(video => video.pause?.());
-      // API unavailable — render brand fallback cleanly without breaking
       renderFallback('Featured products could not load. Try again.');
     }
   }
@@ -241,11 +387,21 @@ export function createHero(onProductClick) {
   loadHero();
 
   section.destroy = () => {
-    alive = false; generation++;
-    section.querySelectorAll('video').forEach(video => video.pause?.());
-    if (autoAdvanceInterval) clearInterval(autoAdvanceInterval);
+    alive = false;
+    generation++;
+    clearImageTimer();
+    if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    }
+    if (intersectionObserver) {
+      intersectionObserver.disconnect();
+      intersectionObserver = null;
+    }
+    section.querySelectorAll('video').forEach(video => {
+      try { video.pause(); } catch {}
+    });
   };
-  section.reload = loadHero;
 
+  section.reload = loadHero;
   return section;
 }

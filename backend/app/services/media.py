@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 import hashlib
 import os
 import uuid
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from app.models.catalog import Collection, Product
-from app.models.media import MediaAsset, ProductMedia
+from app.models.media import MediaAsset, ProductMedia, HeroSlide
 from app.services.owner_catalog import CatalogError, locked, publication_requirements
 from app.services import media_storage as storage
 
@@ -31,9 +31,9 @@ def owner_asset(asset, db=None):
 
 
 def links_response(product):
-    return [{'asset': public_asset(link.asset), 'role': link.role, 'variant_id': link.variant_id,
+    return [{'id': link.id, 'asset': public_asset(link.asset), 'role': link.role, 'variant_id': link.variant_id,
              'display_order': link.display_order, 'alt_text': link.alt_text}
-            for link in product.media_links]
+            for link in sorted(product.media_links, key=lambda l: (l.display_order, l.id or 0))]
 
 
 def ready(db, identifier, kind=None):
@@ -102,7 +102,17 @@ def usage(db, identifier):
             select(ProductMedia.product_id, Product.title, ProductMedia.role, ProductMedia.variant_id).join(Product).where(ProductMedia.asset_id == identifier))],
         'collections': list(db.scalars(select(Collection.id).where(Collection.image_media_id == identifier))),
         'posters_for': list(db.scalars(select(MediaAsset.id).where(MediaAsset.poster_id == identifier, MediaAsset.state == 'ready'))),
+        'hero_slides': list(db.scalars(select(HeroSlide.id).where(
+            (HeroSlide.video_asset_id == identifier) | (HeroSlide.poster_asset_id == identifier) | (HeroSlide.image_asset_id == identifier)))),
     }
+
+
+def sync_product_roles(product):
+    roles = {m.role: m.asset for m in product.media_links if m.role != 'gallery'}
+    for role, field in (('primary', 'image_url'), ('hover_image', 'hover_image_url'),
+                        ('hero_image', 'hero_image_url'), ('hero_video', 'hero_video_url'), ('hero_poster', 'hero_poster_url')):
+        if hasattr(product, field):
+            setattr(product, field, public_asset(roles[role])['url'] if role in roles else None)
 
 
 def replace_product_media(db, identifier, command):
@@ -115,7 +125,7 @@ def replace_product_media(db, identifier, command):
     for item in command.items:
         key = (item.asset_id, item.role, item.variant_id)
         if key in seen or (item.role != 'gallery' and item.role in singles):
-            raise CatalogError('duplicate_media_role', 'Each primary/hero role must have one asset; gallery links must be unique')
+            raise CatalogError('duplicate_media_role', 'Each primary/hero/hover role must have one asset; gallery links must be unique')
         seen.add(key)
         if item.role != 'gallery': singles.add(item.role)
         if item.variant_id is not None and (item.variant_id not in variants or item.role != 'gallery'):
@@ -139,11 +149,291 @@ def replace_product_media(db, identifier, command):
     db.expire(product, ['media_links'])
     product.media_links = rows
     product.legacy_media = False
-    for role, field in (('primary', 'image_url'), ('hero_image', 'hero_image_url'), ('hero_video', 'hero_video_url'), ('hero_poster', 'hero_poster_url')):
-        setattr(product, field, public_asset(roles[role])['url'] if role in roles else None)
+    sync_product_roles(product)
     product.edit_version += 1
     db.flush()
     return product
+
+
+def attach_product_media(db, identifier, command):
+    reference_lock(db)
+    product = locked(db, Product, identifier, command.expected_version)
+    if product.status == 'archived': raise CatalogError('archived_read_only', 'Restore to draft before editing', 409)
+
+    kind = 'video' if command.role == 'hero_video' else ('image' if command.role != 'gallery' else None)
+    asset = ready(db, command.asset_id, kind)
+
+    if product.status == 'published' and command.role == 'gallery' and asset.kind == 'video' and not asset.poster_id:
+        raise CatalogError('poster_required', 'Choose a poster before attaching a gallery video to a published product')
+
+    if command.variant_id is not None:
+        variants = {v.id for v in product.variants}
+        if command.variant_id not in variants or command.role != 'gallery':
+            raise CatalogError('invalid_media_variant', 'Variant gallery media must belong to this product')
+
+    # If attaching a single role (primary, hover_image, etc.), replace any existing link with that role
+    if command.role != 'gallery':
+        for existing in list(product.media_links):
+            if existing.role == command.role:
+                db.delete(existing)
+        db.flush()
+        db.expire(product, ['media_links'])
+
+    order = command.display_order if command.display_order is not None else len(product.media_links)
+    link = ProductMedia(
+        product_id=product.id,
+        asset_id=asset.id,
+        asset=asset,
+        role=command.role,
+        variant_id=command.variant_id,
+        display_order=order,
+        alt_text=command.alt_text,
+    )
+    product.media_links.append(link)
+    product.legacy_media = False
+    sync_product_roles(product)
+    product.edit_version += 1
+    db.flush()
+    return product
+
+
+def detach_product_media(db, identifier, command):
+    reference_lock(db)
+    product = locked(db, Product, identifier, command.expected_version)
+    if product.status == 'archived': raise CatalogError('archived_read_only', 'Restore to draft before editing', 409)
+
+    target_link = None
+    if command.link_id is not None:
+        target_link = next((l for l in product.media_links if l.id == command.link_id), None)
+    elif command.asset_id and command.role:
+        target_link = next((l for l in product.media_links if l.asset_id == command.asset_id and l.role == command.role), None)
+    elif command.asset_id:
+        target_link = next((l for l in product.media_links if l.asset_id == command.asset_id), None)
+
+    if not target_link:
+        raise CatalogError('link_not_found', 'Media attachment not found', 404)
+
+    if target_link.role == 'primary' and product.status == 'published':
+        raise CatalogError('primary_required', 'Choose a replacement primary image or unpublish first', 409)
+
+    db.delete(target_link)
+    db.flush()
+    db.expire(product, ['media_links'])
+    sync_product_roles(product)
+    product.edit_version += 1
+    db.flush()
+    return product
+
+
+def reorder_product_media(db, identifier, command):
+    reference_lock(db)
+    product = locked(db, Product, identifier, command.expected_version)
+    if product.status == 'archived': raise CatalogError('archived_read_only', 'Restore to draft before editing', 409)
+
+    links_by_id = {l.id: l for l in product.media_links}
+    for order, link_id in enumerate(command.link_ids):
+        if link_id in links_by_id:
+            links_by_id[link_id].display_order = order
+
+    product.edit_version += 1
+    db.flush()
+    return product
+
+
+def set_product_roles(db, identifier, command):
+    reference_lock(db)
+    product = locked(db, Product, identifier, command.expected_version)
+    if product.status == 'archived': raise CatalogError('archived_read_only', 'Restore to draft before editing', 409)
+
+    if 'primary_asset_id' in command.model_fields_set:
+        if command.primary_asset_id:
+            primary_asset = ready(db, command.primary_asset_id, 'image')
+            for l in list(product.media_links):
+                if l.role == 'primary': db.delete(l)
+            db.flush()
+            db.expire(product, ['media_links'])
+            product.media_links.append(ProductMedia(
+                product_id=product.id, asset_id=primary_asset.id, asset=primary_asset,
+                role='primary', display_order=0, alt_text=''
+            ))
+        elif product.status == 'published':
+            raise CatalogError('primary_required', 'Published products require a primary image', 409)
+
+    if 'hover_asset_id' in command.model_fields_set:
+        if command.hover_asset_id:
+            hover_asset = ready(db, command.hover_asset_id, 'image')
+            for l in list(product.media_links):
+                if l.role == 'hover_image': db.delete(l)
+            db.flush()
+            db.expire(product, ['media_links'])
+            product.media_links.append(ProductMedia(
+                product_id=product.id, asset_id=hover_asset.id, asset=hover_asset,
+                role='hover_image', display_order=0, alt_text=''
+            ))
+        else:
+            for l in list(product.media_links):
+                if l.role == 'hover_image': db.delete(l)
+            db.flush()
+            db.expire(product, ['media_links'])
+
+    sync_product_roles(product)
+    product.edit_version += 1
+    db.flush()
+    return product
+
+
+def hero_slide_response(slide):
+    from app.services.owner_catalog import collection_response
+    video = public_asset(slide.video) if slide.video else None
+    poster = public_asset(slide.poster) if slide.poster else None
+    image = public_asset(slide.image) if slide.image else None
+    product_dict = None
+    if slide.product:
+        product_dict = {
+            'id': slide.product.id,
+            'title': slide.product.title,
+            'slug': slide.product.slug,
+            'status': slide.product.status,
+            'is_active': slide.product.is_active,
+        }
+    collection_dict = None
+    if slide.collection:
+        collection_dict = collection_response(slide.collection)
+    return {
+        'id': slide.id,
+        'title': slide.title,
+        'benefit': slide.benefit,
+        'video_asset_id': slide.video_asset_id,
+        'poster_asset_id': slide.poster_asset_id,
+        'image_asset_id': slide.image_asset_id,
+        'video': video,
+        'poster': poster,
+        'image': image,
+        'video_url': video['url'] if video else None,
+        'poster_url': poster['url'] if poster else None,
+        'image_url': image['url'] if image else None,
+        'display_order': slide.display_order,
+        'is_enabled': slide.is_enabled,
+        'target_product_id': slide.target_product_id,
+        'target_collection_id': slide.target_collection_id,
+        'product': product_dict,
+        'collection': collection_dict,
+        'edit_version': slide.edit_version,
+        'created_at': slide.created_at.isoformat() if slide.created_at else None,
+        'updated_at': slide.updated_at.isoformat() if slide.updated_at else None,
+    }
+
+
+def list_hero_slides(db, include_disabled=True):
+    from sqlalchemy.orm import selectinload
+    stmt = select(HeroSlide).options(
+        selectinload(HeroSlide.video).selectinload(MediaAsset.poster),
+        selectinload(HeroSlide.poster),
+        selectinload(HeroSlide.image),
+        selectinload(HeroSlide.product),
+        selectinload(HeroSlide.collection),
+    )
+    if not include_disabled:
+        stmt = stmt.where(HeroSlide.is_enabled.is_(True))
+    slides = list(db.scalars(stmt.order_by(HeroSlide.display_order.asc(), HeroSlide.id.asc())))
+    return [hero_slide_response(s) for s in slides]
+
+
+def create_hero_slide(db, command):
+    reference_lock(db)
+    video = ready(db, command.video_asset_id, 'video') if command.video_asset_id else None
+    poster = ready(db, command.poster_asset_id, 'image') if command.poster_asset_id else None
+    image = ready(db, command.image_asset_id, 'image') if command.image_asset_id else None
+
+    if not video and not poster and not image:
+        raise CatalogError('media_required', 'Hero slide requires at least a video, poster or image asset')
+    if video and not poster and not video.poster_id:
+        raise CatalogError('poster_required', 'Featured hero video requires a poster image')
+
+    product = None
+    if command.target_product_id:
+        product = db.get(Product, command.target_product_id)
+        if not product:
+            raise CatalogError('product_not_found', 'Target product does not exist')
+
+    collection = None
+    if command.target_collection_id:
+        collection = db.get(Collection, command.target_collection_id)
+        if not collection:
+            raise CatalogError('collection_not_found', 'Target collection does not exist')
+
+    current_max = db.scalar(select(func.coalesce(func.max(HeroSlide.display_order), -1)))
+    order = command.display_order if command.display_order is not None else current_max + 1
+
+    slide = HeroSlide(
+        id=uuid.uuid4().hex,
+        title=command.title,
+        benefit=command.benefit,
+        video_asset_id=video.id if video else None,
+        poster_asset_id=poster.id if poster else None,
+        image_asset_id=image.id if image else None,
+        display_order=order,
+        is_enabled=command.is_enabled,
+        target_product_id=product.id if product else None,
+        target_collection_id=collection.id if collection else None,
+        edit_version=1,
+    )
+    db.add(slide)
+    db.flush()
+    return slide
+
+
+def update_hero_slide(db, identifier, command):
+    reference_lock(db)
+    slide = locked(db, HeroSlide, identifier, command.expected_version)
+
+    if 'video_asset_id' in command.model_fields_set:
+        video = ready(db, command.video_asset_id, 'video') if command.video_asset_id else None
+        slide.video_asset_id = video.id if video else None
+    if 'poster_asset_id' in command.model_fields_set:
+        poster = ready(db, command.poster_asset_id, 'image') if command.poster_asset_id else None
+        slide.poster_asset_id = poster.id if poster else None
+    if 'image_asset_id' in command.model_fields_set:
+        image = ready(db, command.image_asset_id, 'image') if command.image_asset_id else None
+        slide.image_asset_id = image.id if image else None
+
+    if not slide.video_asset_id and not slide.poster_asset_id and not slide.image_asset_id:
+        raise CatalogError('media_required', 'Hero slide requires at least a video, poster or image asset')
+
+    if 'title' in command.model_fields_set: slide.title = command.title
+    if 'benefit' in command.model_fields_set: slide.benefit = command.benefit
+    if 'display_order' in command.model_fields_set and command.display_order is not None:
+        slide.display_order = command.display_order
+    if 'is_enabled' in command.model_fields_set and command.is_enabled is not None:
+        slide.is_enabled = command.is_enabled
+    if 'target_product_id' in command.model_fields_set:
+        slide.target_product_id = command.target_product_id
+    if 'target_collection_id' in command.model_fields_set:
+        slide.target_collection_id = command.target_collection_id
+
+    slide.edit_version += 1
+    db.flush()
+    return slide
+
+
+def reorder_hero_slides(db, command):
+    reference_lock(db)
+    slides = list(db.scalars(select(HeroSlide).where(HeroSlide.id.in_(command.slide_ids)).with_for_update()))
+    slides_by_id = {s.id: s for s in slides}
+    for index, s_id in enumerate(command.slide_ids):
+        if s_id in slides_by_id:
+            slides_by_id[s_id].display_order = index
+            slides_by_id[s_id].edit_version += 1
+    db.flush()
+    return list_hero_slides(db)
+
+
+def delete_hero_slide(db, identifier, command):
+    reference_lock(db)
+    slide = locked(db, HeroSlide, identifier, command.expected_version)
+    db.delete(slide)
+    db.flush()
+    return {'id': identifier, 'deleted': True}
 
 
 def set_collection_media(db, identifier, command):

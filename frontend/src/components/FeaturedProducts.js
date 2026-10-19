@@ -233,21 +233,21 @@ export function createFeaturedProducts(onOpenProductModal) {
       const card = grid.querySelector(`#product-${product.id}`);
       const wrapper = card?.querySelector('.product-card-img-wrapper');
       if (wrapper && !wrapper.querySelector('.product-card-img')) {
-        const secondaryUrl = product.secondary_image_url || product.secondary_image || (Array.isArray(product.media) && product.media.find(m => m.kind === 'image' && m.role !== 'primary')?.url) || null;
+        const hoverUrl = product.hover_image_url || product.secondary_image_url || null;
 
         const primaryImg = createSafeImageElement({
           src: product.image_url,
           alt: product.image_alt || product.title || 'Product',
-          className: 'product-card-img product-card-img-primary' + (secondaryUrl ? ' has-secondary' : ''),
+          className: 'product-card-img product-card-img-primary' + (hoverUrl ? ' has-secondary' : ''),
           loading: 'lazy',
           width: 320,
           height: 426,
         });
         wrapper.appendChild(primaryImg);
 
-        if (secondaryUrl) {
+        if (hoverUrl) {
           const secondaryImg = createSafeImageElement({
-            src: secondaryUrl,
+            src: hoverUrl,
             alt: `${product.title} alternate view`,
             className: 'product-card-img product-card-img-secondary',
             loading: 'lazy',

@@ -5,6 +5,7 @@ import { mountProductGallery } from './ProductGallery.js';
 import { variantImage } from '../utils/productMedia.js';
 import { extractPriceMinor, formatDisplayPrice } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
+import { storeConfig } from '../data/store-config.js';
 
 export function createProductModal(onAddedToCart) {
   const modalContainer = document.createElement('div');
@@ -179,7 +180,7 @@ export function createProductModal(onAddedToCart) {
               <rect x="1" y="3" width="15" height="13"></rect>
               <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
             </svg>
-            <span>Delivery: Estimated 3–5 business days nationwide (COD & Bank Transfer)</span>
+            <span>${escapeHtml(storeConfig.shippingInfo.standardTime)}.</span>
           </div>
         </div>
       </div>

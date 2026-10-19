@@ -19,6 +19,7 @@ Design rules enforced via database constraints:
 from __future__ import annotations
 
 import enum
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
@@ -32,6 +33,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy import event, inspect as sa_inspect, text
 
@@ -124,8 +126,13 @@ class Product(Base):
     __table_args__ = (
         CheckConstraint("status IN ('draft', 'published', 'archived')", name='ck_product_status'),
         CheckConstraint("status != 'published' OR (title IS NOT NULL AND slug IS NOT NULL AND collection_id IS NOT NULL)", name='ck_product_published_identity'),
+        CheckConstraint("stock_management_source IN ('alphazee_managed', 'vendor_managed')", name='ck_product_stock_management_source'),
+        CheckConstraint("stock_management_source != 'vendor_managed' OR vendor_id IS NOT NULL", name='ck_product_vendor_managed_requires_vendor'),
+        Index('ix_products_vendor_id', 'vendor_id'),
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'published'"))
+    stock_management_source: Mapped[str] = mapped_column(String(32), nullable=False, default="alphazee_managed", server_default=text("'alphazee_managed'"))
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=True)
     edit_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text('1'))
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     short_description: Mapped[str | None] = mapped_column(Text)
@@ -176,6 +183,9 @@ class Product(Base):
     hero_video_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Background video URL for the hero slide."""
 
+    hover_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Card hover / back image shown on desktop fine-pointer hover."""
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
@@ -186,6 +196,7 @@ class Product(Base):
 
     # Relationships
     collection: Mapped[Collection | None] = relationship("Collection", back_populates="products")
+    vendor = relationship("Supplier", foreign_keys=[vendor_id])
     media_links: Mapped[list['ProductMedia']] = relationship('ProductMedia', back_populates='product', cascade='save-update, merge', passive_deletes='all', order_by='ProductMedia.display_order')
     variants: Mapped[list[Variant]] = relationship(
         "Variant", back_populates="product", cascade="save-update, merge", passive_deletes='all'

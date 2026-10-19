@@ -4,49 +4,49 @@ export const storeConfig = {
   currency: 'PKR',
   currencySymbol: 'Rs. ',
   shippingInfo: {
-    standardTime: '3–5 business days nationwide upon confirmation',
-    dispatchTime: '24–48 hours upon confirmation',
-    standardRate: 'Free nationwide delivery',
-    returnPolicy: '7-day inspection and size-exchange policy upon delivery',
-    courierNotice: 'Delivery nationwide via verified local courier partners',
+    standardTime: 'Delivery timing and coverage will be published before public ordering opens',
+    dispatchTime: 'Dispatch timing will be published before public ordering opens',
+    standardRate: 'Public delivery charges are not yet published',
+    returnPolicy: 'Return and exchange terms will be published before public ordering opens',
+    courierNotice: 'Delivery coverage is not yet published',
   },
   policies: {
-    delivery: 'Orders dispatch within 24–48 hours following confirmation. Nationwide transit takes 3–5 business days via verified courier partners.',
-    returns: 'Every order is backed by our 7-day inspection and size-exchange policy. Inspect your items upon delivery and contact support for sizing exchanges or defect resolution.',
-    privacy: 'Customer shipping details and phone numbers are used solely for order confirmation, delivery coordination, and private status recovery. They are never shared or sold.',
+    delivery: null,
+    returns: null,
+    privacy: null,
   },
   reassurance: [
     {
       id: 'delivery',
-      title: 'Nationwide Delivery',
-      desc: '3–5 business days nationwide transit via verified local courier partners.',
+      title: 'Delivery Information',
+      desc: 'Delivery coverage, charges and timing will be published before public ordering opens.',
       icon: 'truck'
     },
     {
       id: 'payments',
       title: 'Manual Verification',
-      desc: 'Cash on delivery and bank transfer, verified before shipment.',
+      desc: 'Enabled payment options appear at checkout. Bank transfers require confirmation of received funds before dispatch.',
       icon: 'shield-check'
     },
     {
       id: 'support',
       title: 'Direct Support',
-      desc: 'Direct assistance for sizing inquiries and verified order tracking.',
+      desc: 'Support contact details will be published before public ordering opens.',
       icon: 'message-circle'
     }
   ],
   faqs: [
     {
       q: 'How long does delivery take?',
-      a: 'Orders typically dispatch within 24–48 hours and arrive in 3–5 business days nationwide once confirmed.'
+      a: 'Delivery coverage and dispatch/transit estimates will be published before public ordering opens.'
     },
     {
       q: 'How can I pay for my order?',
-      a: 'Cash on Delivery is supported nationwide. Bank transfer appears only when configured; instructions follow supplier confirmation, and received funds are verified before dispatch.'
+      a: 'Enabled options appear at checkout. For bank transfer, instructions follow supplier confirmation, and received funds must be verified before dispatch. Public ordering is not open yet.'
     },
     {
       q: 'What is the return & exchange policy?',
-      a: 'We offer a 7-day inspection and size-exchange policy upon delivery. Report any sizing adjustments or defects immediately for prompt resolution.'
+      a: 'Return eligibility, time limits and exchange charges will be published before public ordering opens.'
     },
     {
       q: 'How do I choose the correct size?',
@@ -66,8 +66,9 @@ export const storeConfig = {
       { label: 'Customer FAQ', href: '#faq' },
     ],
     legal: [
-      { label: 'Privacy & Terms', href: '#policies' },
-      { label: 'Return Policy', href: '#faq' },
+      { label: 'Privacy Policy', href: null },
+      { label: 'Terms of Service', href: null },
+      { label: 'Return Policy', href: null },
       { label: 'Owner Console', href: '/admin' },
     ]
   }

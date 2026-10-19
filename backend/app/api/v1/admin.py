@@ -616,8 +616,13 @@ def get_admin_overview(db: Session = Depends(get_db)) -> AdminOverviewMetricsRes
     response_model=SupplierListResponse,
     summary="List all registered suppliers",
 )
-def list_suppliers_endpoint(db: Session = Depends(get_db)) -> SupplierListResponse:
+def list_suppliers_endpoint(
+    include_internal: bool = False,
+    db: Session = Depends(get_db),
+) -> SupplierListResponse:
     stmt = select(Supplier).order_by(Supplier.name.asc())
+    if not include_internal:
+        stmt = stmt.where(Supplier.supplier_type != "alphazee_internal")
     suppliers = db.scalars(stmt).all()
     return SupplierListResponse(
         suppliers=[
@@ -626,6 +631,7 @@ def list_suppliers_endpoint(db: Session = Depends(get_db)) -> SupplierListRespon
                 name=s.name,
                 slug=s.slug,
                 status=s.status,
+                supplier_type=s.supplier_type,
                 notes=s.notes,
             )
             for s in suppliers

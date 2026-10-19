@@ -49,7 +49,7 @@ export function createCartDrawer(onCheckout, onExplore) {
           <circle cx="5.5" cy="18.5" r="2.5"></circle>
           <circle cx="18.5" cy="18.5" r="2.5"></circle>
         </svg>
-        <span>Free nationwide delivery across Pakistan (${escapeHtml(storeConfig.shippingInfo.standardTime)}).</span>
+        <span>${escapeHtml(storeConfig.shippingInfo.standardRate)}.</span>
       </p>
       <p id="checkout-availability" role="status" class="cart-sample-notice"></p>
       <button class="btn btn-primary" id="btn-checkout" disabled style="width: 100%; min-height: 48px;">

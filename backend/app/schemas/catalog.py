@@ -130,6 +130,7 @@ class ProductSummarySchema(BaseModel):
     description: Optional[str] = None
     collection_id: str
     image_url: Optional[str] = None
+    hover_image_url: Optional[str] = None
     badge: Optional[str] = None
     is_hero: bool
     image_alt: str = ''
@@ -175,11 +176,12 @@ class HeroProductSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    slug: str
+    slug: Optional[str] = None
     title: str
     description: Optional[str] = None
-    collection_id: str
+    collection_id: Optional[str] = None
     image_url: Optional[str] = None
+    hover_image_url: Optional[str] = None
     badge: Optional[str] = None
     is_hero: bool = True
     image_alt: str = ''
@@ -189,10 +191,31 @@ class HeroProductSchema(BaseModel):
     hero_image_url: Optional[str] = None
     hero_poster_url: Optional[str] = None
     hero_video_url: Optional[str] = None
+    slide_id: Optional[str] = None
     min_price: Optional[CurrencyAmount] = Field(
         default=None,
         description="Lowest price across all active variants.",
     )
+
+
+class HeroSlidePublicSchema(BaseModel):
+    """Dedicated homepage hero slide representation."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: Optional[str] = None
+    benefit: Optional[str] = None
+    video_url: Optional[str] = None
+    poster_url: Optional[str] = None
+    image_url: Optional[str] = None
+    display_order: int = 0
+    is_enabled: bool = True
+    target_product_id: Optional[str] = None
+    target_product_slug: Optional[str] = None
+    target_collection_id: Optional[str] = None
+    target_collection_slug: Optional[str] = None
+    min_price: Optional[CurrencyAmount] = None
 
 
 class ProductDetailSchema(BaseModel):
@@ -215,8 +238,10 @@ class ProductDetailSchema(BaseModel):
     sizing: Optional[str] = None
     collection_id: str
     image_url: Optional[str] = None
+    hover_image_url: Optional[str] = None
     badge: Optional[str] = None
     is_hero: bool
     hero: Optional[HeroMetaSchema] = None
     variants: list[VariantSchema]
     media: list[PublicMediaSchema] = Field(default_factory=list)
+

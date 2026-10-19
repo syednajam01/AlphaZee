@@ -23,6 +23,8 @@ from app.models.returns import OrderReturn  # noqa: F401
 from app.models.auth import OwnerCredential, OwnerSession, OwnerLoginBucket  # noqa: F401
 from app.models.order_access import OrderAccessGrant, OrderAccessSession, OrderAccessAttempt  # noqa: F401
 from app.models.finance import CourierSettlementEntry, RefundExecution  # noqa: F401
+from app.models.supplier_finance import SupplierAgreement, SupplierLedgerEntry, SupplierPaymentAllocation  # noqa: F401
+from app.models.business_expenses import BusinessExpense  # noqa: F401
 
 __all__ = [
     "Base",
@@ -49,6 +51,10 @@ __all__ = [
     "OrderAccessAttempt",
     "CourierSettlementEntry",
     "RefundExecution",
+    "SupplierAgreement",
+    "SupplierLedgerEntry",
+    "SupplierPaymentAllocation",
+    "BusinessExpense",
 ]
 
 

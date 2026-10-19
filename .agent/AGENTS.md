@@ -18,7 +18,7 @@ This is the canonical project agent guide. Read it at the start of each task. Ke
 
 Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging and the separate checkout lab.
 
-Latest recorded M9 verification: 260 backend tests, 108 frontend tests, 145 commerce/mobile/archive Chrome checks plus 83 authoring/storefront checks, production frontend build, normal/production/lab image builds, migration comparison/cycle and archived-history restart persistence. One existing AnyIO deprecation warning was recorded. Vite 7.3.7/esbuild 0.28.2 returned zero npm advisories at verification. These are dated results, not substitutes for checking later changes. Migration head: `f27b6d91c083`.
+Latest recorded M9/MM5 verification: 260 backend tests, 136 frontend tests, 145 commerce/mobile/archive Chrome checks plus 83 authoring/storefront checks, production frontend build, normal/production/lab image builds, migration comparison/cycle and archived-history restart persistence. One existing AnyIO deprecation warning was recorded. Vite 7.3.7/esbuild 0.28.2 returned zero npm advisories at verification. These are dated results, not substitutes for checking later changes. Migration head: `2c8a1b3e5f70`.
 
 M9 completed purchased-product archive/history, mobile checkout/offline recovery, partial COD and replacement-RTO acceptance. The owner guide is `.context/m9_owner_handoff.md`; detailed results are in `m9_implementation_report.md`. Production has not been deployed. Domain and hosting proposals in older documents are not verified deployments.
 
@@ -54,15 +54,17 @@ Use `rg` first for searches and `npm.cmd` in PowerShell. Native frontend work re
 
 ## Project memory
 
-The 2026-10-19 `.context/business_and_architecture_review.md` reviews redesign evidence and defines B0–B5 priorities. Next.js remains unimplemented; resolve product-content correctness and verification gaps before launch. Recommendations are not implementation authorization.
+Brand story/copy: `.context/brand_voice_and_story_guide.md`. Vendor-sourced clothing first; accessories and own-label products later. Avoid unsupported manufacturing claims.
 
-The 2026-10-19 `.context/frontend_design_implementation_guide.md` is the Antigravity storefront redesign brief: visual tokens, product URLs, responsive media/purchase flows and U0–U5 browser gates. Expected progress file: `.context/frontend_redesign_progress.md`. The brief is not implementation evidence; preserve checkout/data boundaries. It supersedes the testing-only handoff for the requested design work.
+The 2026-10-19 `.context/business_and_architecture_review.md` defines B0–B5. Owner-authorized B1 follow-up fixes and pending browser checks: `.context/b1_followup_and_browser_handoff.md`. Next.js remains unimplemented; commercial decisions and production acceptance remain outstanding.
+
+Storefront design: `.context/frontend_design_implementation_guide.md`; progress: `.context/frontend_redesign_progress.md`. Media specification: `.context/admin_media_implementation_guide.md` (MM0–MM5), verified complete in `.context/admin_media_acceptance_report.md` with admin-managed hero sequencing, collection flat-folders, explicit card front/back images, container restart persistence, and checkout isolation. Muted hero autoplay supersedes earlier hero restrictions; product-gallery video remains user-initiated.
 
 Antigravity's v2 report and `.local/antigravity-browser/run_20261018_pass2/` were reviewed on 2026-10-19: JSON records 33 PASS/1 NOT TESTED, but some claims exceed assertions. Read `.context/browser_acceptance_v2_review.md` for keyboard/zoom/security-negative/coverage limits and next priorities. Treat this as partial evidence, not completed acceptance or production certification. Preserve reports; `.context/next_target.md` contains second-pass instructions and `.context/next_target.txt` is older.
 
-The 2026-10-18 guidance is `.context/next_priorities_and_browser_testing.md`: baseline acceptance, commercial decisions, mobile buying-journey UX, launch/staging verification and a controlled pilot. It includes current automated runner prerequisites plus manual/device/usability checks; it is guidance, not newly executed evidence or implementation authorization.
+`.context/next_priorities_and_browser_testing.md` covers acceptance, commercial decisions, UX, staging and a controlled pilot; it includes runner prerequisites and manual/device checks, not fresh verification evidence.
 
-The 2026-10-15 readiness assessment is `.context/production_readiness_summary.md`. Core workflows are implemented, but public checkout release, Azure acceptance and business setup remain. Vendor payable/payout accounting is absent; customer checkout currently defaults to zero shipping. Treat these as assessed gaps/decisions, not newly authorized implementation phases.
+Finance/admin brief: `.context/vendor_finance_admin_implementation_guide.md` (VF0–VF8); latest stock-portal refinement: `.context/vendor_stock_portal_implementation_guide.md`. Optional vendor linking requires AlphaZee-managed inventory support. AlphaZee bears RTO/return costs; payable triggers/credits remain undecided. Preserve ongoing VF work. Reviews: `.context/vendor_stock_and_money_review.md`, `.context/production_readiness_summary.md`.
 
 Read `.context/summary.md`, `.context/owner_catalog_phase_status.json`, `.context/owner_dashboard_catalog_media_implementation_plan.md` and `.context/next_target.txt` for task context. Use phase guides and JSON evidence, especially `m8_checkout_lab_runbook.md`, `m7_operations_runbook.md` and `m3_media_runbook.md`.
 

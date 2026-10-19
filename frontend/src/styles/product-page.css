@@ -702,11 +702,28 @@ body.lightbox-open .mobile-purchase-bar,
   height: 100%;
   object-fit: contain;
   object-position: center;
-  transition: transform var(--transition-normal);
+  transition: opacity 180ms ease, transform var(--transition-normal);
 }
 
-.product-related-card:hover .product-related-img {
-  transform: scale(1.02);
+.product-related-media.has-hover .product-related-img {
+  position: absolute;
+  inset: 0;
+}
+
+.product-related-img-hover {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .product-related-card:hover .product-related-img-primary.has-hover {
+    opacity: 0;
+  }
+
+  .product-related-card:hover .product-related-img-hover {
+    opacity: 1;
+    transform: scale(1.02);
+  }
 }
 
 .product-related-meta {

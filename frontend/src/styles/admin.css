@@ -68,3 +68,26 @@
   .admin-page .admin-report-summary,
   .admin-page .admin-report-secondary { grid-template-columns: minmax(0, 1fr) !important; }
 }
+
+.role-selector-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 16px 0; }
+.role-selector-card { display: flex; gap: 16px; padding: 14px; background: #101713; border: 1px solid #344b3c; border-radius: 8px; align-items: center; }
+.role-thumbnail { width: 80px; height: 100px; object-fit: cover; border-radius: 4px; background: #0c100e; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; color: rgba(255, 255, 255, 0.4); text-align: center; border: 1px dashed #40574a; }
+.role-selector-info { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.role-selector-info strong { font-size: 0.9rem; color: #FFFFFF; }
+.role-selector-info p { margin: 0; font-size: 0.75rem; color: rgba(255, 255, 255, 0.6); }
+
+.hero-slide-card { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding: 16px; border: 1px solid #344b3c; border-radius: 8px; background: #101713; margin-bottom: 12px; }
+.hero-slide-preview { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; background: #0c100e; }
+.hero-slide-info { display: flex; flex-direction: column; gap: 8px; }
+.hero-slide-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+.hero-badge-enabled { background: rgba(74, 222, 128, 0.2); color: #4ADE80; }
+.hero-badge-disabled { background: rgba(239, 68, 68, 0.2); color: #FCA5A5; }
+
+.collection-members-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.collection-member-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: #101713; border: 1px solid #2d3e33; border-radius: 6px; font-size: 0.85rem; }
+.collection-member-title { font-weight: 600; color: #FFFFFF; }
+.collection-member-status { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+.status-published { background: rgba(74, 222, 128, 0.15); color: #4ADE80; }
+.status-draft { background: rgba(251, 191, 36, 0.15); color: #FCD34D; }
+.status-archived { background: rgba(255, 255, 255, 0.1); color: #9CA3AF; }
+

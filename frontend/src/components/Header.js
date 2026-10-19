@@ -10,7 +10,7 @@ export function createHeader() {
   header.innerHTML = `
     <!-- Store Announcement Bar -->
     <div class="announcement-bar" role="region" aria-label="Store announcement">
-      <span>AlphaZee MVP Concept Preview • Free delivery across Pakistan • Cash on Delivery & Verified Bank Transfer (Checkout Disabled)</span>
+      <span>AlphaZee Concept Preview • Public ordering is not open yet</span>
     </div>
 
     <div class="container">
