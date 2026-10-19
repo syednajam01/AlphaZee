@@ -4,6 +4,7 @@ import { extractPriceMinor, formatDisplayPrice } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
 import { mountProductGallery } from './ProductGallery.js';
 import { variantImage } from '../utils/productMedia.js';
+import { storeConfig } from '../data/store-config.js';
 
 export function createProductPage({ onAddedToCart, onNavigate }) {
   const container = document.createElement('div');
@@ -19,6 +20,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
   let gallery = null;
   let ctaObserver = null;
   let mobileBar = null;
+  let loadGeneration = 0;
 
   function updateMetadata(product) {
     if (typeof document === 'undefined') return;
@@ -176,7 +178,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
               <div class="option-group" data-option="size">
                 <div class="option-group-header">
                   <span class="option-group-title">Size</span>
-                  <span class="option-group-value" id="selected-size-name">${escapeHtml(selectedSize || '')}</span>
+                  <span class="option-group-value" id="selected-size-name">${escapeHtml(selectedSize || (sizes.length > 1 ? 'Select a size' : (sizes[0] || '')))}</span>
                 </div>
                 <div class="option-chips" role="radiogroup" aria-label="Select size">
                   ${sizes.map(sz => {
@@ -193,6 +195,9 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
                       </button>
                     `;
                   }).join('')}
+                </div>
+                <div id="size-selection-prompt" class="form-error" role="alert" hidden style="margin-top: 8px; font-size: 0.8125rem;">
+                  Please select a size before adding to bag.
                 </div>
               </div>
             ` : ''}
@@ -230,31 +235,54 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
 
             <div class="product-info-block">
               <h3 class="product-info-title">Material & Garment Care</h3>
-              <div class="product-info-content">${escapeHtml(product.material || product.material_care || 'Crafted from 100% heavyweight combed cotton (240 GSM). Preshrunk fabric. Machine wash cold with like colors. Line dry inside out to maintain shape and color richness.')}</div>
+              <div class="product-info-content">
+                <p style="margin: 0 0 6px 0;">
+                  <strong>Material:</strong> ${product.material ? escapeHtml(product.material) : '<span style="color: var(--color-text-muted);">Material composition not verified yet.</span>'}
+                </p>
+                <p style="margin: 0;">
+                  <strong>Care:</strong> ${product.care ? escapeHtml(product.care) : '<span style="color: var(--color-text-muted);">Care instructions not verified yet.</span>'}
+                </p>
+              </div>
             </div>
 
             <div class="product-info-block">
-              <h3 class="product-info-title">Sizing Guide</h3>
+              <h3 class="product-info-title">Sizing & Fit</h3>
               <div class="product-info-content">
-                ${escapeHtml(product.sizing_guide || 'Designed for a structured, contemporary silhouette with a relaxed shoulder drop. Order your standard size for the intended relaxed drape, or size down for a slimmer tailoring.')}
-                <table class="size-guide-table">
-                  <thead>
-                    <tr><th>Size</th><th>Chest (in)</th><th>Length (in)</th><th>Shoulder (in)</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td>S</td><td>38 - 40</td><td>27.5</td><td>18.5</td></tr>
-                    <tr><td>M</td><td>40 - 42</td><td>28.5</td><td>19.5</td></tr>
-                    <tr><td>L</td><td>42 - 44</td><td>29.5</td><td>20.5</td></tr>
-                    <tr><td>XL</td><td>44 - 46</td><td>30.5</td><td>21.5</td></tr>
-                  </tbody>
-                </table>
+                <p style="margin: 0 0 8px 0;">
+                  ${product.sizing ? escapeHtml(product.sizing) : '<span style="color: var(--color-text-muted);">Garment measurements not verified yet. Product-specific sizing table will be published once verified.</span>'}
+                </p>
+                ${Array.isArray(product.measurements) && product.measurements.length > 0 ? `
+                  <table class="size-guide-table">
+                    <thead>
+                      <tr><th>Size</th><th>Chest (in)</th><th>Length (in)</th><th>Shoulder (in)</th></tr>
+                    </thead>
+                    <tbody>
+                      ${product.measurements.map(m => `
+                        <tr>
+                          <td>${escapeHtml(m.size || '')}</td>
+                          <td>${escapeHtml(m.chest || '—')}</td>
+                          <td>${escapeHtml(m.length || '—')}</td>
+                          <td>${escapeHtml(m.shoulder || '—')}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                ` : ''}
               </div>
             </div>
 
             <div class="product-info-block">
               <h3 class="product-info-title">Nationwide Delivery & Returns</h3>
               <div class="product-info-content">
-                Orders dispatch within 24 to 48 hours from our Karachi fulfillment hub. Standard nationwide transit is 3–5 business days. Cash on delivery (COD) and direct online bank transfer accepted. Every order includes private order tracking and our 7-day inspection and size-exchange policy.
+                <p style="margin: 0 0 6px 0;">
+                  <strong>Dispatch:</strong> Orders dispatch within ${escapeHtml(storeConfig.shippingInfo.dispatchTime)}.
+                </p>
+                <p style="margin: 0 0 6px 0;">
+                  <strong>Transit:</strong> ${escapeHtml(storeConfig.shippingInfo.standardTime)} (${escapeHtml(storeConfig.shippingInfo.standardRate)}).
+                </p>
+                <p style="margin: 0;">
+                  <strong>Policy:</strong> ${escapeHtml(storeConfig.shippingInfo.returnPolicy)}.
+                </p>
               </div>
             </div>
           </div>
@@ -347,6 +375,11 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
     container.querySelectorAll('[data-option-size]').forEach(btn => {
       btn.addEventListener('click', () => {
         selectedSize = btn.dataset.optionSize;
+        const prompt = container.querySelector('#size-selection-prompt');
+        if (prompt) {
+          prompt.hidden = true;
+          if (prompt.style && typeof prompt.style === 'object') prompt.style.display = 'none';
+        }
         onVariantOptionsChanged();
       });
     });
@@ -387,6 +420,22 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
   }
 
   function handleAddToCart() {
+    const product = currentProduct;
+    if (!product) return;
+    const variants = product.variants || [];
+    const sizes = variants.some(v => v.size) ? [...new Set(variants.map(v => v.size || '').filter(Boolean))] : [];
+
+    if (sizes.length > 1 && !selectedSize) {
+      const prompt = container.querySelector('#size-selection-prompt');
+      if (prompt) {
+        prompt.hidden = false;
+        if (prompt.style && typeof prompt.style === 'object') prompt.style.display = 'block';
+      }
+      const sizeGroup = container.querySelector('[data-option="size"]');
+      sizeGroup?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+
     const active = getSelectedVariant();
     if (!active || active.availability !== 'available') return;
     const priceMinor = extractPriceMinor(active.price_minor ?? active.price);
@@ -450,6 +499,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
   }
 
   async function load(slug, variantIdQuery = null) {
+    const currentGen = ++loadGeneration;
     isLoading = true;
     errorMessage = null;
     currentProduct = null;
@@ -459,29 +509,32 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
 
     try {
       const prod = await fetchProductBySlug(slug);
+      if (currentGen !== loadGeneration) return;
       currentProduct = prod;
 
       // Select initial variant
       const variants = prod.variants || [];
+      const sizes = variants.some(v => v.size) ? [...new Set(variants.map(v => v.size || '').filter(Boolean))] : [];
+      const colors = variants.some(v => v.color) ? [...new Set(variants.map(v => v.color || '').filter(Boolean))] : [];
+
       let initialVariant = null;
       if (variantIdQuery) {
         initialVariant = variants.find(v => String(v.id) === String(variantIdQuery));
-      }
-      if (!initialVariant) {
-        initialVariant = variants.find(v => v.availability === 'available') || variants[0];
       }
 
       if (initialVariant) {
         selectedSize = initialVariant.size || null;
         selectedColor = initialVariant.color || null;
       } else {
-        selectedSize = null;
-        selectedColor = null;
+        selectedColor = colors[0] || null;
+        // Require deliberate size choice if multiple sizes exist
+        selectedSize = sizes.length === 1 ? sizes[0] : null;
       }
 
       // Fetch related products in background
       fetchProducts({ collectionId: prod.collection_id || null, pageSize: 5 })
         .then(res => {
+          if (currentGen !== loadGeneration) return;
           const raw = res?.products || [];
           relatedProducts = raw.filter(p => p.id !== prod.id && p.slug !== prod.slug).slice(0, 4);
           render();
@@ -494,6 +547,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
       updateMetadata(prod);
       render();
     } catch (err) {
+      if (currentGen !== loadGeneration) return;
       isLoading = false;
       errorMessage = err.message || 'Unable to load product information.';
       updateMetadata(null);
@@ -505,8 +559,15 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
     element: container,
     load,
     destroy() {
+      loadGeneration++;
       gallery?.destroy();
-      if (ctaObserver) ctaObserver.disconnect();
+      gallery = null;
+      if (ctaObserver) {
+        ctaObserver.disconnect();
+        ctaObserver = null;
+      }
+      container.innerHTML = '';
+      currentProduct = null;
     }
   };
 }

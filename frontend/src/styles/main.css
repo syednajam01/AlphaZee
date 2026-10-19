@@ -172,4 +172,4 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
 }
- .checkout-lab-notice { position: relative; z-index: 10001; padding: 10px 16px; background: #ffdf70; color: #191600; font: 600 13px/1.5 sans-serif; text-align: center; }
+ .checkout-lab-notice { position: sticky; top: 0; z-index: 10001; padding: 10px 16px; background: #ffdf70; color: #191600; font: 600 13px/1.5 sans-serif; text-align: center; }

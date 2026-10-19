@@ -19,16 +19,28 @@ function createMockElement(tagName) {
     setAttribute(name, val) {
       if (name === 'disabled') {
         this.disabled = val !== false && val !== 'false';
+      } else if (name === 'hidden') {
+        this.hidden = val !== false && val !== 'false';
+      } else if (name === 'style') {
+        this.style = this.style && typeof this.style === 'object' ? this.style : {};
+        if (typeof val === 'string') {
+          val.split(';').forEach(rule => {
+            const [k, v] = rule.split(':');
+            if (k && v) this.style[k.trim()] = v.trim();
+          });
+        }
       } else {
         this[name] = val;
       }
     },
     getAttribute(name) {
       if (name === 'disabled') return this.disabled ? '' : null;
+      if (name === 'hidden') return this.hidden ? '' : null;
       return this[name] || null;
     },
     removeAttribute(name) {
       if (name === 'disabled') this.disabled = false;
+      if (name === 'hidden') this.hidden = false;
       delete this[name];
     },
     appendChild(child) {
@@ -72,8 +84,10 @@ function createMockElement(tagName) {
             const attr = attrMatch[1];
             const val = attrMatch[2];
             if (attr.startsWith('data-')) {
-              const dataKey = attr.replace('data-', '');
-              if (val !== undefined ? node.dataset && node.dataset[dataKey] === val : node.dataset && node.dataset[dataKey] !== undefined) {
+              const rawKey = attr.replace('data-', '');
+              const camelKey = rawKey.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+              const actualVal = node.dataset?.[camelKey] ?? node.dataset?.[rawKey] ?? node[attr];
+              if (val !== undefined ? actualVal === val : actualVal !== undefined) {
                 matches.push(node);
               }
             } else if (val !== undefined ? node[attr] === val : node[attr] !== undefined) {
@@ -293,7 +307,7 @@ describe('Product Page & Routing Invariants', () => {
     page.destroy();
   });
 
-  it('gracefully falls back to first available variant if variant query is invalid', async () => {
+  it('gracefully requires deliberate size choice when variant query is invalid or unselected', async () => {
     globalThis.fetch = async () => ({
       ok: true,
       json: async () => sampleProduct
@@ -311,12 +325,12 @@ describe('Product Page & Routing Invariants', () => {
     const selectedSize = page.element.querySelector('#selected-size-name');
 
     assert.equal(selectedColor?.textContent, 'Black');
-    assert.equal(selectedSize?.textContent, 'M');
+    assert.equal(selectedSize?.textContent, 'Select a size');
 
     page.destroy();
   });
 
-  it('adds selected variant with quantity to cart', async () => {
+  it('requires deliberate size selection before adding to cart when multiple sizes exist', async () => {
     globalThis.fetch = async () => ({
       ok: true,
       json: async () => sampleProduct
@@ -338,6 +352,22 @@ describe('Product Page & Routing Invariants', () => {
     assert.ok(addBtn);
     assert.equal(addBtn.disabled, false);
 
+    // Attempt to add without selecting size -> fails with prompt
+    addBtn.click();
+    assert.equal(addedTriggered, false, 'Add to bag must be prevented when no size is chosen');
+    const prompt = page.element.querySelector('#size-selection-prompt');
+    assert.ok(prompt);
+    assert.equal(prompt.hidden, false);
+
+    // Select size 'M'
+    const sizeMBtn = page.element.querySelector('[data-option-size="M"]');
+    assert.ok(sizeMBtn);
+    sizeMBtn.click();
+
+    // Prompt should now be hidden
+    assert.equal(prompt.hidden, true);
+
+    // Now adding to cart succeeds
     addBtn.click();
 
     assert.equal(addedTriggered, true);
@@ -346,6 +376,101 @@ describe('Product Page & Routing Invariants', () => {
     assert.equal(cartState.items[0].product_id, 'prod-001');
     assert.equal(cartState.items[0].variant_id, 201);
     assert.equal(cartState.items[0].quantity, 2);
+
+    page.destroy();
+  });
+
+  it('E1: renders genuine material, care, and sizing fields separately from API without invented cotton claims', async () => {
+    const customProduct = {
+      ...sampleProduct,
+      description: 'Minimalist streetwear silhouette.',
+      material: '100% French Terry Cotton',
+      care: 'Cold wash inside out. Hang dry only.',
+      sizing: 'Boxy streetwear cut. True to size for intended drape.'
+    };
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => customProduct
+    });
+
+    const page = createProductPage({
+      onAddedToCart: () => {},
+      onNavigate: () => {}
+    });
+
+    await page.load('architectural-heavyweight-tee');
+
+    const html = page.element.innerHTML;
+    assert.match(html, /100% French Terry Cotton/);
+    assert.match(html, /Cold wash inside out/);
+    assert.match(html, /Boxy streetwear cut/);
+    assert.doesNotMatch(html, /240 GSM combed cotton/);
+
+    page.destroy();
+  });
+
+  it('E1: renders honest unverified states when material, care, or sizing are missing from API', async () => {
+    const sparseProduct = {
+      ...sampleProduct,
+      description: 'Minimalist streetwear silhouette.',
+      material: null,
+      care: null,
+      sizing: null
+    };
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => sparseProduct
+    });
+
+    const page = createProductPage({
+      onAddedToCart: () => {},
+      onNavigate: () => {}
+    });
+
+    await page.load('architectural-heavyweight-tee');
+
+    const html = page.element.innerHTML;
+    assert.match(html, /Material composition not verified yet/);
+    assert.match(html, /Care instructions not verified yet/);
+    assert.match(html, /Garment measurements not verified yet/);
+    assert.doesNotMatch(html, /240 GSM combed cotton/);
+
+    page.destroy();
+  });
+
+  it('E4: guards against stale out-of-order route responses overwriting current product', async () => {
+    let resolveFirst;
+    const firstPromise = new Promise(resolve => { resolveFirst = resolve; });
+
+    globalThis.fetch = async (url) => {
+      if (String(url).includes('first-slug')) {
+        await firstPromise;
+        return { ok: true, json: async () => ({ ...sampleProduct, title: 'First Product Stale' }) };
+      }
+      return { ok: true, json: async () => ({ ...sampleProduct, title: 'Second Product Fresh' }) };
+    };
+
+    const page = createProductPage({
+      onAddedToCart: () => {},
+      onNavigate: () => {}
+    });
+
+    // Start loading first slug (slow)
+    const p1 = page.load('first-slug');
+    // Rapidly switch to second slug (fast)
+    const p2 = page.load('second-slug');
+
+    await p2;
+    assert.equal(page.element.querySelector('.product-page-title')?.textContent, 'Second Product Fresh');
+
+    // First response finally arrives
+    resolveFirst();
+    await p1;
+
+    // Page must still show Second Product Fresh, NOT overwritten by First
+    assert.equal(page.element.querySelector('.product-page-title')?.textContent, 'Second Product Fresh');
 
     page.destroy();
   });

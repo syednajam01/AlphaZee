@@ -351,3 +351,89 @@ All six phases specified in [.context/frontend_design_implementation_guide.md](f
 6. **U5 (Visual Polish, Multi-Breakpoint Matrix & Targeted Regression)**: 5-viewport matrix (360/390/768/1280/1440px) without horizontal scrollbar overflow, actual desktop 200% page scale zoom without content truncation, full keyboard focus trap and forward/reverse Tab wrapping with Escape dismiss, `prefers-reduced-motion` instantaneous transitions, slow network resilience, broken image neutral SVG fallback, and owner console `/admin` smoke test verified across both lab and dev environments without style interference.
 
 **All 123 frontend unit tests pass. Production bundle builds cleanly in ~3.5s. All backend commerce contracts, integer paisas, and strict checkout isolation (open strictly in local lab `127.0.0.1:13001`, closed in dev and prod) are preserved.**
+
+---
+
+## Phase B1: Frontend Correctness & Customer Journey Improvements
+
+Implemented on 2026-10-19 following the analytical recommendations in [.context/business_and_architecture_review.md](file:///f:/AlphaZee/.context/business_and_architecture_review.md). All fixes are independent frontend correctness improvements that preserve backend commerce contracts, integer paisas, and lab isolation boundaries.
+
+### Scope & Architectural Findings Fixed
+
+1. **E1 — Truthful Product Fields & Honest Unverified States**:
+   - Replaced fabricated claims ("240 GSM combed cotton") and hardcoded generic S–XL measurement tables with genuine `material`, `care`, and `sizing` fields read directly from the backend `ProductDetailSchema`.
+   - Rendered `Material` and `Care` as separate, distinct lines under `Material & Garment Care`.
+   - When backend fields are not yet verified by the owner, rendered honest unverified states:
+     - *"Material: Material composition not verified yet."*
+     - *"Care: Care instructions not verified yet."*
+     - *"Garment measurements not verified yet. Product-specific sizing table will be published once verified."*
+   - Generic measurement tables are suppressed unless product-specific measurements are supplied by the owner.
+
+2. **E2 — Reconciled Delivery, Shipping & Returns Policies**:
+   - Centralized delivery and return promises across `storeConfig`, `ProductPage`, `CartDrawer`, and `CheckoutView`.
+   - Eliminated contradictions between "calculated at checkout" and "Free nationwide delivery".
+   - Standardized nationwide promises:
+     - **Dispatch:** Orders dispatch within 24–48 hours upon confirmation.
+     - **Transit:** 3–5 business days nationwide upon confirmation (Free nationwide delivery).
+     - **Returns/Exchanges:** 7-day inspection and size-exchange policy upon delivery.
+   - Connected `#policies` in footer/header to a smooth in-page policy scroll rather than dead/null links.
+
+3. **E3 — Deliberate Size Selection Requirement**:
+   - Eliminated silent auto-preselection of variants (`selectedSize` initialized to `null` if multiple sizes exist).
+   - If a customer clicks *"Add to Shopping Bag"* without selecting an explicit size, the action is blocked, the cart drawer remains closed, and an inline `#size-selection-prompt` is displayed: *"Please select a size before adding to bag."*
+   - Selecting a size chip immediately dismisses the prompt, updates the label, and enables seamless cart addition.
+   - Valid variant deep links (`?variant=<id>`) correctly restore the customer's explicit choice.
+
+4. **E4 — Request Generation Guards & Metadata Cleanup**:
+   - Added `loadGeneration` counter in `ProductPage.js` to discard stale out-of-order route responses (e.g., rapid A→B navigation) and delayed related-product callbacks from overwriting active state.
+   - Implemented full `destroy()` lifecycle on `ProductPage`, unmounting observers, pausing media, detaching listeners, and nulling container references.
+   - Updated `app.js` to call `productPage.destroy()` on navigation away from product routes and reset all document metadata (`document.title`, `meta[name="description"]`, and `link[rel="canonical"]`) to the home root (`/`).
+
+5. **Journey 1 — Mobile Homepage Arrival & Hero Compactness**:
+   - Eliminated the bulky `.hero-catalog-status` diagnostic banner that pushed mobile hero content down.
+   - Reduced mobile `.hero-section` min-height from `55vh` to `45vh` and tightened padding to `var(--space-6)`.
+   - Adjusted fallback typography with responsive `clamp()` sizes.
+   - Customers landing on mobile (360px/390px) now immediately see the curated collections and garment catalog without excessive scrolling.
+
+6. **Journey 2 — Desktop Product Page Single-Unit Scroll**:
+   - Removed nested vertical scrollbar on `.product-page-details.is-sticky` (`max-height` and `overflow-y: auto` removed in `product-page.css`).
+   - The desktop product view now scrolls naturally as a single unified document with sticky purchase details anchored alongside the gallery stage.
+
+7. **Journey 3 — Cart Drawer Header & Lab Notice Offset**:
+   - Tracked `.checkout-lab-notice` bounding height dynamically into `--lab-notice-height` CSS custom property on resize.
+   - Made `.checkout-lab-notice` `position: sticky; top: 0; z-index: 10001;` so the mandatory SAMPLE label remains visible at all times.
+   - Positioned `.drawer`, `.drawer-backdrop`, and `.modal-container` with `top: var(--lab-notice-height, 0);`.
+   - Completely eliminated yellow lab notice overlap: the cart drawer header (*"Shopping Cart"*) and close button (*"✕"*) are 100% visible, accessible, and clickable.
+
+### Changed Files
+- `frontend/src/data/store-config.js`
+- `frontend/src/components/ProductPage.js`
+- `frontend/src/components/Hero.js`
+- `frontend/src/main.js`
+- `frontend/src/app.js`
+- `frontend/src/styles/hero.css`
+- `frontend/src/styles/product-page.css`
+- `frontend/src/styles/components.css`
+- `frontend/src/styles/main.css`
+- `frontend/tests/product-routing.test.js`
+- `scratch/verify_b1_gate.py`
+- `.context/frontend_redesign_progress.md`
+
+### Verification Evidence
+- **Frontend Unit Tests**: `npm.cmd test` → **126 passed, 0 failed across 16 test suites** (includes 3 new B1 unit tests for deliberate size requirement, E1 truthful fields/unverified states, and E4 out-of-order race guard).
+- **Production Bundle Build**: `npm.cmd run build` → **Passed, Vite 7.3.7, 35 modules in 2.56s**.
+- **Lab Container Packaging**: `docker compose -f compose.checkout-lab.yml up --build -d web` → Rebuilt and healthy on `127.0.0.1:13001`.
+- **Chrome CDP Automated Browser Gate (`scratch/verify_b1_gate.py`)**:
+  1. `Journey 1 (Mobile Home Compact Hero)`: PASS (`heroHeight: 380px`, `heroRatioToViewport: 0.45`, `hasDiagnosticBanner: false`).
+  2. `E1/E2 & Journey 2 (Truthful Fields, Unified Policies, Single Desktop Scroll)`: PASS (`hasNestedScrollbar: false`, `hasFabricatedCottonText: false`, `hasGenericSizeTable: false`, `honestMaterialUnverified: true`, `honestCareUnverified: true`, `honestSizingUnverified: true`, `hasUnifiedDispatchPolicy: true`, `hasUnifiedTransitPolicy: true`, `hasUnifiedReturnPolicy: true`).
+  3. `E3 (Deliberate Size Selection)`: PASS (`sizeCount: 2`, `hasPreselectedChip: false`, `promptVisible: true`, `cartDrawerRemainedClosed: true`, `promptHiddenNow: true`, `selectedSizeName: 'M'`).
+  4. `Journey 3 (Cart Drawer Clear of Lab Notice)`: PASS (`labNoticeHeight: 40px`, `drawerTop: 40px`, `headerTop: 40px`, `noOverlap: true`, `headerVisibleAndClear: true`, `drawerIsOpen: true`, `cartItemCount: 1`).
+  5. `E4 (Route Navigation & Metadata Cleanup)`: PASS (`titleRestored: true`, `canonicalRestored: true`, `descriptionRestored: true`, `productPageDetached: true`).
+- **Evidence Screenshots**:
+  - Mobile Home Compact Arrival: `.local/frontend-redesign/run_b1_gate/b1_mobile_home.png`
+  - Desktop Product Details & Single Scroll: `.local/frontend-redesign/run_b1_gate/b1_desktop_product_details.png`
+  - Deliberate Size Selection Prompt: `.local/frontend-redesign/run_b1_gate/b1_size_selection_prompt.png`
+  - Cart Drawer Lab Notice Offset: `.local/frontend-redesign/run_b1_gate/b1_cart_drawer_offset.png`
+  - Home Route Metadata Restored: `.local/frontend-redesign/run_b1_gate/b1_home_metadata_restored.png`
+  - JSON Evidence: `.local/frontend-redesign/run_b1_gate/b1_verification_results.json`
+

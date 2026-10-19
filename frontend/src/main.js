@@ -7,6 +7,16 @@ if (import.meta.env.VITE_CHECKOUT_LAB === 'true') {
   notice.className = 'checkout-lab-notice';
   notice.textContent = 'SAMPLE CHECKOUT LAB — simulated orders and payment verification only. Do not transfer real money.';
   document.body.prepend(notice);
+
+  const updateNoticeHeight = () => {
+    const h = notice.offsetHeight || 0;
+    document.documentElement.style.setProperty('--lab-notice-height', `${h}px`);
+  };
+  updateNoticeHeight();
+  window.addEventListener('resize', updateNoticeHeight);
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(updateNoticeHeight).observe(notice);
+  }
 }
 
 // Remote typography must not hold up a usable local store/dashboard.

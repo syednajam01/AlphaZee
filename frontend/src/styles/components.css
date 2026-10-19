@@ -244,7 +244,10 @@
 
 .drawer-backdrop {
   position: fixed;
-  inset: 0;
+  top: var(--lab-notice-height, 0);
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-color: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(2px);
   z-index: var(--z-overlay);
@@ -261,7 +264,7 @@
 /* Drawer Shell */
 .drawer {
   position: fixed;
-  top: 0;
+  top: var(--lab-notice-height, 0);
   right: 0;
   bottom: 0;
   width: 100%;
@@ -307,7 +310,10 @@
 /* Modal Shell */
 .modal-container {
   position: fixed;
-  inset: 0;
+  top: var(--lab-notice-height, 0);
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: var(--z-modal);
   display: flex;
   align-items: center;

@@ -15,22 +15,29 @@ export function createHero(onProductClick) {
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const saveData = navigator.connection && navigator.connection.saveData;
 
-  function renderFallback(message = 'No featured products yet. Browse the catalog below.') {
+  function renderFallback(message = null) {
+    const statusHtml = message ? `
+      <div class="hero-catalog-status" role="status" style="position: relative; z-index: 10; padding: 8px 16px; background: rgba(0, 0, 0, 0.45); font-size: 0.8125rem; display: flex; align-items: center; justify-content: space-between;">
+        <span>${escapeHtml(message)}</span>
+        <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" data-hero-retry>Retry</button>
+      </div>
+    ` : '';
+
     section.innerHTML = `
       <div class="hero-bg-container">
         <div class="hero-bg-media is-active" style="background: radial-gradient(circle at 70% 30%, #1A2621 0%, #0D1310 100%); width: 100%; height: 100%;"></div>
       </div>
       <div class="hero-overlay"></div>
       <div class="hero-motif" aria-hidden="true">AZ</div>
-      <div class="hero-catalog-status" role="status">${escapeHtml(message)}<button type="button" class="btn btn-secondary" data-hero-retry>Refresh featured products</button></div>
-      <div class="container hero-content-wrapper" style="position: relative; z-index: 2; padding-top: var(--space-16); padding-bottom: var(--space-16);">
+      ${statusHtml}
+      <div class="container hero-content-wrapper" style="position: relative; z-index: 2; padding-top: var(--space-6); padding-bottom: var(--space-6);">
         <div style="max-width: 640px;">
-          <span class="badge badge-accent hero-badge" style="margin-bottom: 16px;">Authentic Streetwear</span>
-          <h1 class="hero-title" style="font-size: 2.75rem; font-weight: 800; line-height: 1.15; margin-bottom: 16px; color: #FFFFFF;">
+          <span class="badge badge-accent hero-badge" style="margin-bottom: var(--space-2);">Authentic Streetwear</span>
+          <h1 class="hero-title" style="font-size: clamp(1.85rem, 5vw, 2.75rem); font-weight: 800; line-height: 1.15; margin-bottom: var(--space-3); color: #FFFFFF;">
             Architectural Cuts.<br>Heavyweight Drape.
           </h1>
-          <p class="hero-desc" style="font-size: 1.125rem; color: rgba(255, 255, 255, 0.85); line-height: 1.6; margin-bottom: 24px;">
-            Minimalist streetwear crafted in Pakistan. Premium cotton, structured fits, and zero compromises.
+          <p class="hero-desc" style="font-size: clamp(0.95rem, 2.5vw, 1.125rem); color: rgba(255, 255, 255, 0.85); line-height: 1.5; margin-bottom: var(--space-5); max-width: 520px;">
+            Minimalist streetwear crafted in Pakistan. Architectural cuts, structured fits, and zero compromises.
           </p>
           <div class="hero-cta-group">
             <a href="#featured" class="btn btn-hero">Explore Collection</a>
