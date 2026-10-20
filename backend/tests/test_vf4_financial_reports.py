@@ -172,7 +172,6 @@ def test_golden_fixture_1_delivered_cod_economics_and_cash(
         discount_amount_minor=0,
         total_minor=200000,  # PKR 2,000
         placed_at=datetime.now(timezone.utc),
-        delivered_at=datetime.now(timezone.utc),
     )
     db_session.add(order)
     db_session.flush()
@@ -181,10 +180,14 @@ def test_golden_fixture_1_delivered_cod_economics_and_cash(
         id=uuid.uuid4(),
         order_id=order.id,
         variant_id=var.id,
+        product_title_snapshot="VF4 Embroidered Tunic",
+        variant_sku_snapshot=var.sku,
+        variant_size_snapshot=var.size,
+        variant_color_snapshot=var.color,
         quantity=1,
         unit_price_minor=200000,  # PKR 2,000
         unit_cost_minor=120000,  # PKR 1,200
-        total_minor=200000,
+        line_total_minor=200000,
         ownership_source="vendor_consignment",
         fulfillment_kind="original",
     )
@@ -235,9 +238,8 @@ def test_golden_fixture_1_delivered_cod_economics_and_cash(
         incurred_date=date.today(),
         paid_date=date.today(),
         payment_method="cash",
-        payee_name="Local Polybag Supplier",
+        payee="Local Polybag Supplier",
         reference="PKG-CASH-01",
-        is_paid=True,
     )
     db_session.add(pkg_exp)
 
@@ -370,10 +372,14 @@ def test_golden_fixture_2_rto_before_delivery(
         id=uuid.uuid4(),
         order_id=order.id,
         variant_id=var.id,
+        product_title_snapshot="VF4 Embroidered Tunic",
+        variant_sku_snapshot=var.sku,
+        variant_size_snapshot=var.size,
+        variant_color_snapshot=var.color,
         quantity=1,
         unit_price_minor=200000,
         unit_cost_minor=120000,
-        total_minor=200000,
+        line_total_minor=200000,
         ownership_source="vendor_consignment",
         fulfillment_kind="original",
     )
@@ -443,7 +449,6 @@ def test_golden_fixture_3_customer_return_and_cogs_reversal(
         discount_amount_minor=0,
         total_minor=200000,
         placed_at=datetime.now(timezone.utc),
-        delivered_at=datetime.now(timezone.utc),
         payment_verified_at=datetime.now(timezone.utc),
     )
     db_session.add(order)
@@ -453,10 +458,14 @@ def test_golden_fixture_3_customer_return_and_cogs_reversal(
         id=uuid.uuid4(),
         order_id=order.id,
         variant_id=var.id,
+        product_title_snapshot="VF4 Embroidered Tunic",
+        variant_sku_snapshot=var.sku,
+        variant_size_snapshot=var.size,
+        variant_color_snapshot=var.color,
         quantity=1,
         unit_price_minor=200000,
         unit_cost_minor=120000,
-        total_minor=200000,
+        line_total_minor=200000,
         ownership_source="vendor_consignment",
         fulfillment_kind="original",
     )
@@ -466,10 +475,11 @@ def test_golden_fixture_3_customer_return_and_cogs_reversal(
         id=uuid.uuid4(),
         order_id=order.id,
         order_line_id=line.id,
-        return_number="RET-VF4-001",
         return_type="refund_bank_transfer",
+        reason="size_too_small",
         status="completed",
         quantity=1,
+        received_quantity=1,
         refund_amount_minor=200000,  # PKR 2,000 refund
         sellable_quantity=1,  # 1 unit returned sellable
         damaged_quantity=0,
@@ -485,9 +495,8 @@ def test_golden_fixture_3_customer_return_and_cogs_reversal(
         amount_minor=25000,  # PKR 250
         incurred_date=date.today(),
         payment_method="cash",
-        is_paid=True,
         paid_date=date.today(),
-        payee_name="Rider Express Return",
+        payee="Rider Express Return",
     )
     db_session.add(ret_exp)
     db_session.commit()
@@ -520,7 +529,6 @@ def test_order_economics_api_and_formula_escaping(
         discount_amount_minor=10000,
         total_minor=205000,  # 2000 + 150 - 100 = 2050
         placed_at=datetime.now(timezone.utc),
-        delivered_at=datetime.now(timezone.utc),
     )
     db_session.add(order)
     db_session.flush()
@@ -529,10 +537,14 @@ def test_order_economics_api_and_formula_escaping(
         id=uuid.uuid4(),
         order_id=order.id,
         variant_id=var.id,
+        product_title_snapshot="VF4 Embroidered Tunic",
+        variant_sku_snapshot=var.sku,
+        variant_size_snapshot=var.size,
+        variant_color_snapshot=var.color,
         quantity=1,
         unit_price_minor=200000,
         unit_cost_minor=120000,
-        total_minor=200000,
+        line_total_minor=200000,
         ownership_source="vendor_consignment",
         fulfillment_kind="original",
     )

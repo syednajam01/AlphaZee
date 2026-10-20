@@ -24,6 +24,13 @@ const fonts = document.getElementById('brand-fonts');
 if (fonts?.sheet) fonts.media = 'all';
 else fonts?.addEventListener('load', () => { fonts.media = 'all'; }, { once: true });
 
-startStorefront(() => window.location.pathname === '/admin' || window.location.pathname.startsWith('/admin/')
-  ? import('./components/AdminDashboard.js').then(module => ({ initApp: module.initAdminDashboard }))
-  : import('./app.js'));
+startStorefront(() => {
+  const path = window.location.pathname;
+  if (path === '/admin' || path.startsWith('/admin/')) {
+    return import('./components/AdminDashboard.js').then(module => ({ initApp: module.initAdminDashboard }));
+  }
+  if (path === '/vendor' || path.startsWith('/vendor/')) {
+    return import('./components/VendorPortal.js').then(module => ({ initApp: module.initVendorPortal }));
+  }
+  return import('./app.js');
+});

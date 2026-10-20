@@ -230,14 +230,10 @@ def get_period_financial_report(
     delivered_filter = [delivered]
     if start_dt:
         order_filter.append(Order.placed_at >= start_dt)
-        delivered_filter.append(
-            or_(Order.delivered_at >= start_dt, Order.placed_at >= start_dt)
-        )
+        delivered_filter.append(Order.placed_at >= start_dt)
     if end_dt:
         order_filter.append(Order.placed_at <= end_dt)
-        delivered_filter.append(
-            or_(Order.delivered_at <= end_dt, Order.placed_at <= end_dt)
-        )
+        delivered_filter.append(Order.placed_at <= end_dt)
 
     total_orders_count = _sum(db, select(func.count(Order.id)).where(and_(*order_filter)))
     delivered_orders_count = _sum(
@@ -479,7 +475,7 @@ def get_period_financial_report(
 
     # Paid business expenses via bank/cash (not courier deductions)
     paid_exp_filter = [
-        BusinessExpense.is_paid == True,
+        BusinessExpense.paid_date.is_not(None),
         BusinessExpense.payment_method != "courier_deduction",
     ]
     if start_date:
@@ -774,7 +770,7 @@ def get_order_economics_list(
                 "order_id": ord_obj.id,
                 "order_number": ord_obj.order_number,
                 "placed_at": ord_obj.placed_at,
-                "delivered_at": ord_obj.delivered_at,
+                "delivered_at": shipment.delivered_at if shipment else None,
                 "order_status": ord_obj.order_status,
                 "payment_method": ord_obj.payment_method,
                 "payment_status": ord_obj.payment_status,

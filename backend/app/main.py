@@ -30,6 +30,8 @@ from app.api.v1 import owner_stock as owner_stock_router
 from app.api.v1 import supplier_finance as supplier_finance_router
 from app.api.v1 import business_expenses as business_expenses_router
 from app.api.v1 import financial_reports as financial_reports_router
+from app.api.v1 import vendor_portal as vendor_portal_router
+from app.api.v1 import admin_vendor_users as admin_vendor_users_router
 from app.config import settings
 
 # ── Application instance ──────────────────────────────────────────────────────
@@ -74,13 +76,15 @@ app.include_router(owner_stock_router.router, prefix='/api/v1')
 app.include_router(supplier_finance_router.router, prefix="/api/v1")
 app.include_router(business_expenses_router.router, prefix="/api/v1")
 app.include_router(financial_reports_router.router, prefix="/api/v1")
+app.include_router(vendor_portal_router.router, prefix="/api/v1")
+app.include_router(admin_vendor_users_router.router, prefix="/api/v1")
 app.add_middleware(media_router.LimitedUploadMiddleware)
 
 
 @app.middleware('http')
 async def private_owner_responses(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith(('/api/v1/auth/', '/api/v1/admin/',
+    if request.url.path.startswith(('/api/v1/auth/', '/api/v1/vendor/', '/api/v1/admin/',
                                     '/api/v1/orders', '/api/v1/returns/')):
         response.headers['Cache-Control'] = 'no-store'
         response.headers['Pragma'] = 'no-cache'
@@ -90,7 +94,7 @@ async def private_owner_responses(request: Request, call_next):
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, error: RequestValidationError):
-    if request.url.path.startswith('/api/v1/auth/'):
+    if request.url.path.startswith(('/api/v1/auth/', '/api/v1/vendor/auth/')):
         # Do not reflect passwords from invalid request bodies in errors.
         return JSONResponse({'detail': 'Invalid login request'}, status_code=422)
     return await request_validation_exception_handler(request, error)

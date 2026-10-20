@@ -397,4 +397,72 @@ Real browser automation executed via Chrome DevTools Protocol (CDP) against `htt
 | `vf3_06` | `vf3_06_expenses_recorded_summary.png` | Both Packaging (PKR 1,500) and RTO Transport (PKR 350) recorded. KPIs update dynamically: Total Incurred, Paid, and AlphaZee Freight & RTO. |
 | `vf3_07` | `vf3_07_expenses_filtered_rto.png` | Category filter set to **RTO Return Transport (AlphaZee-Borne)**. Table filters to show only TRX-RTO-9941. |
 
+---
+
+## 7. Phase VF4: Period Financial Reports, Per-Order Economics & Escaped CSV Exports
+
+### 7.1 Scope & Architecture
+Phase VF4 delivers authoritative financial intelligence, period P&L statements, per-order margin breakdowns, cash flow reconciliation, and formula-injection-safe CSV export capabilities:
+1. **P&L & Operating Statement (`/api/v1/admin/reports/period`)**:
+   - **Revenue**: Gross Delivered Sales less Customer Discounts plus Customer Shipping Charged less Completed Sales Reversals (Returns).
+   - **Cost of Goods Sold (COGS)**: Wholesale product cost snapshot less Sellable Return Restocks (COGS Reversals).
+   - **Margin & Contribution**: Contribution before overhead and gross margin percentage.
+   - **Logistics & Overhead**: Outbound Courier Freight, RTO Transport Freight (100% AlphaZee-borne), Customer Return Freight (100% AlphaZee-borne), Packaging & Boxes, Advertising & Marketing, Platform & Hosting, Salaries & Wages, Office & Other Overhead.
+   - **Net Operating Result**: Operating result in integer paisas, operating margin percentage, and mandatory statutory disclaimer (*"Net Operating Result is subject to unrecorded business expenses, tax liabilities, and pending courier settlements. Never treat as final audited net profit."*).
+2. **Cash Movement & Account Reconciliation**:
+   - **Cash Inflows**: Bank customer prepayments cleared, Courier COD cash remitted into bank, and Supplier refunds received.
+   - **Cash Outflows**: Supplier payments disbursed, Customer refunds paid, Direct cash & bank expenses paid, and Courier freight deductions settled.
+   - **Net Cash Movement**: Inflows less Outflows.
+   - **Outstanding Receivables & Liabilities**: Courier-held COD (unremitted cash), Outstanding supplier payables, and Customer refund liabilities payable.
+3. **Per-Order Economics & Unit Margins (`/api/v1/admin/reports/orders`)**:
+   - Paginated order list with search, status filters, and date boundaries.
+   - Per-order customer total, wholesale COGS, outbound shipping cost, RTO courier cost, total logistics, supplier charges, supplier payments, supplier balance due, and estimated contribution.
+   - Expandable line-item inspection: product title, variant SKU/size/color, quantity, unit cost snapshot, unit price, line contribution, and stock ownership source (`vendor_consigned` vs `alphazee_owned`).
+4. **Formula Injection Mitigation (CSV Exports)**:
+   - Export endpoints: `GET /admin/reports/orders/export` and `GET /admin/reports/period/export`.
+   - All cell values starting with `=, +, -, @, \t, \r` are prepended with a single quote (`'`) to neutralize CSV injection attacks when opened in Microsoft Excel or LibreOffice Calc.
+5. **Asia/Karachi Timezone Boundaries**:
+   - All reporting date boundaries default to `Asia/Karachi` (UTC+5) with cross-platform fallback handling on Windows.
+
+### 7.2 Backend Implementation
+- **Schemas** ([backend/app/schemas/financial_report.py](file:///f:/AlphaZee/backend/app/schemas/financial_report.py)):
+  - `PeriodFinancialReportResponse`, `OrderEconomicsListResponse`, `OrderEconomicsItem`, `OrderEconomicsLineItem`.
+- **Service** ([backend/app/services/financial_report.py](file:///f:/AlphaZee/backend/app/services/financial_report.py)):
+  - `get_period_financial_report()`, `get_order_economics_list()`, `export_order_economics_csv()`, `export_period_pnl_csv()`, `escape_csv_cell()`.
+- **API Router** ([backend/app/api/v1/financial_reports.py](file:///f:/AlphaZee/backend/app/api/v1/financial_reports.py)):
+  - Mounted on `/api/v1/admin/reports` with session-based owner authentication.
+
+### 7.3 Frontend Implementation
+- **API Utilities** ([frontend/src/utils/api.js](file:///f:/AlphaZee/frontend/src/utils/api.js)):
+  - `fetchPeriodFinancialReport()`, `fetchOrderEconomics()`, `getOrderEconomicsCsvUrl()`, `getPeriodReportCsvUrl()`.
+- **Component** ([frontend/src/components/admin/FinancialReports.js](file:///f:/AlphaZee/frontend/src/components/admin/FinancialReports.js)):
+  - Quick period presets (`All Time`, `Today`, `This Month`, `Last Month`, `Custom Date Range`) with Asia/Karachi notice.
+  - 5-column Executive KPI summary cards (Delivered Net Revenue, Net Wholesale COGS, Contribution Before Overhead, Evidenced Logistics & Overhead, Net Operating Result).
+  - Period Income Statement (P&L) card and Realized Cash Movement & Balance Sheet reconciliation card.
+  - Per-order economics table with line inspection toggle showing item ownership (`Vendor Consigned` vs `AlphaZee Owned`), wholesale cost, and line contribution.
+  - Export P&L Statement (CSV) and Export Orders CSV buttons.
+- **Admin Integration** ([frontend/src/components/AdminConsole.js](file:///f:/AlphaZee/frontend/src/components/AdminConsole.js)):
+  - Wired into `renderAnalyticsTab` under the **Reports & Analytics** / **P&L & Analytics** tab.
+
+### 7.4 Verification Evidence
+| Test / Check | Scope | Result | Execution Time |
+| :--- | :--- | :--- | :--- |
+| `backend/tests/test_vf4_financial_reports.py` | 5 Golden Fixtures: COD economics, RTO freight, customer return COGS reversal, order economics & CSV escaping | **5 / 5 PASS (100%)** | 16.82s |
+| `backend/tests/test_vf3_stock_and_expenses.py` | Stock ownership, responsibility toggle, reassignment guard, expense validation & KPIs | **9 / 9 PASS (100%)** | 26.68s |
+| `backend/tests/test_vf1_supplier_finance.py` | Agreements, charges, credit notes, reversals, fulfillment triggers | **7 / 7 PASS (100%)** | 25.40s |
+| `backend/tests/test_vf2_supplier_finance.py` | Payments, FIFO/explicit allocation, statements, partials, advances | **9 / 9 PASS (100%)** | 28.15s |
+| **Full VF Backend Regression (VF1 + VF2 + VF3 + VF4)** | Complete vendor stock & financial report suite | **30 / 30 PASS (100%)** | 25.00s |
+| Frontend Test Suite (`npm test`) | Unit and integration tests including VF4 API client and CSV helpers | **137 / 137 PASS (100%)** | 9.25s |
+| Frontend Production Build (`npm run build`) | Vite v7.3.7 production bundle | **SUCCESS (0 errors)** | 5.59s |
+
+### 7.5 Browser Verification Evidence (Checkout Lab)
+Real browser automation executed via Chrome DevTools Protocol (CDP) against `http://127.0.0.1:13001` with lab owner authentication:
+
+| Screenshot | Artifact / File | Description & Assertion |
+| :--- | :--- | :--- |
+| `vf4_01` | `vf4_01_pnl_summary.png` | Reports & Analytics tab: 5 KPI summary cards, period selector with Asia/Karachi timezone indicator, and Income Statement (P&L) detailing gross sales, discounts, net revenue, wholesale COGS, and AlphaZee-borne transport expenses. |
+| `vf4_02` | `vf4_02_cash_reconciliation.png` | Cash Movement & Account Reconciliation: Realized cash inflows (bank prepayments, COD remitted), cash outflows (supplier payments, refunds paid, expenses paid), net cash movement, and outstanding courier-held COD / supplier liabilities. |
+| `vf4_03` | `vf4_03_order_economics.png` | Per-Order Economics table: Expanded line-item inspection showing item variant, ownership source (`Vendor Consigned` with 0 liability note for AlphaZee-owned items), unit cost snapshot (PKR 2,000), unit price (PKR 4,800), and line contribution (PKR 2,800). |
+| `vf4_04` | `vf4_04_csv_export.png` | Top toolbar export actions: Verified `Export P&L Statement (CSV)` and `Export Orders CSV` endpoints with formula injection mitigation and exact headers. |
+
 

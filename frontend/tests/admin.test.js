@@ -32,6 +32,10 @@ import {
   logoutOwner,
   fetchOwnerSession,
   removeLegacyAdminCredentials,
+  fetchPeriodFinancialReport,
+  fetchOrderEconomics,
+  getOrderEconomicsCsvUrl,
+  getPeriodReportCsvUrl,
 } from '../src/utils/api.js';
 
 describe('Admin API Client Methods', () => {
@@ -414,6 +418,88 @@ describe('Admin API Client Methods', () => {
     assert.deepEqual(JSON.parse(calls[1].options.body), { sellable_quantity: 1, damaged_quantity: 1, notes: 'Torn' });
     assert.ok(calls[2].url.endsWith('/shipments/ship-1/stock-reconciliation'));
     assert.equal(JSON.parse(calls[3].options.body).lines[0].physical_deducted, true);
+  });
+
+  it('VF4: fetches period financial reports, order economics, and builds export URLs', async () => {
+    let capturedUrl = null;
+    global.fetch = async (url) => {
+      capturedUrl = url;
+      if (url.includes('/admin/reports/period')) {
+        return {
+          ok: true,
+          json: async () => ({
+            gross_revenue_minor: 200000,
+            net_revenue_minor: 200000,
+            formatted_net_revenue: 'PKR 2,000',
+            gross_cogs_minor: 120000,
+            net_cogs_minor: 120000,
+            formatted_net_cogs: 'PKR 1,200',
+            total_freight_minor: 35000,
+            total_overhead_minor: 5000,
+            contribution_before_overhead_minor: 80000,
+            net_operating_result_minor: 40000,
+            formatted_net_operating_result: 'PKR 400',
+            net_cash_movement_minor: 55000,
+            courier_held_cod_minor: 0,
+            supplier_liabilities_minor: 0,
+          }),
+        };
+      }
+      if (url.includes('/admin/reports/orders')) {
+        return {
+          ok: true,
+          json: async () => ({
+            orders: [
+              {
+                order_id: 'ord-101',
+                order_number: '1001',
+                order_status: 'delivered',
+                customer_total_minor: 200000,
+                wholesale_cogs_minor: 120000,
+                estimated_contribution_minor: 55000,
+                formatted_contribution: 'PKR 550',
+                lines: [
+                  {
+                    line_id: 'l-1',
+                    product_title: 'Linen Kurta',
+                    ownership_source: 'vendor_consigned',
+                    unit_cost_minor: 120000,
+                    line_contribution_minor: 55000,
+                  },
+                ],
+              },
+            ],
+            total_orders: 1,
+            page: 1,
+            limit: 50,
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const period = await fetchPeriodFinancialReport({
+      start_date: '2026-10-01',
+      end_date: '2026-10-20',
+      timezone: 'Asia/Karachi',
+    });
+    assert.ok(capturedUrl.includes('/admin/reports/period'));
+    assert.ok(capturedUrl.includes('start_date=2026-10-01'));
+    assert.ok(capturedUrl.includes('timezone=Asia%2FKarachi'));
+    assert.equal(period.formatted_net_operating_result, 'PKR 400');
+
+    const orders = await fetchOrderEconomics({ status: 'delivered', limit: 50 });
+    assert.ok(capturedUrl.includes('/admin/reports/orders'));
+    assert.ok(capturedUrl.includes('status=delivered'));
+    assert.equal(orders.orders[0].lines[0].ownership_source, 'vendor_consigned');
+
+    const pnlCsvUrl = getPeriodReportCsvUrl({ start_date: '2026-10-01', end_date: '2026-10-20' });
+    assert.ok(pnlCsvUrl.includes('/admin/reports/period/export'));
+    assert.ok(pnlCsvUrl.includes('start_date=2026-10-01'));
+
+    const ordersCsvUrl = getOrderEconomicsCsvUrl({ start_date: '2026-10-01' });
+    assert.ok(ordersCsvUrl.includes('/admin/reports/orders/export'));
+    assert.ok(ordersCsvUrl.includes('start_date=2026-10-01'));
   });
 });
 

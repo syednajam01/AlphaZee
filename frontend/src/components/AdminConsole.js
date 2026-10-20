@@ -53,7 +53,9 @@ import { mountCatalogSection } from './admin/CatalogWorkspace.js';
 import { mountStockHolds } from './admin/StockHolds.js';
 import {orderEvidence, returnEvidence, mountFundsReview, mountAccessRecovery} from './admin/OrderEvidence.js';
 import { createSupplierFinanceView } from './admin/SupplierFinance.js';
+import { createVendorUsersModal } from './admin/VendorUsersModal.js';
 import { renderBusinessExpenses } from './admin/BusinessExpenses.js';
+import { renderFinancialReports } from './admin/FinancialReports.js';
 
 export function createAdminConsoleModal({ page = false, initialTab = 'overview', onNavigate = () => {} } = {}) {
   const modal = document.createElement('div');
@@ -1494,9 +1496,12 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           </span>
         </td>
         <td style="padding: 12px 8px; color: rgba(255, 255, 255, 0.6);">${escapeHtml(s.notes || '—')}</td>
-        <td style="padding: 12px 8px; text-align: right;">
-          <button type="button" class="btn btn-manage-finance" data-supplier-id="${s.id}" style="background: rgba(20, 92, 68, 0.4); border: 1px solid #145C44; color: #FFF; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+        <td style="padding: 12px 8px; text-align: right; white-space: nowrap;">
+          <button type="button" class="btn btn-manage-finance" data-supplier-id="${s.id}" style="background: rgba(20, 92, 68, 0.4); border: 1px solid #145C44; color: #FFF; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-right: 6px;">
             Finance &amp; Ledger
+          </button>
+          <button type="button" class="btn btn-manage-stock-users" data-supplier-id="${s.id}" style="background: rgba(59, 130, 246, 0.25); border: 1px solid #3B82F6; color: #93C5FD; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+            🔑 Stock Logins
           </button>
         </td>
       </tr>
@@ -1514,7 +1519,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
                   <th style="padding: 8px;">Identifier Slug</th>
                   <th style="padding: 8px;">Status</th>
                   <th style="padding: 8px;">Terms / Notes</th>
-                  <th style="padding: 8px; text-align: right;">Ledger</th>
+                  <th style="padding: 8px; text-align: right;">Actions</th>
                 </tr>
               </thead>
               <tbody>${rowsHtml.length ? rowsHtml : '<tr><td colspan="5" style="padding: 20px 8px; text-align: center; color: rgba(255,255,255,0.4);">No suppliers registered yet.</td></tr>'}</tbody>
@@ -1621,130 +1626,29 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         }
       });
     });
+
+    // Wire Stock Logins modal buttons
+    container.querySelectorAll('.btn-manage-stock-users').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const supId = btn.getAttribute('data-supplier-id');
+        const sup = suppliers.find(s => String(s.id) === String(supId));
+        if (sup) {
+          const usersModal = createVendorUsersModal(sup, {
+            onClose: () => {
+              if (activeTab === 'suppliers') renderSuppliersTab(container, viewGeneration);
+            }
+          });
+          document.body.appendChild(usersModal);
+        }
+      });
+    });
   }
 
-  // 7. Analytics & Marketing Tab
+  // 7. Analytics & Financial Reports Tab (VF4)
   async function renderAnalyticsTab(container, view) {
-    const [data, marketing] = await Promise.all([
-      fetchAdminProfitLoss(),
-      fetchAdminMarketingAnalytics(),
-    ]);
-    if (view !== viewGeneration) return;
-
-    const mktRows = (marketing.channels || []).map(c => `
-      <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-        <td style="padding: 10px 8px; font-weight: 700; color: #38BDF8;">${escapeHtml(c.utm_source)}</td>
-        <td style="padding: 10px 8px;">${escapeHtml(c.utm_medium)}</td>
-        <td style="padding: 10px 8px;">${escapeHtml(c.utm_campaign)}</td>
-        <td style="padding: 10px 8px; font-weight: 600;">${c.orders_count}</td>
-        <td style="padding: 10px 8px; font-weight: 700; color: #4ADE80;">${escapeHtml(c.formatted_revenue)}</td>
-        <td style="padding: 10px 8px; color: #F59E0B;">${escapeHtml(c.formatted_discount)}</td>
-      </tr>
-    `).join('');
-
-    container.innerHTML = `
-      <p>All-time operational figures from recorded orders, shipments and payments; estimated contribution excludes unrecorded overhead. Marketing order value includes undelivered orders.</p>
-      ${data.total_orders_count === 0 ? '<p role="status">No active orders currently contribute to this report. Recorded cash and historical evidence remain separate.</p>' : ''}
-      <div class="admin-report-summary" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
-        
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Delivered Sales</div>
-          <div style="font-size: 1.5rem; font-weight: 800; color: #4ADE80;">${escapeHtml(data.formatted_gross_revenue)}</div>
-          <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Delivered order value; bank prepayments are reported separately</div>
-        </div>
-
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Wholesale COGS</div>
-          <div style="font-size: 1.5rem; font-weight: 800; color: #F59E0B;">${escapeHtml(data.formatted_cogs)}</div>
-          <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Supplier product cost snapshot</div>
-        </div>
-
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Estimated Contribution</div>
-          <div style="font-size: 1.5rem; font-weight: 800; color: #38BDF8;">${escapeHtml(data.formatted_gross_profit)}</div>
-          <div style="font-size: 0.7rem; color: #38BDF8; font-weight: 700; margin-top: 4px;">${data.gross_margin_percent}% after recorded product/courier costs; excludes other overhead</div>
-        </div>
-
-      </div>
-
-      <div style="background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); padding: 16px; margin-bottom: 20px;">
-        <h4 style="font-size: .8125rem; margin: 0 0 10px;">Sales and cash reconciliation · all-time PKR</h4>
-        <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; font-size: .8rem;">
-          <div>Order value: ${formatPkr(data.order_value_minor)}</div>
-          <div>Delivered sales: ${formatPkr(data.delivered_sales_minor)}</div>
-          <div>Bank payments verified: ${formatPkr(data.bank_customer_payments_minor)}</div>
-          <div>COD collected by couriers: ${formatPkr(data.cod_collected_minor)}</div>
-          <div>COD receipts cleared in bank: ${formatPkr(data.cod_remitted_minor)}</div>
-          <div>Documented courier deductions: ${formatPkr(data.courier_deductions_minor)}</div>
-          <div>COD outstanding with couriers: ${formatPkr(data.courier_held_cod_minor)}</div>
-          <div>Completed refund liabilities: ${formatPkr(data.sales_reversals_minor)}</div>
-          <div>Refunds actually paid: ${formatPkr(data.refund_paid_minor)}</div>
-          <div>Refunds still payable: ${formatPkr(data.refund_outstanding_minor)}</div>
-          <div>Business cash after refunds: ${formatPkr(data.business_cash_received_minor)}</div>
-          <div>Sellable return COGS reversal: ${formatPkr(data.cogs_reversals_minor)}</div>
-          <div>Other evidenced deductions: ${formatPkr(data.other_deductions_minor)}</div>
-        </div>
-      </div>
-
-      <div class="admin-report-secondary" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
-        
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <h4 style="font-size: 0.8125rem; font-weight: 700; color: #FFFFFF; margin: 0 0 10px 0;">Courier Costs & RTO Analytics</h4>
-          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-            <span style="color: rgba(255, 255, 255, 0.7);">Total Courier Expenses:</span>
-            <strong style="color: #F87171;">${escapeHtml(data.formatted_courier_expenses)}</strong>
-          </div>
-          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-            <span style="color: rgba(255, 255, 255, 0.7);">Outbound Delivery Fees:</span>
-            <span>${formatPkr(data.outbound_courier_cost_minor)}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-            <span style="color: rgba(255, 255, 255, 0.7);">RTO Return Penalties:</span>
-            <span style="color: #F87171;">${formatPkr(data.rto_courier_cost_minor)}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.8125rem;">
-            <span style="color: rgba(255, 255, 255, 0.7);">Return-to-Origin (RTO) Rate:</span>
-            <strong style="color: ${data.rto_rate_percent > 20 ? '#F87171' : '#4ADE80'};">${data.rto_rate_percent}% (${data.rto_shipments_count} / ${data.total_shipments_count} parcels)</strong>
-          </div>
-        </div>
-
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <h4 style="font-size: 0.8125rem; font-weight: 700; color: #FFFFFF; margin: 0 0 10px 0;">COD Cash Remittance Tracking</h4>
-          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-            <span style="color: rgba(255, 255, 255, 0.7);">Pending Courier Remittance:</span>
-            <strong style="color: #F59E0B;">${formatPkr(data.cod_pending_remittance_minor)}</strong>
-          </div>
-          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-            <span style="color: rgba(255, 255, 255, 0.7);">Cleared in Bank Account:</span>
-            <strong style="color: #4ADE80;">${formatPkr(data.cod_remitted_minor)}</strong>
-          </div>
-          <p style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); margin: 12px 0 0 0;">
-            Record actual courier receipts and evidenced deductions. Payout timing depends on your courier agreement; outstanding amounts remain visible until settled.
-          </p>
-        </div>
-
-      </div>
-
-      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-        <h4 style="font-size: 0.8125rem; font-weight: 700; color: #FFFFFF; margin: 0 0 10px 0;">Marketing Attribution & Campaign Conversion (UTM)</h4>
-        <div style="overflow-x: auto;">
-          <table style="width: 100%; border-collapse: collapse; text-align: left;">
-            <thead>
-              <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
-                <th style="padding: 8px;">Source</th>
-                <th style="padding: 8px;">Medium</th>
-                <th style="padding: 8px;">Campaign</th>
-                <th style="padding: 8px;">Orders</th>
-                <th style="padding: 8px;">Order value (not cash)</th>
-                <th style="padding: 8px;">Discounts Given</th>
-              </tr>
-            </thead>
-            <tbody>${mktRows.length ? mktRows : '<tr><td colspan="6" style="padding: 20px 8px; text-align: center; color: rgba(255,255,255,0.4);">No attribution data recorded yet.</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
+    await renderFinancialReports(container, view);
   }
+
 
   async function open() {
     if (!page) overlay.open();

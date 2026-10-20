@@ -8,6 +8,8 @@
 const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) || '/api/v1';
 let ownerCsrfToken = null;
 const ownerExpiryListeners = new Set();
+let vendorCsrfToken = null;
+const vendorExpiryListeners = new Set();
 
 export function removeLegacyAdminCredentials() {
   if (typeof window === 'undefined') return;
@@ -28,6 +30,17 @@ function forgetOwnerSession() {
   if (hadSession) ownerExpiryListeners.forEach(listener => listener());
 }
 
+export function onVendorSessionExpired(listener) {
+  vendorExpiryListeners.add(listener);
+  return () => vendorExpiryListeners.delete(listener);
+}
+
+function forgetVendorSession() {
+  const hadSession = vendorCsrfToken !== null;
+  vendorCsrfToken = null;
+  if (hadSession) vendorExpiryListeners.forEach(listener => listener());
+}
+
 export async function loginOwner(username, password) {
   const session = await request('/auth/login', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -46,6 +59,30 @@ export async function fetchOwnerSession() {
 export async function logoutOwner() {
   await request('/auth/logout', { method: 'POST' });
   forgetOwnerSession();
+}
+
+export async function loginVendor(username, password) {
+  const session = await request('/vendor/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  vendorCsrfToken = session.csrf_token;
+  return session;
+}
+
+export async function fetchVendorSession() {
+  const session = await request('/vendor/auth/me', { cache: 'no-store' });
+  vendorCsrfToken = session.csrf_token;
+  return session;
+}
+
+export async function logoutVendor() {
+  try {
+    await request('/vendor/auth/logout', { method: 'POST' });
+  } finally {
+    forgetVendorSession();
+  }
 }
 
 export class ApiError extends Error {
@@ -70,6 +107,10 @@ async function request(endpoint, options = {}) {
       && !['GET', 'HEAD', 'OPTIONS'].includes(method) && ownerCsrfToken) {
     headers['X-CSRF-Token'] = ownerCsrfToken;
   }
+  if ((endpoint.startsWith('/vendor') && endpoint !== '/vendor/auth/login')
+      && !['GET', 'HEAD', 'OPTIONS'].includes(method) && vendorCsrfToken) {
+    headers['X-CSRF-Token'] = vendorCsrfToken;
+  }
 
   try {
     const res = await fetch(url, {
@@ -79,8 +120,12 @@ async function request(endpoint, options = {}) {
     });
 
     if (!res.ok) {
-      if (res.status === 401 && (endpoint.startsWith('/admin') || endpoint === '/auth/session' || endpoint === '/auth/logout')) {
-        forgetOwnerSession();
+      if (res.status === 401) {
+        if (endpoint.startsWith('/admin') || endpoint === '/auth/session' || endpoint === '/auth/logout') {
+          forgetOwnerSession();
+        } else if (endpoint.startsWith('/vendor')) {
+          forgetVendorSession();
+        }
       }
       let errorData = null;
       try {
@@ -1030,6 +1075,184 @@ export async function fetchBusinessExpenseSummary(params = {}) {
   const qStr = query.toString();
   return request(`/admin/expenses/summary${qStr ? `?${qStr}` : ''}`);
 }
+
+/**
+ * Fetch period financial statement, P&L, operating results, and cash reconciliation.
+ * @param {Object} params { start_date, end_date, timezone }
+ */
+export async function fetchPeriodFinancialReport(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== null && val !== '') {
+      query.append(key, val);
+    }
+  }
+  const qStr = query.toString();
+  return request(`/admin/reports/period${qStr ? `?${qStr}` : ''}`);
+}
+
+/**
+ * Fetch per-order economics list with line-item margins and supplier costs.
+ * @param {Object} params { start_date, end_date, order_id, status, search, limit, offset }
+ */
+export async function fetchOrderEconomics(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== null && val !== '') {
+      query.append(key, val);
+    }
+  }
+  const qStr = query.toString();
+  return request(`/admin/reports/orders${qStr ? `?${qStr}` : ''}`);
+}
+
+/**
+ * Get CSV export URL for order economics.
+ * @param {Object} params { start_date, end_date }
+ */
+export function getOrderEconomicsCsvUrl(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== null && val !== '') {
+      query.append(key, val);
+    }
+  }
+  const qStr = query.toString();
+  return `${API_BASE}/admin/reports/orders/export${qStr ? `?${qStr}` : ''}`;
+}
+
+/**
+ * Get CSV export URL for period financial statement.
+ * @param {Object} params { start_date, end_date }
+ */
+export function getPeriodReportCsvUrl(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== null && val !== '') {
+      query.append(key, val);
+    }
+  }
+  const qStr = query.toString();
+  return `${API_BASE}/admin/reports/period/export${qStr ? `?${qStr}` : ''}`;
+}
+
+// ── Vendor Stock Portal APIs (VS2-VS3) ─────────────────────────────────────────
+
+/**
+ * Fetch assigned stock variants for the logged-in vendor.
+ * @param {Object} params { page, limit, search }
+ */
+export async function fetchVendorStock(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined && val !== null && val !== '') {
+      query.append(key, val);
+    }
+  }
+  const qStr = query.toString();
+  return request(`/vendor/stock${qStr ? `?${qStr}` : ''}`);
+}
+
+/**
+ * Update physical count for a variant assigned to this vendor.
+ * @param {number} variantId
+ * @param {Object} body { counted_quantity, expected_version, reason, note, request_ref }
+ */
+export async function updateVendorStockCount(variantId, body) {
+  return request(`/vendor/stock/${variantId}/count`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Explicitly report a stock shortage for a variant.
+ * @param {number} variantId
+ * @param {Object} body { reported_count, note }
+ */
+export async function reportVendorShortage(variantId, body) {
+  return request(`/vendor/stock/${variantId}/shortage`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Fetch recent audit update history for variants assigned to this vendor.
+ * @param {number} limit
+ */
+export async function fetchVendorStockHistory(limit = 30) {
+  return request(`/vendor/stock/history?limit=${encodeURIComponent(limit)}`);
+}
+
+// ── Owner Administration of Vendor Users & Shortages ──────────────────────────
+
+/**
+ * Fetch provisioned vendor user accounts for a supplier.
+ * @param {string} supplierId UUID
+ */
+export async function fetchSupplierVendorUsers(supplierId) {
+  return request(`/admin/suppliers/${supplierId}/users`);
+}
+
+/**
+ * Provision a new stock login for a supplier.
+ * @param {string} supplierId UUID
+ * @param {Object} body { username, password, allow_short_local }
+ */
+export async function provisionVendorUser(supplierId, body) {
+  return request(`/admin/suppliers/${supplierId}/users`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Reset password for a vendor user account.
+ * @param {string} vendorUserId UUID
+ * @param {Object} body { password, allow_short_local }
+ */
+export async function resetVendorPassword(vendorUserId, body) {
+  return request(`/admin/vendor-users/${vendorUserId}/reset-password`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Toggle active status of a vendor user account.
+ * @param {string} vendorUserId UUID
+ * @param {boolean} isActive
+ */
+export async function toggleVendorUserStatus(vendorUserId, isActive) {
+  return request(`/admin/vendor-users/${vendorUserId}/toggle-status`, {
+    method: 'POST',
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+/**
+ * Fetch open or all shortages for owner review.
+ * @param {string|null} vendorId Optional filter
+ */
+export async function fetchShortages(vendorId = null) {
+  const q = vendorId ? `?vendor_id=${encodeURIComponent(vendorId)}` : '';
+  return request(`/admin/shortages${q}`);
+}
+
+/**
+ * Resolve or cancel a reported stock shortage.
+ * @param {string} shortageId UUID
+ * @param {Object} body { resolution_action, resolution_note }
+ */
+export async function resolveShortage(shortageId, body) {
+  return request(`/admin/shortages/${shortageId}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+
 
 
 
