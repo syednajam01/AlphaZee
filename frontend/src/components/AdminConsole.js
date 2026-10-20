@@ -56,6 +56,7 @@ import { createSupplierFinanceView } from './admin/SupplierFinance.js';
 import { createVendorUsersModal } from './admin/VendorUsersModal.js';
 import { renderBusinessExpenses } from './admin/BusinessExpenses.js';
 import { renderFinancialReports } from './admin/FinancialReports.js';
+import { createStoreSettingsComponent } from './admin/StoreSettings.js';
 
 export function createAdminConsoleModal({ page = false, initialTab = 'overview', onNavigate = () => {} } = {}) {
   const modal = document.createElement('div');
@@ -203,6 +204,14 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
               <line x1="6" y1="20" x2="6" y2="14"></line>
             </svg>
             <span class="admin-nav-label">P&L & Analytics</span>
+          </button>
+
+          <button type="button" class="admin-tab-btn" data-tab="settings" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.7); border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span class="admin-nav-label">Store Settings</span>
           </button>
         </nav>
 
@@ -382,7 +391,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       overview: 'Store overview', products: 'Products & Catalog', collections: 'Collections',
       hero: 'Homepage Hero Playlist', media: 'Media Library', orders: 'Orders and payments',
       inventory: 'Inventory and stock', coupons: 'Coupons & Promos', returns: 'Returns and exchanges',
-      suppliers: 'Suppliers', expenses: 'Business Expenses & Freight', analytics: 'Reports & Analytics'
+      suppliers: 'Suppliers', expenses: 'Business Expenses & Freight', analytics: 'Reports & Analytics',
+      settings: 'Store Configuration & Admin Preferences'
     };
     viewTitle.textContent = titles[activeTab] || 'Section not found';
     tabBtns.forEach(button => {
@@ -428,6 +438,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         suppliers: 'Approved Suppliers & Cost Mapping',
         expenses: 'Operating Costs & Transport Expenses',
         analytics: 'Gross Profit, COGS & Attribution',
+        settings: 'Store Configuration & Admin Preferences',
       };
       if (viewTitle) viewTitle.textContent = titles[tab] || 'Store Management';
 
@@ -548,6 +559,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         await renderBusinessExpenses(contentArea, view);
       } else if (activeTab === 'analytics') {
         await renderAnalyticsTab(contentArea, view);
+      } else if (activeTab === 'settings') {
+        await renderSettingsTab(contentArea, view);
       } else if (['products', 'collections', 'media', 'hero'].includes(activeTab)) {
         catalogView = mountCatalogSection(activeTab, contentArea, {
           isCurrent: () => view === viewGeneration && authenticated,
@@ -1647,6 +1660,13 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   // 7. Analytics & Financial Reports Tab (VF4)
   async function renderAnalyticsTab(container, view) {
     await renderFinancialReports(container, view);
+  }
+
+  // 8. Store Settings & Preferences Tab (VF6)
+  async function renderSettingsTab(container, view) {
+    container.innerHTML = '';
+    const settingsComp = createStoreSettingsComponent();
+    container.appendChild(settingsComp);
   }
 
 

@@ -1252,6 +1252,84 @@ export async function resolveShortage(shortageId, body) {
   });
 }
 
+// ── VF6: Store Settings & Owner Preferences ──────────────────────────────────
+
+/**
+ * Fetch public store settings (branding, announcement bar, published policies, theme tokens).
+ */
+export async function fetchPublicStoreSettings() {
+  return request('/store/settings');
+}
+
+/**
+ * Fetch admin store settings (full configuration, draft policies, thresholds, version).
+ */
+export async function fetchAdminStoreSettings() {
+  return request('/admin/settings');
+}
+
+/**
+ * Update store settings with validation and audit log generation.
+ * @param {Object} payload
+ */
+export async function updateAdminStoreSettings(payload) {
+  return request('/admin/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Publish or unpublish a legal policy (delivery, return, terms, privacy).
+ * @param {string} policyType 'delivery' | 'return' | 'terms' | 'privacy'
+ * @param {boolean} publish
+ */
+export async function publishStorePolicy(policyType, publish) {
+  return request(`/admin/settings/policies/${encodeURIComponent(policyType)}/publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ publish }),
+  });
+}
+
+/**
+ * Fetch chronological audit logs of store settings changes.
+ * @param {number} [limit=50]
+ */
+export async function fetchSettingsAuditLogs(limit = 50) {
+  return request(`/admin/settings/audit-logs?limit=${encodeURIComponent(limit)}`);
+}
+
+/**
+ * Fetch personal interface preferences for the authenticated owner.
+ */
+export async function fetchAdminPreferences() {
+  return request('/admin/preferences');
+}
+
+/**
+ * Update personal interface preferences.
+ * @param {Object} payload { theme, table_density, default_date_range, nav_order, dashboard_layout }
+ */
+export async function updateAdminPreferences(payload) {
+  return request('/admin/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Reset interface preferences to factory defaults.
+ */
+export async function resetAdminPreferences() {
+  return request('/admin/preferences/reset', {
+    method: 'POST',
+  });
+}
+
+
 
 
 

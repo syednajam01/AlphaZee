@@ -1,5 +1,6 @@
 import { cart } from '../utils/cart.js';
 import { capabilities } from '../utils/capabilities.js';
+import { fetchPublicStoreSettings } from '../utils/api.js';
 import { createBrandLogo } from './BrandLogo.js';
 
 export function createHeader() {
@@ -92,10 +93,51 @@ export function createHeader() {
     }
   });
 
-  capabilities.subscribe(({ checkoutEnabled }) => {
-    header.querySelector('.announcement-bar').querySelector('span').textContent = checkoutEnabled
-      ? 'AlphaZee SAMPLE / TEST store - no real orders'
-      : 'AlphaZee preview - browse and save your cart. Checkout is temporarily unavailable.';
+  // Dynamic Store Settings & Announcement Bar (VF6)
+  let publicSettings = null;
+  const announcementBar = header.querySelector('.announcement-bar');
+  const announcementSpan = announcementBar?.querySelector('span');
+
+  function updateAnnouncement(checkoutEnabled) {
+    if (!announcementBar || !announcementSpan) return;
+
+    if (publicSettings && publicSettings.announcement_banner_enabled === false) {
+      announcementBar.style.display = 'none';
+      return;
+    }
+
+    announcementBar.style.display = 'block';
+    if (publicSettings && publicSettings.accent_color) {
+      announcementBar.style.backgroundColor = publicSettings.accent_color;
+    }
+
+    const customText = publicSettings?.announcement_banner_text;
+    if (checkoutEnabled) {
+      announcementSpan.textContent = customText
+        ? `AlphaZee SAMPLE / TEST: ${customText}`
+        : 'AlphaZee SAMPLE / TEST store - no real orders';
+    } else {
+      announcementSpan.textContent = customText || 'AlphaZee preview - browse and save your cart. Checkout is temporarily unavailable.';
+    }
+
+    if (publicSettings?.announcement_banner_link) {
+      announcementBar.style.cursor = 'pointer';
+      announcementBar.onclick = () => {
+        window.location.hash = publicSettings.announcement_banner_link;
+      };
+    }
+  }
+
+  fetchPublicStoreSettings().then(settings => {
+    publicSettings = settings;
+    updateAnnouncement(capabilities.getState().checkoutEnabled);
+  }).catch(() => {
+    // Graceful fallback to default message if offline
   });
+
+  capabilities.subscribe(({ checkoutEnabled }) => {
+    updateAnnouncement(checkoutEnabled);
+  });
+
   return header;
 }

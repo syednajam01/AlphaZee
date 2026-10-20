@@ -92,21 +92,37 @@ def main():
 
         # Provision a new stock login: denim_staff_vf5
         vendor_user = f"staff_{secrets.token_hex(3)}"
-        vendor_pass = "StaffPass123!"
+        vendor_pass = "StaffPassword123!"
         print(f"Provisioning vendor login '{vendor_user}'...")
 
         b.js(f"""(() => {{
             const uInput = document.querySelector('#prov-username');
             const pInput = document.querySelector('#prov-password');
             const form = document.querySelector('#provision-user-form');
+            const btn = document.querySelector('#btn-submit-provision');
             if (uInput && pInput && form) {{
                 uInput.value = {json.dumps(vendor_user)};
                 pInput.value = {json.dumps(vendor_pass)};
-                form.dispatchEvent(new Event('submit', {{ bubbles: true, cancelable: true }}));
+                if (btn) btn.click();
+                else form.dispatchEvent(new Event('submit', {{ bubbles: true, cancelable: true }}));
             }}
         }})()""")
-        time.sleep(2.0)
 
+        # Poll until user appears in the table
+        for _ in range(20):
+            time.sleep(0.5)
+            found = b.js(f"""(() => {{
+                const codes = Array.from(document.querySelectorAll('#vendor-users-content code')).map(c => c.textContent.trim());
+                return codes.includes({json.dumps(vendor_user)});
+            }})()""")
+            if found:
+                print(f"Vendor login '{vendor_user}' successfully provisioned and rendered in table!")
+                break
+        else:
+            err_text = b.js("document.querySelector('#prov-error')?.textContent")
+            print("Provision error visible on screen:", err_text)
+
+        time.sleep(0.5)
         # Capture Screenshot 1: Owner managing stock logins
         save_and_copy(b, "vf5_01_owner_manage_stock_logins.png")
 
@@ -130,17 +146,25 @@ def main():
         b.js(f"""(() => {{
             const uInput = document.querySelector('#vp-username');
             const pInput = document.querySelector('#vp-password');
-            const form = document.querySelector('#vp-login-form');
-            if (uInput && pInput && form) {{
+            const btn = document.querySelector('#vp-login-btn');
+            if (uInput && pInput) {{
                 uInput.value = {json.dumps(vendor_user)};
                 pInput.value = {json.dumps(vendor_pass)};
-                form.dispatchEvent(new Event('submit', {{ bubbles: true, cancelable: true }}));
+                if (btn) btn.click();
             }}
         }})()""")
-        time.sleep(2.5)
 
-        # Verify stock cards rendered
-        cards_count = b.js("document.querySelectorAll('.vp-stock-card').length")
+        # Poll until stock cards appear
+        cards_count = 0
+        for _ in range(20):
+            time.sleep(0.5)
+            cards_count = b.js("document.querySelectorAll('.vp-stock-card').length") or 0
+            if cards_count > 0:
+                break
+        else:
+            login_err = b.js("document.querySelector('.vp-alert-error')?.textContent")
+            print("Vendor login error visible on screen:", login_err)
+
         print(f"Loaded {cards_count} vendor stock cards.")
         assert cards_count > 0, "No stock cards rendered!"
 
@@ -172,8 +196,12 @@ def main():
         # Submit count update
         print("Submitting count update (3 -> 2)...")
         b.js("""(() => {
-            const form = document.querySelector('#vp-count-form');
-            if (form) form.dispatchEvent(new Event('submit', {{ bubbles: true, cancelable: true }}));
+            const btn = document.querySelector('#vp-submit-count');
+            if (btn) btn.click();
+            else {
+                const form = document.querySelector('#vp-count-form');
+                if (form) form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            }
         })()""")
         time.sleep(2.0)
 
@@ -215,7 +243,7 @@ def main():
         # Capture Screenshot 6: Audit History
         save_and_copy(b, "vf5_06_vendor_audit_history.png")
 
-    print("\n✅ All 6 VF5 Browser Screenshots Captured and Verified Successfully!")
+    print("\n[SUCCESS] All 6 VF5 Browser Screenshots Captured and Verified Successfully!")
 
 if __name__ == '__main__':
     main()

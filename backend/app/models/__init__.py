@@ -25,6 +25,17 @@ from app.models.order_access import OrderAccessGrant, OrderAccessSession, OrderA
 from app.models.finance import CourierSettlementEntry, RefundExecution  # noqa: F401
 from app.models.supplier_finance import SupplierAgreement, SupplierLedgerEntry, SupplierPaymentAllocation  # noqa: F401
 from app.models.business_expenses import BusinessExpense  # noqa: F401
+from app.models.vendor_portal import (  # noqa: F401
+    VendorUser,
+    VendorSession,
+    VendorLoginBucket,
+    VendorStockShortage,
+)
+from app.models.store_settings import (  # noqa: F401
+    StoreSettings,
+    StoreSettingsAuditLog,
+    OwnerPreference,
+)
 
 __all__ = [
     "Base",
@@ -55,6 +66,13 @@ __all__ = [
     "SupplierLedgerEntry",
     "SupplierPaymentAllocation",
     "BusinessExpense",
+    "VendorUser",
+    "VendorSession",
+    "VendorLoginBucket",
+    "VendorStockShortage",
+    "StoreSettings",
+    "StoreSettingsAuditLog",
+    "OwnerPreference",
 ]
 
 

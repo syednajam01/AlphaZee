@@ -32,6 +32,7 @@ from app.api.v1 import business_expenses as business_expenses_router
 from app.api.v1 import financial_reports as financial_reports_router
 from app.api.v1 import vendor_portal as vendor_portal_router
 from app.api.v1 import admin_vendor_users as admin_vendor_users_router
+from app.api.v1 import store_settings as store_settings_router
 from app.config import settings
 
 # ── Application instance ──────────────────────────────────────────────────────
@@ -78,6 +79,8 @@ app.include_router(business_expenses_router.router, prefix="/api/v1")
 app.include_router(financial_reports_router.router, prefix="/api/v1")
 app.include_router(vendor_portal_router.router, prefix="/api/v1")
 app.include_router(admin_vendor_users_router.router, prefix="/api/v1")
+app.include_router(store_settings_router.public_router, prefix="/api/v1")
+app.include_router(store_settings_router.admin_router, prefix="/api/v1")
 app.add_middleware(media_router.LimitedUploadMiddleware)
 
 

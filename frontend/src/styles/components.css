@@ -1042,4 +1042,31 @@
   font-weight: var(--font-weight-bold);
 }
 
+/* VF6: Admin Settings Tabs & Components */
+.settings-tab-btn {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  border-radius: 6px 6px 0 0;
+}
+
+.settings-tab-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-tab-btn.active {
+  color: #60a5fa;
+  border-bottom-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+}
+
+
 

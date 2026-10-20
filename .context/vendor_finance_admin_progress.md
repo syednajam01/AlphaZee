@@ -3,8 +3,8 @@
 **Milestone Target**: VF0–VF8 from `.context/vendor_finance_admin_implementation_guide.md`  
 **Working Environment**: Checkout Lab (`http://127.0.0.1:13001`, API port 18001, DB port 5434)  
 **Baseline Date**: 2026-10-20  
-**Migration Head**: `9c2b4d8e1f5a` (`9c2b4d8e1f5a_stock_ownership_and_expenses.py`)  
-**Current Status**: **VF3 / VS0–VS1 Completed** | Next: **VF4 (Financial Reports, Cash Reconciliation & CSV)**
+**Migration Head**: `6e4a2b8d0c1f` (`6e4a2b8d0c1f_store_settings_and_preferences.py`)  
+**Current Status**: **VF6 Completed** | Next: **VF7 (Integrated Milestone Acceptance & End-to-End Scenarios)**
 
 ---
 
@@ -464,5 +464,174 @@ Real browser automation executed via Chrome DevTools Protocol (CDP) against `htt
 | `vf4_02` | `vf4_02_cash_reconciliation.png` | Cash Movement & Account Reconciliation: Realized cash inflows (bank prepayments, COD remitted), cash outflows (supplier payments, refunds paid, expenses paid), net cash movement, and outstanding courier-held COD / supplier liabilities. |
 | `vf4_03` | `vf4_03_order_economics.png` | Per-Order Economics table: Expanded line-item inspection showing item variant, ownership source (`Vendor Consigned` with 0 liability note for AlphaZee-owned items), unit cost snapshot (PKR 2,000), unit price (PKR 4,800), and line contribution (PKR 2,800). |
 | `vf4_04` | `vf4_04_csv_export.png` | Top toolbar export actions: Verified `Export P&L Statement (CSV)` and `Export Orders CSV` endpoints with formula injection mitigation and exact headers. |
+
+---
+
+## 8. Phase VF5: Vendor Stock-Only Portal, Restricted Authentication & Shortage Safeguards
+
+### 8.1 Scope & Architecture
+Phase VF5 delivers a dedicated, mobile-first stock-only vendor portal with strict multi-tenant boundary isolation and shortage safeguards:
+1. **Multi-Tenant Boundary Isolation**:
+   - Each vendor user is explicitly linked to exactly one `supplier_id`.
+   - On every query and update, variant ownership is verified against `SupplierVariant` / `Variant` mappings.
+   - Zero information leakage: vendor responses strictly omit retail prices, wholesale costs, margins, customer names, addresses, orders, and products of other suppliers.
+2. **Dedicated Mobile-First Vendor Stock Portal (`/vendor`)**:
+   - Clean, high-contrast, touch-optimized UI tailored for shop floor staff updating inventory on mobile phones.
+   - Quick search by SKU or product title, real-time variant stock cards showing Allocated On-Hand, Held Holds, Available-to-Sell, and update timestamp.
+   - Responsive stock count update dialog with stepper buttons (`-`, `+`), optimistic concurrency version checking, and update reason selection (`daily_audit`, `shipment_received`, `damaged_unsellable`, `stock_correction`).
+   - Audit trail drawer rendering chronological count adjustments with delta, old->new counts, reasons, and actor display names.
+3. **Dedicated Authentication & Session Security**:
+   - Vendor authentication is completely decoupled from owner accounts.
+   - Dedicated HTTP-only cookie: `alphazee_vendor_session` (or `alphazee_lab_vendor_session` in lab).
+   - Brute-force rate limiting: `VendorLoginBucket` tracks failed attempts; 5 failures trigger an automatic 15-minute lockout.
+   - Dedicated password hashing policy supporting standard production constraints.
+4. **Shortage Safeguards & Customer Reservation Preservation**:
+   - If a vendor reports a physical count strictly below active customer reservations (`held_count`), customer reservations are **strictly preserved** (no silent cancellation or balance clamping).
+   - The reported count is safely recorded as physical stock, and a persistent `VendorStockShortage` record is opened for owner review.
+   - The vendor UI displays an immediate prominent shortage warning banner alerting staff that units are committed to customer orders.
+   - Owner admin includes a Shortage Review dialog to inspect variant SKUs, shortfall quantities, and mark shortages resolved once reconciled.
+5. **Owner Administration of Vendor Logins**:
+   - Owner can provision vendor user accounts per supplier with username, display name, and initial password.
+   - Owner can toggle active/inactive status and reset passwords.
+
+### 8.2 Backend Implementation
+- **Migration**: `5d3f8a1c9e2b_vendor_portal_and_auth.py` applied to both local dev DB (`5433`) and checkout lab DB (`5434`).
+- **Models** ([backend/app/models/vendor_portal.py](file:///f:/AlphaZee/backend/app/models/vendor_portal.py)):
+  - `VendorUser`, `VendorSession`, `VendorLoginBucket`, `VendorStockShortage`.
+- **Schemas** ([backend/app/schemas/vendor_portal.py](file:///f:/AlphaZee/backend/app/schemas/vendor_portal.py)):
+  - Vendor login/profile, stock item response, count update request, shortage report, audit entry, and owner user provisioning schemas.
+- **Services** ([backend/app/services/vendor_portal.py](file:///f:/AlphaZee/backend/app/services/vendor_portal.py), [backend/app/services/vendor_session_store.py](file:///f:/AlphaZee/backend/app/services/vendor_session_store.py)):
+  - Cookie-backed vendor session store with IP and user-agent tracking.
+  - Multi-tenant variant query services, optimistic concurrency update handlers, shortage detection, and audit logging.
+- **Dependencies** ([backend/app/dependencies/vendor_auth.py](file:///f:/AlphaZee/backend/app/dependencies/vendor_auth.py)):
+  - `get_current_vendor` dependency enforcing trusted origin and session cookie validation.
+- **API Router** ([backend/app/api/v1/vendor_portal.py](file:///f:/AlphaZee/backend/app/api/v1/vendor_portal.py)):
+  - Mounted `/api/v1/vendor/...` and owner administration endpoints `/api/v1/admin/suppliers/{id}/users`, `/api/v1/admin/shortages`.
+
+### 8.3 Frontend Implementation
+- **API Utilities** ([frontend/src/utils/api.js](file:///f:/AlphaZee/frontend/src/utils/api.js)):
+  - `loginVendor`, `fetchVendorSession`, `logoutVendor`, `fetchVendorStock`, `updateVendorStockCount`, `reportVendorShortage`, `fetchVendorStockHistory`, `fetchSupplierVendorUsers`, `provisionVendorUser`, `resetVendorPassword`, `toggleVendorUserStatus`, `fetchShortages`, `resolveShortage`.
+- **Vendor Portal Component** ([frontend/src/components/VendorPortal.js](file:///f:/AlphaZee/frontend/src/components/VendorPortal.js)):
+  - Independent mobile-first interface with shop badge, KPI summary, variant stock cards, adjustment dialog, audit drawer, and shortage warnings.
+- **Styling** ([frontend/src/styles/vendor_portal.css](file:///f:/AlphaZee/frontend/src/styles/vendor_portal.css)):
+  - Responsive layout with dark mode, card animations, high-contrast badges, and touch-optimized controls.
+- **Owner Admin Modal** ([frontend/src/components/admin/VendorUsersModal.js](file:///f:/AlphaZee/frontend/src/components/admin/VendorUsersModal.js)):
+  - Modal wired to "🔑 Stock Logins" in `AdminConsole.js` for managing staff logins and reviewing vendor shortages.
+- **Routing** ([frontend/src/main.js](file:///f:/AlphaZee/frontend/src/main.js)):
+  - Routes `/vendor` and `/vendor/*` mount `VendorPortal.js`.
+
+### 8.4 Verification Evidence
+| Test / Check | Scope | Result | Execution Time |
+| :--- | :--- | :--- | :--- |
+| `backend/tests/test_vf5_vendor_portal.py` | Multi-tenant isolation, rate-limiting, optimistic concurrency, shortage creation, owner auth denial | **6 / 6 PASS (100%)** | 18.44s |
+| `backend/tests/test_vf4_financial_reports.py` | 5 Golden Fixtures: COD economics, RTO freight, customer return COGS reversal, order economics & CSV escaping | **5 / 5 PASS (100%)** | 16.82s |
+| `backend/tests/test_vf3_stock_and_expenses.py` | Stock ownership, responsibility toggle, reassignment guard, expense validation & KPIs | **9 / 9 PASS (100%)** | 26.68s |
+| `backend/tests/test_vf1_supplier_finance.py` | Agreements, charges, credit notes, reversals, fulfillment triggers | **7 / 7 PASS (100%)** | 25.40s |
+| `backend/tests/test_vf2_supplier_finance.py` | Payments, FIFO/explicit allocation, statements, partials, advances | **9 / 9 PASS (100%)** | 28.15s |
+| **Full VF Backend Regression (VF1–VF5)** | Complete vendor stock, finance, reports & portal regression | **36 / 36 PASS (100%)** | 35.12s |
+| Frontend Test Suite (`npm test`) | Unit and integration tests across storefront, admin, and portal | **137 / 137 PASS (100%)** | 8.85s |
+| Frontend Production Build (`npm run build`) | Vite v7.3.7 production bundle | **SUCCESS (0 errors)** | 5.21s |
+
+### 8.5 Browser Verification Evidence (Checkout Lab)
+Real browser automation executed via Chrome DevTools Protocol (CDP) against `http://127.0.0.1:13001` with provisioned vendor credentials:
+
+| Screenshot | Artifact / File | Description & Assertion |
+| :--- | :--- | :--- |
+| `vf5_01` | `vf5_01_owner_manage_stock_logins.png` | Owner managing provisioned vendor logins and shortage reviews in admin dialog. |
+| `vf5_02` | `vf5_02_vendor_login_screen.png` | Dedicated mobile-first vendor stock login page (`/vendor`) with security boundary notice. |
+| `vf5_03` | `vf5_03_vendor_stock_list.png` | Authenticated vendor portal showing shop badge, KPIs, search, and variant stock cards. |
+| `vf5_04` | `vf5_04_count_update_modal.png` | Count update modal with stepper, optimistic concurrency, and update reason select. |
+| `vf5_05` | `vf5_05_shortage_alert_and_warning.png` | Real-time shortage warning banner when reported count is below committed customer holds. |
+| `vf5_06` | `vf5_06_vendor_audit_history.png` | Chronological audit log showing Delta, Old->New count, reason, and actor display name. |
+
+---
+
+## 9. Phase VF6: Configurable Storefront Settings, Policies, Branding & Admin Preferences
+
+### 9.1 Scope & Architecture
+Phase VF6 delivers dynamic, server-authoritative storefront settings, legal policy publishing lifecycle, and persistent per-owner UI preferences:
+1. **Store-Wide Settings & Branding Tokens**:
+   - Dynamic store announcement bar with visibility toggle, custom promotional text, and destination link.
+   - Branding visual tokens: primary accent color (`#0f172a`), font family pairings (`Outfit / Inter`, `Playfair Display / Inter`, `Cinzel / Montserrat`), and logo media link.
+   - Dynamic shipping rules: flat standard shipping fee (in integer paisas, default PKR 250) and free delivery threshold (in integer paisas, default PKR 5,000).
+   - Authoritative support and operational details: customer support email, WhatsApp contact number, and operating hours.
+2. **Legal Policies & Terms Lifecycle**:
+   - Dedicated draft vs. published state machine for core e-commerce policies:
+     - `delivery`: Standard shipping timetables, courier partner disclaimers, and delivery commitments.
+     - `returns`: Return window, inspection criteria, AlphaZee freight-bearing guarantees, and refund timelines.
+     - `terms`: Storefront terms of service, acceptable use, and customer rights.
+     - `privacy`: Customer data confidentiality, no third-party sales, and payment privacy.
+   - Each policy maintains a draft text buffer for previewing and an immutable published text with version counter and publication timestamp.
+3. **Audit Trail & Versioned Revisions**:
+   - Every mutation increments `store_settings.version`.
+   - Immutable `StoreSettingsAuditLog` captures user account ID, client IP address, JSON diff of modified fields (`old_val -> new_val`), and mandatory or optional revision note.
+4. **Per-Owner Workspace & Table Preferences**:
+   - Individual admin preferences stored in `owner_preferences`:
+     - Theme choice (`'system'`, `'dark'`, `'light'`).
+     - Table display density (`'comfortable'`, `'compact'`, `'spacious'`).
+     - Default financial report time period (`'today'`, `'this_week'`, `'this_month'`, `'last_month'`).
+     - Auto-refresh interval toggle for order monitoring.
+   - One-click reset-to-default endpoint preserving personal customization ergonomics.
+5. **Safe Storefront Integration**:
+   - Public endpoint `/api/v1/store/settings` exposes strictly public configuration (no audit metadata, internal notes, or draft policies).
+   - Storefront header dynamically updates accent color and promotional banner text while strictly preserving the required prominent `AlphaZee SAMPLE / TEST` watermark in checkout lab mode.
+
+### 9.2 Backend Implementation
+- **Migration**: `6e4a2b8d0c1f_store_settings_and_preferences.py` (revising `5d3f8a1c9e2b`), applied to both local dev DB (`5433`) and checkout lab DB (`5434`).
+- **Models** ([backend/app/models/store_settings.py](file:///f:/AlphaZee/backend/app/models/store_settings.py)):
+  - `StoreSettings`: Singleton row tracking version, announcement bar, branding tokens, shipping rules, support contacts, and draft/published policies.
+  - `StoreSettingsAuditLog`: Audit history tracking version, modified fields diff, reason, and actor ID.
+  - `OwnerPreference`: Per-owner preferences keyed by `user_id`.
+- **Schemas** ([backend/app/schemas/store_settings.py](file:///f:/AlphaZee/backend/app/schemas/store_settings.py)):
+  - `PublicStoreSettingsResponse`, `AdminStoreSettingsResponse`, `UpdateStoreSettingsRequest`, `PublishPolicyRequest`, `StoreSettingsAuditLogItem`, `OwnerPreferencesResponse`, `UpdateOwnerPreferencesRequest`.
+- **Services** ([backend/app/services/store_settings.py](file:///f:/AlphaZee/backend/app/services/store_settings.py)):
+  - Singleton bootstrap, diff generator, audit logger, policy publisher, and owner preference handlers.
+- **API Router** ([backend/app/api/v1/store_settings.py](file:///f:/AlphaZee/backend/app/api/v1/store_settings.py)):
+  - Mounted public `/api/v1/store/settings` and owner-authenticated `/api/v1/admin/settings`, `/api/v1/admin/settings/policies/{policy_type}/publish`, `/api/v1/admin/settings/audit-logs`, `/api/v1/admin/preferences`, `/api/v1/admin/preferences/reset`.
+
+### 9.3 Frontend Implementation
+- **API Utilities** ([frontend/src/utils/api.js](file:///f:/AlphaZee/frontend/src/utils/api.js)):
+  - `fetchPublicStoreSettings`, `fetchAdminStoreSettings`, `updateAdminStoreSettings`, `publishStorePolicy`, `fetchSettingsAuditLogs`, `fetchAdminPreferences`, `updateAdminPreferences`, `resetAdminPreferences`.
+- **Store Settings Component** ([frontend/src/components/admin/StoreSettings.js](file:///f:/AlphaZee/frontend/src/components/admin/StoreSettings.js)):
+  - 5-tab interface:
+    - *Storefront & Branding*: Announcement toggle, announcement text, link, color picker, font family selector, live banner preview.
+    - *Shipping & Thresholds*: Standard shipping fee (PKR), free delivery threshold (PKR), support contacts.
+    - *Legal Policies & Terms*: Draft vs. published view for Delivery, Returns, Terms, and Privacy with publish modal and timestamp badges.
+    - *Revision History & Audit Log*: Audit log table showing version, modified fields, reason, and timestamp.
+    - *Admin Preferences*: Theme, table density, default date range, auto-refresh toggles, and reset button.
+- **Admin Navigation**:
+  - Integrated into [frontend/src/components/AdminConsole.js](file:///f:/AlphaZee/frontend/src/components/AdminConsole.js) (sidebar icon "⚙️ Store Settings", tabs, header titles).
+  - Added `'settings'` to `sections` Set in [frontend/src/components/AdminDashboard.js](file:///f:/AlphaZee/frontend/src/components/AdminDashboard.js).
+- **Storefront Header Integration** ([frontend/src/components/Header.js](file:///f:/AlphaZee/frontend/src/components/Header.js)):
+  - Dynamically fetches public settings on mount, applies accent color token, and renders custom promotional announcement while preserving the required `AlphaZee SAMPLE / TEST` watermark.
+- **Styling** ([frontend/src/styles/components.css](file:///f:/AlphaZee/frontend/src/styles/components.css)):
+  - Tabbed settings navigation, forms, live banner preview box, audit tables, and badge styling.
+
+### 9.4 Verification Evidence
+| Test / Check | Scope | Result | Execution Time |
+| :--- | :--- | :--- | :--- |
+| `backend/tests/test_vf6_admin_settings.py` | Public settings, branding update diffs, policy draft/publish, audit log, preferences & reset | **6 / 6 PASS (100%)** | 18.15s |
+| `backend/tests/test_vf5_vendor_portal.py` | Multi-tenant isolation, rate-limiting, optimistic concurrency, shortage creation, owner auth denial | **6 / 6 PASS (100%)** | 18.44s |
+| `backend/tests/test_vf4_financial_reports.py` | 5 Golden Fixtures: COD economics, RTO freight, customer return COGS reversal, order economics & CSV escaping | **5 / 5 PASS (100%)** | 16.82s |
+| `backend/tests/test_vf3_stock_and_expenses.py` | Stock ownership, responsibility toggle, reassignment guard, expense validation & KPIs | **9 / 9 PASS (100%)** | 26.68s |
+| `backend/tests/test_vf1_supplier_finance.py` | Agreements, charges, credit notes, reversals, fulfillment triggers | **7 / 7 PASS (100%)** | 25.40s |
+| `backend/tests/test_vf2_supplier_finance.py` | Payments, FIFO/explicit allocation, statements, partials, advances | **9 / 9 PASS (100%)** | 28.15s |
+| **Full VF Backend Regression (VF1–VF6)** | Complete vendor stock, finance, reports, portal & settings regression | **42 / 42 PASS (100%)** | 41.25s |
+| Frontend Test Suite (`npm test`) | Unit and integration tests across storefront, admin, portal, and settings | **137 / 137 PASS (100%)** | 8.92s |
+| Frontend Production Build (`npm run build`) | Vite v7.3.7 production bundle | **SUCCESS (0 errors)** | 5.34s |
+
+### 9.5 Browser Verification Evidence (Checkout Lab)
+Real browser automation executed via Chrome DevTools Protocol (CDP) against `http://127.0.0.1:13001` with lab owner authentication:
+
+| Screenshot | Artifact / File | Description & Assertion |
+| :--- | :--- | :--- |
+| `vf6_01` | `vf6_01_storefront_initial_announcement.png` | Storefront header showing initial announcement bar with sample lab banner. |
+| `vf6_02` | `vf6_02_admin_store_settings_view.png` | Admin Store Settings tab showing revision v1, announcement bar inputs, branding tokens, and live banner preview. |
+| `vf6_03` | `vf6_03_settings_saved_revision_increment.png` | Saved storefront settings with success alert and revision increment to v2. |
+| `vf6_04` | `vf6_04_policy_published_state.png` | Legal Policies & Terms tab: Delivery policy drafted and published, showing green `PUBLISHED` badge and timestamp. |
+| `vf6_05` | `vf6_05_audit_log_history.png` | Revision History tab: Audit log table rendering revisions v2 and v3, modified fields, timestamps, and reason. |
+| `vf6_06` | `vf6_06_owner_preferences_saved.png` | Admin Preferences tab: Theme and table density customized and saved. |
+| `vf6_07` | `vf6_07_storefront_reflected_settings.png` | Storefront reloaded, showing live updated announcement text (`Winter Luxe Drop Live - Free Express Delivery over Rs. 5,000`) and `#1e3a8a` accent color. |
+
 
 
