@@ -5,7 +5,7 @@ Explicitly separates delivered sales, wholesale COGS, AlphaZee-borne transport e
 operating expenses, and cash reconciliation movements.
 """
 
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timezone, timedelta
 import io
 import csv
 from typing import Any, Dict, List, Optional, Tuple
@@ -19,7 +19,8 @@ from app.models.catalog import Product, Variant
 from app.models.finance import CourierSettlementEntry, RefundExecution
 from app.models.orders import Order, OrderLine
 from app.models.returns import OrderReturn
-from app.models.shipments import Shipment
+from app.models.shipments import Shipment, ShipmentAllocation
+from app.models.inventory import StockReservation
 from app.models.supplier_finance import (
     SupplierAgreement,
     SupplierLedgerEntry,
@@ -37,6 +38,19 @@ except Exception:
 
 def _sum(db: Session, statement) -> int:
     return int(db.scalar(statement) or 0)
+
+
+def rto_writeoff_cost(db, start_dt=None, end_dt=None):
+    from app.services.stock_ownership import returned_cost
+    query = select(ShipmentAllocation, OrderLine).join(StockReservation,
+        StockReservation.id == ShipmentAllocation.reservation_id).join(OrderLine,
+        OrderLine.id == StockReservation.order_line_id).where(ShipmentAllocation.damaged_quantity > 0)
+    if start_dt:
+        query = query.where(ShipmentAllocation.inspected_at >= start_dt)
+    if end_dt:
+        query = query.where(ShipmentAllocation.inspected_at < end_dt)
+    return sum(returned_cost(line, allocation.damaged_quantity, allocation.sellable_quantity)
+               for allocation, line in db.execute(query))
 
 
 def _format_pkr(minor: int) -> str:
@@ -119,22 +133,19 @@ def get_financial_summary(db: Session) -> dict:
 
     original_cogs = _sum(
         db,
-        select(func.sum(OrderLine.unit_cost_minor * OrderLine.quantity))
+        select(func.sum(func.coalesce(OrderLine.acquisition_cost_minor, OrderLine.unit_cost_minor * OrderLine.quantity)))
         .join(Order, OrderLine.order_id == Order.id)
         .where(delivered, OrderLine.fulfillment_kind == "original"),
     )
-    return_cogs_reversal = _sum(
-        db,
-        select(
-            func.sum(OrderLine.unit_cost_minor * OrderReturn.sellable_quantity)
-        )
-        .join(OrderReturn, OrderReturn.order_line_id == OrderLine.id)
-        .join(Order, Order.id == OrderLine.order_id)
-        .where(delivered, OrderReturn.status == "completed"),
-    )
+    from app.services.stock_ownership import returned_cost
+    return_cogs_reversal = sum(ret.restocked_cost_minor if ret.restocked_cost_minor is not None
+        else returned_cost(line, ret.sellable_quantity)
+        for ret, line in db.execute(select(OrderReturn, OrderLine).join(OrderLine,
+            OrderLine.id == OrderReturn.order_line_id).join(Order, Order.id == OrderLine.order_id)
+            .where(delivered, OrderReturn.status == 'completed')))
     replacement_cogs = _sum(
         db,
-        select(func.sum(OrderLine.unit_cost_minor * OrderLine.quantity))
+        select(func.sum(func.coalesce(OrderLine.acquisition_cost_minor, OrderLine.unit_cost_minor * OrderLine.quantity)))
         .join(
             Shipment,
             Shipment.replacement_return_id == OrderLine.replacement_return_id,
@@ -144,7 +155,7 @@ def get_financial_summary(db: Session) -> dict:
             Shipment.status == "delivered",
         ),
     )
-    cogs = original_cogs - return_cogs_reversal + replacement_cogs
+    cogs = original_cogs - return_cogs_reversal + replacement_cogs + rto_writeoff_cost(db)
     outbound_cost = _sum(db, select(func.sum(Shipment.shipping_cost_minor)))
     rto_cost = _sum(db, select(func.sum(Shipment.rto_courier_cost_minor)))
     courier_expenses = outbound_cost + rto_cost
@@ -218,7 +229,7 @@ def get_period_financial_report(
             timezone.utc
         )
     if end_date:
-        end_dt = datetime.combine(end_date, time.max, tzinfo=tz).astimezone(
+        end_dt = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=tz).astimezone(
             timezone.utc
         )
 
@@ -227,13 +238,15 @@ def get_period_financial_report(
     delivered = Order.order_status == "delivered"
 
     order_filter = [valid_order]
+    delivery_date = select(func.min(Shipment.delivered_at)).where(
+        Shipment.order_id == Order.id, Shipment.replacement_return_id.is_(None)).correlate(Order).scalar_subquery()
     delivered_filter = [delivered]
     if start_dt:
         order_filter.append(Order.placed_at >= start_dt)
-        delivered_filter.append(Order.placed_at >= start_dt)
+        delivered_filter.append(delivery_date >= start_dt)
     if end_dt:
-        order_filter.append(Order.placed_at <= end_dt)
-        delivered_filter.append(Order.placed_at <= end_dt)
+        order_filter.append(Order.placed_at < end_dt)
+        delivered_filter.append(delivery_date < end_dt)
 
     total_orders_count = _sum(db, select(func.count(Order.id)).where(and_(*order_filter)))
     delivered_orders_count = _sum(
@@ -241,7 +254,7 @@ def get_period_financial_report(
     )
 
     gross_sales_minor = _sum(
-        db, select(func.sum(Order.total_minor)).where(and_(*delivered_filter))
+        db, select(func.sum(Order.subtotal_minor)).where(and_(*delivered_filter))
     )
     subtotal_minor = _sum(
         db, select(func.sum(Order.subtotal_minor)).where(and_(*delivered_filter))
@@ -261,7 +274,7 @@ def get_period_financial_report(
     if start_dt:
         rep_filter.append(Shipment.delivered_at >= start_dt)
     if end_dt:
-        rep_filter.append(Shipment.delivered_at <= end_dt)
+        rep_filter.append(Shipment.delivered_at < end_dt)
     replacement_sales = _sum(
         db, select(func.sum(Shipment.cod_amount_minor)).where(and_(*rep_filter))
     )
@@ -275,32 +288,36 @@ def get_period_financial_report(
     if start_dt:
         return_filter.append(OrderReturn.inspected_at >= start_dt)
     if end_dt:
-        return_filter.append(OrderReturn.inspected_at <= end_dt)
+        return_filter.append(OrderReturn.inspected_at < end_dt)
     sales_reversals_minor = _sum(
         db, select(func.sum(OrderReturn.refund_amount_minor)).where(and_(*return_filter))
     )
-    net_revenue_minor = gross_sales_minor - sales_reversals_minor
+    net_revenue_minor = gross_sales_minor - discounts_minor + shipping_revenue_minor - sales_reversals_minor
 
     # 2. COGS (Cost of Goods Sold)
     cogs_stmt = (
-        select(func.sum(OrderLine.unit_cost_minor * OrderLine.quantity))
+        select(func.sum(func.coalesce(OrderLine.acquisition_cost_minor, OrderLine.unit_cost_minor * OrderLine.quantity)))
         .join(Order, OrderLine.order_id == Order.id)
         .where(and_(*delivered_filter), OrderLine.fulfillment_kind == "original")
     )
     gross_cogs_minor = _sum(db, cogs_stmt)
 
-    # Sellable returns reverse COGS
-    cogs_rev_stmt = (
-        select(func.sum(OrderLine.unit_cost_minor * OrderReturn.sellable_quantity))
-        .join(OrderReturn, OrderReturn.order_line_id == OrderLine.id)
-        .join(Order, Order.id == OrderLine.order_id)
-        .where(and_(*delivered_filter), OrderReturn.status == "completed")
-    )
+    # Return recognition is independent of the original sale's period.
+    reversal_rows = select(OrderReturn, OrderLine).join(OrderLine, OrderLine.id == OrderReturn.order_line_id).where(
+        OrderReturn.status == 'completed')
     if start_dt:
-        cogs_rev_stmt = cogs_rev_stmt.where(OrderReturn.inspected_at >= start_dt)
+        reversal_rows = reversal_rows.where(OrderReturn.inspected_at >= start_dt)
     if end_dt:
-        cogs_rev_stmt = cogs_rev_stmt.where(OrderReturn.inspected_at <= end_dt)
-    cogs_reversals_minor = _sum(db, cogs_rev_stmt)
+        reversal_rows = reversal_rows.where(OrderReturn.inspected_at < end_dt)
+    from app.services.stock_ownership import returned_cost
+    cogs_reversals_minor = sum(ret.restocked_cost_minor if ret.restocked_cost_minor is not None else returned_cost(line, ret.sellable_quantity)
+                              for ret, line in db.execute(reversal_rows))
+    replacement_costs = select(func.sum(func.coalesce(OrderLine.acquisition_cost_minor,
+        OrderLine.unit_cost_minor * OrderLine.quantity))).join(Shipment,
+        Shipment.replacement_return_id == OrderLine.replacement_return_id).where(*rep_filter)
+    gross_cogs_minor += _sum(db, replacement_costs)
+    writeoffs_minor = rto_writeoff_cost(db, start_dt, end_dt)
+    gross_cogs_minor += writeoffs_minor
     net_cogs_minor = gross_cogs_minor - cogs_reversals_minor
 
     # 3. Freight Expenses (AlphaZee strictly bears outbound, RTO & customer return transport)
@@ -308,7 +325,7 @@ def get_period_financial_report(
     if start_dt:
         shipment_filter.append(Shipment.created_at >= start_dt)
     if end_dt:
-        shipment_filter.append(Shipment.created_at <= end_dt)
+        shipment_filter.append(Shipment.created_at < end_dt)
 
     total_shipments_count = _sum(
         db,
@@ -345,12 +362,13 @@ def get_period_financial_report(
         if shipment_filter
         else select(func.sum(Shipment.shipping_cost_minor)),
     )
-    rto_freight_minor = _sum(
-        db,
-        select(func.sum(Shipment.rto_courier_cost_minor)).where(and_(*shipment_filter))
-        if shipment_filter
-        else select(func.sum(Shipment.rto_courier_cost_minor)),
-    )
+    rto_cost_date = func.coalesce(Shipment.rto_cost_recorded_at, Shipment.created_at)
+    rto_filter = []
+    if start_dt:
+        rto_filter.append(rto_cost_date >= start_dt)
+    if end_dt:
+        rto_filter.append(rto_cost_date < end_dt)
+    rto_freight_minor = _sum(db, select(func.sum(Shipment.rto_courier_cost_minor)).where(*rto_filter))
 
     # Customer return freight and additional courier expenses recorded in business_expenses
     exp_filter = []
@@ -364,7 +382,7 @@ def get_period_financial_report(
     )
     if exp_filter:
         exp_query = exp_query.where(and_(*exp_filter))
-    exp_query = exp_query.group_by(BusinessExpense.category)
+    exp_query = exp_query.where(BusinessExpense.linked_courier_settlement_id.is_(None)).group_by(BusinessExpense.category)
     exp_rows = db.execute(exp_query).all()
     exp_by_cat = {row[0]: int(row[1] or 0) for row in exp_rows}
 
@@ -373,10 +391,14 @@ def get_period_financial_report(
     extra_rto_expense = exp_by_cat.get("rto_transport", 0)
     extra_outbound_expense = exp_by_cat.get("outbound_delivery", 0)
 
-    # To avoid double-counting courier costs that have linked settlement expenses:
-    # If business expenses contain rto_transport or outbound_delivery not linked to shipments, add them
-    total_rto_freight_minor = max(rto_freight_minor, extra_rto_expense)
-    total_outbound_freight_minor = max(outbound_freight_minor, extra_outbound_expense)
+    # Linked rows are evidence for one existing shipment charge; unrelated rows add.
+    def extra_freight(category):
+        return _sum(db, select(func.sum(BusinessExpense.amount_minor)).where(
+            *exp_filter, BusinessExpense.category == category,
+            BusinessExpense.linked_shipment_id.is_(None),
+            BusinessExpense.linked_courier_settlement_id.is_(None)))
+    total_rto_freight_minor = rto_freight_minor + extra_freight('rto_transport')
+    total_outbound_freight_minor = outbound_freight_minor + extra_freight('outbound_delivery')
     total_freight_minor = (
         total_outbound_freight_minor
         + total_rto_freight_minor
@@ -389,7 +411,12 @@ def get_period_financial_report(
     platform_hosting_minor = exp_by_cat.get("platform_hosting", 0)
     salaries_minor = exp_by_cat.get("salaries", 0)
     office_supplies_minor = exp_by_cat.get("office_supplies", 0)
-    other_overhead_minor = exp_by_cat.get("other_overhead", 0)
+    other_deduction_query = select(func.sum(CourierSettlementEntry.amount_minor)).where(CourierSettlementEntry.entry_type == 'other_deduction')
+    if start_dt:
+        other_deduction_query = other_deduction_query.where(CourierSettlementEntry.recorded_at >= start_dt)
+    if end_dt:
+        other_deduction_query = other_deduction_query.where(CourierSettlementEntry.recorded_at < end_dt)
+    other_overhead_minor = exp_by_cat.get("other_overhead", 0) + _sum(db, other_deduction_query)
     total_overhead_minor = (
         packaging_minor
         + advertising_minor
@@ -426,7 +453,7 @@ def get_period_financial_report(
     if start_dt:
         bank_pmt_filter.append(Order.payment_verified_at >= start_dt)
     if end_dt:
-        bank_pmt_filter.append(Order.payment_verified_at <= end_dt)
+        bank_pmt_filter.append(Order.payment_verified_at < end_dt)
     bank_customer_receipts_minor = _sum(
         db, select(func.sum(Order.total_minor)).where(and_(*bank_pmt_filter))
     )
@@ -435,23 +462,31 @@ def get_period_financial_report(
     if start_dt:
         courier_receipt_filter.append(CourierSettlementEntry.recorded_at >= start_dt)
     if end_dt:
-        courier_receipt_filter.append(CourierSettlementEntry.recorded_at <= end_dt)
+        courier_receipt_filter.append(CourierSettlementEntry.recorded_at < end_dt)
     courier_cod_remitted_minor = _sum(
         db,
         select(func.sum(CourierSettlementEntry.amount_minor)).where(
             and_(*courier_receipt_filter)
         ),
     )
-    total_cash_inflow_minor = (
-        bank_customer_receipts_minor + courier_cod_remitted_minor
-    )
+    period_ledger_query = select(SupplierLedgerEntry)
+    if start_date:
+        period_ledger_query = period_ledger_query.where(SupplierLedgerEntry.effective_date >= start_date)
+    if end_date:
+        period_ledger_query = period_ledger_query.where(SupplierLedgerEntry.effective_date <= end_date)
+    ledger_cash = []
+    for entry in db.scalars(period_ledger_query):
+        original = db.get(SupplierLedgerEntry, entry.reversal_entry_id) if entry.reversal_entry_id else entry
+        ledger_cash.append((original.entry_type, entry.amount_minor if entry.direction == 'credit' else -entry.amount_minor))
+    supplier_refund_cash = sum(amount for kind, amount in ledger_cash if kind == 'refund_received')
+    total_cash_inflow_minor = bank_customer_receipts_minor + courier_cod_remitted_minor + supplier_refund_cash
 
     # Outflow
     refund_exec_filter = []
     if start_dt:
         refund_exec_filter.append(RefundExecution.executed_at >= start_dt)
     if end_dt:
-        refund_exec_filter.append(RefundExecution.executed_at <= end_dt)
+        refund_exec_filter.append(RefundExecution.executed_at < end_dt)
     refunds_paid_minor = _sum(
         db,
         select(func.sum(RefundExecution.amount_minor)).where(
@@ -461,17 +496,7 @@ def get_period_financial_report(
         else select(func.sum(RefundExecution.amount_minor)),
     )
 
-    sup_pmt_filter = [SupplierLedgerEntry.entry_type == "payment"]
-    if start_date:
-        sup_pmt_filter.append(SupplierLedgerEntry.effective_date >= start_date)
-    if end_date:
-        sup_pmt_filter.append(SupplierLedgerEntry.effective_date <= end_date)
-    supplier_payments_paid_minor = _sum(
-        db,
-        select(func.sum(SupplierLedgerEntry.amount_minor)).where(
-            and_(*sup_pmt_filter)
-        ),
-    )
+    supplier_payments_paid_minor = -sum(amount for kind, amount in ledger_cash if kind in {'payment', 'advance'})
 
     # Paid business expenses via bank/cash (not courier deductions)
     paid_exp_filter = [
@@ -492,7 +517,7 @@ def get_period_financial_report(
     if start_dt:
         ded_filter.append(CourierSettlementEntry.recorded_at >= start_dt)
     if end_dt:
-        ded_filter.append(CourierSettlementEntry.recorded_at <= end_dt)
+        ded_filter.append(CourierSettlementEntry.recorded_at < end_dt)
     courier_deductions_settled_minor = _sum(
         db,
         select(func.sum(CourierSettlementEntry.amount_minor)).where(
@@ -530,27 +555,10 @@ def get_period_financial_report(
         0, total_cod_collected - total_cod_cleared - total_cod_deducted
     )
 
-    # Supplier liabilities outstanding (sum of unallocated charges)
-    total_sup_charges = _sum(
-        db,
-        select(func.sum(SupplierLedgerEntry.amount_minor)).where(
-            SupplierLedgerEntry.entry_type.in_(["charge", "opening_balance"]),
-            SupplierLedgerEntry.direction == "credit",
-        ),
-    )
-    total_sup_credits = _sum(
-        db,
-        select(func.sum(SupplierLedgerEntry.amount_minor)).where(
-            SupplierLedgerEntry.entry_type == "credit_note",
-            SupplierLedgerEntry.direction == "debit",
-        ),
-    )
-    total_sup_allocations = _sum(
-        db, select(func.sum(SupplierPaymentAllocation.allocated_amount_minor))
-    )
-    supplier_liabilities_outstanding_minor = max(
-        0, total_sup_charges - total_sup_credits - total_sup_allocations
-    )
+    # Outstanding balances are current, not falsely presented as period-closing balances.
+    from app.services.supplier_finance import get_supplier_ledger_summary
+    supplier_liabilities_outstanding_minor = sum(get_supplier_ledger_summary(db, supplier_id)['outstanding_payable_minor']
+        for supplier_id in db.scalars(select(SupplierLedgerEntry.supplier_id).distinct()))
 
     # Refund liabilities outstanding
     total_refund_liabilities = _sum(
@@ -571,7 +579,7 @@ def get_period_financial_report(
         "end_date": end_date,
         "date_basis": (
             "Delivered sales recognized by delivery date; expenses recognized by incurred date; "
-            "cash movements recognized by settlement/payment date."
+            "cash movements recognized by settlement/payment date. Outstanding balances are current, not historical period closing balances. Order-list filters use placement date."
         ),
         "revenue": {
             "gross_sales_minor": gross_sales_minor,
@@ -582,6 +590,7 @@ def get_period_financial_report(
             "formatted_net_revenue": _format_pkr(net_revenue_minor),
         },
         "cogs": {
+            "inventory_writeoffs_minor": writeoffs_minor,
             "gross_cogs_minor": gross_cogs_minor,
             "cogs_reversals_minor": cogs_reversals_minor,
             "net_cogs_minor": net_cogs_minor,
@@ -676,10 +685,10 @@ def get_order_economics_list(
         )
         query = query.where(Order.placed_at >= start_dt)
     if end_date:
-        end_dt = datetime.combine(end_date, time.max, tzinfo=KARACHI_TZ).astimezone(
+        end_dt = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=KARACHI_TZ).astimezone(
             timezone.utc
         )
-        query = query.where(Order.placed_at <= end_dt)
+        query = query.where(Order.placed_at < end_dt)
 
     total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     orders = db.scalars(query.offset(offset).limit(limit)).all()
@@ -691,19 +700,18 @@ def get_order_economics_list(
         tot_cogs = 0
         for line in ord_obj.lines:
             tot_price = line.unit_price_minor * line.quantity
-            tot_cost = (line.unit_cost_minor or 0) * line.quantity
+            tot_cost = line.acquisition_cost_minor if line.acquisition_cost_minor is not None else (line.unit_cost_minor or 0) * line.quantity
             tot_cogs += tot_cost
             line_contrib = tot_price - tot_cost
             var = db.scalar(select(Variant).where(Variant.id == line.variant_id))
-            prod_title = var.product.title if var and var.product else "Item"
-            sku = var.sku if var else None
-            size = var.size if var else None
-            color = var.color if var else None
+            prod_title = line.product_title_snapshot
+            sku = line.variant_sku_snapshot
+            size = line.variant_size_snapshot
+            color = line.variant_color_snapshot
 
             # Find supplier name if mapped
             sup_name = None
-            if var and var.product and var.product.vendor:
-                sup_name = var.product.vendor.name
+            sup_name = (line.acquisition_snapshot or {}).get('supplier_name')
 
             lines_data.append(
                 {
@@ -724,21 +732,27 @@ def get_order_economics_list(
                 }
             )
 
-        # 2. Freight & Logistics
-        shipment = db.scalar(
-            select(Shipment)
-            .where(Shipment.order_id == ord_obj.id)
-            .order_by(Shipment.created_at.desc())
-        )
-        outbound_shipping = shipment.shipping_cost_minor if shipment else 0
-        rto_cost = shipment.rto_courier_cost_minor if shipment else 0
-        total_logistics = outbound_shipping + rto_cost
+        # Include every original/replacement parcel rather than only the latest one.
+        parcels = list(db.scalars(select(Shipment).where(Shipment.order_id == ord_obj.id)))
+        shipment = next((parcel for parcel in parcels if parcel.replacement_return_id is None), None)
+        outbound_shipping = sum(parcel.shipping_cost_minor for parcel in parcels)
+        rto_cost = sum(parcel.rto_courier_cost_minor for parcel in parcels)
+        returns = list(db.scalars(select(OrderReturn).where(OrderReturn.order_id == ord_obj.id)))
+        parcel_ids = [parcel.id for parcel in parcels]
+        return_ids = [ret.id for ret in returns]
+        extra_costs = list(db.scalars(select(BusinessExpense).where(or_(
+            BusinessExpense.linked_shipment_id.in_(parcel_ids), BusinessExpense.linked_return_id.in_(return_ids)))))
+        extra_freight = sum(exp.amount_minor for exp in extra_costs if exp.category == 'customer_return_transport')
+        attributed_overhead = sum(exp.amount_minor for exp in extra_costs
+            if exp.category not in {'outbound_delivery', 'rto_transport', 'customer_return_transport'})
+        total_logistics = outbound_shipping + rto_cost + extra_freight
 
         # 3. Supplier Charges & Payments
         charges = db.scalars(
             select(SupplierLedgerEntry).where(
                 SupplierLedgerEntry.order_id == ord_obj.id,
                 SupplierLedgerEntry.entry_type == "charge",
+                SupplierLedgerEntry.status == "posted",
             )
         ).all()
         tot_charges = sum(c.amount_minor for c in charges)
@@ -752,18 +766,29 @@ def get_order_economics_list(
             tot_payments += int(alloc_sum or 0)
         sup_outstanding = max(0, tot_charges - tot_payments)
 
-        # 4. Estimated Contribution
-        # If delivered: customer total - cogs - logistics
-        # If cancelled/unfulfilled with no shipping: 0
-        # If RTO: 0 customer total - logistics - (cogs if not restocked)
-        if ord_obj.order_status == "delivered":
-            estimated_contrib = ord_obj.total_minor - tot_cogs - total_logistics
-        elif ord_obj.order_status in ("rto", "rto_initiated", "rto_delivered"):
-            estimated_contrib = -total_logistics
-        elif ord_obj.order_status == "cancelled":
-            estimated_contrib = -total_logistics
+        # Completed returns reverse their actual cost and customer sales once.
+        from app.services.stock_ownership import returned_cost
+        returned_cogs = sum(ret.restocked_cost_minor if ret.restocked_cost_minor is not None
+            else returned_cost(db.get(OrderLine, ret.order_line_id), ret.sellable_quantity)
+            for ret in returns if ret.status == 'completed')
+        refunded_sales = sum(ret.refund_amount_minor for ret in returns
+            if ret.status == 'completed' and ret.return_type == 'refund_bank_transfer')
+        if ord_obj.order_status == 'delivered':
+            delivered_replacement_ids = {parcel.replacement_return_id for parcel in parcels
+                if parcel.replacement_return_id and parcel.delivered_at}
+            consumed_cost = sum((line.acquisition_cost_minor if line.acquisition_cost_minor is not None
+                else (line.unit_cost_minor or 0) * line.quantity) for line in ord_obj.lines
+                if line.fulfillment_kind == 'original' or line.replacement_return_id in delivered_replacement_ids)
+            replacement_sales = sum(parcel.cod_amount_minor for parcel in parcels
+                if parcel.replacement_return_id in delivered_replacement_ids)
+            estimated_contrib = ord_obj.total_minor + replacement_sales - refunded_sales - consumed_cost + returned_cogs - total_logistics - attributed_overhead
+        elif ord_obj.order_status in {'rto', 'cancelled', 'rto_initiated', 'rto_delivered'}:
+            written_off = sum(returned_cost(db.get(OrderLine, allocation.reservation.order_line_id),
+                allocation.damaged_quantity, allocation.sellable_quantity)
+                for parcel in parcels for allocation in parcel.allocations)
+            estimated_contrib = -total_logistics - attributed_overhead - written_off
         else:
-            estimated_contrib = ord_obj.total_minor - tot_cogs - total_logistics
+            estimated_contrib = ord_obj.total_minor - tot_cogs - total_logistics - attributed_overhead
 
         result.append(
             {
@@ -794,14 +819,19 @@ def get_order_economics_list(
 
 
 def export_order_economics_csv(
-    db: Session,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None,
+    status: Optional[str] = None, search: Optional[str] = None, order_id: Optional[str] = None,
 ) -> str:
-    """Generate CSV string of order economics with formula injection escaping."""
-    orders, _ = get_order_economics_list(
-        db, start_date=start_date, end_date=end_date, limit=10000, offset=0
-    )
+    """Export every matching row, with the same filters as the owner table."""
+    orders = []
+    offset = 0
+    while True:
+        page, count = get_order_economics_list(db, start_date=start_date, end_date=end_date,
+            status=status, search=search, order_id=order_id, limit=500, offset=offset)
+        orders.extend(page)
+        offset += len(page)
+        if not page or offset >= count:
+            break
     output = io.StringIO()
     writer = csv.writer(output)
 

@@ -39,7 +39,7 @@ def create_business_expense(
     """
     # Validate linked entities if provided
     if payload.linked_shipment_id:
-        shipment = db.get(Shipment, payload.linked_shipment_id)
+        shipment = db.scalar(select(Shipment).where(Shipment.id == payload.linked_shipment_id).with_for_update())
         if not shipment:
             raise ValueError(f"Linked shipment {payload.linked_shipment_id} does not exist.")
 
@@ -49,9 +49,32 @@ def create_business_expense(
             raise ValueError(f"Linked order return {payload.linked_return_id} does not exist.")
 
     if payload.linked_courier_settlement_id:
-        settlement = db.get(CourierSettlementEntry, payload.linked_courier_settlement_id)
+        settlement = db.scalar(select(CourierSettlementEntry).where(
+            CourierSettlementEntry.id == payload.linked_courier_settlement_id).with_for_update())
         if not settlement:
             raise ValueError(f"Linked courier settlement {payload.linked_courier_settlement_id} does not exist.")
+        if settlement.entry_type == 'receipt' or settlement.amount_minor != payload.amount_minor:
+            raise ValueError('Link an expense to a matching courier deduction, not a cash receipt or different amount.')
+        expected = {'outbound_shipping': 'outbound_delivery', 'rto_shipping': 'rto_transport',
+                    'other_deduction': 'other_overhead'}.get(settlement.entry_type)
+        if payload.category != expected:
+            raise ValueError('Expense category must match the linked deduction.')
+        if payload.linked_shipment_id and payload.linked_shipment_id != settlement.shipment_id:
+            raise ValueError('The linked deduction belongs to a different shipment.')
+        prior = db.scalar(select(BusinessExpense).where(
+            BusinessExpense.linked_courier_settlement_id == settlement.id))
+        if prior:
+            if prior.category == payload.category and prior.amount_minor == payload.amount_minor:
+                return prior
+            raise ValueError('This courier deduction already has expense evidence.')
+    if payload.linked_shipment_id and payload.category in {'outbound_delivery', 'rto_transport'}:
+        canonical = shipment.shipping_cost_minor if payload.category == 'outbound_delivery' else shipment.rto_courier_cost_minor
+        if canonical != payload.amount_minor:
+            raise ValueError('Linked freight evidence must match the recorded shipment cost. Record additional costs separately.')
+        prior = db.scalar(select(BusinessExpense).where(BusinessExpense.linked_shipment_id == shipment.id,
+            BusinessExpense.category == payload.category))
+        if prior:
+            raise ValueError('This shipment cost already has expense evidence.')
 
     expense = BusinessExpense(
         category=payload.category,

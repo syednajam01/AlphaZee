@@ -18,17 +18,30 @@ from app.services.vendor_session_store import csrf_token as vendor_csrf_token
 
 
 @pytest.fixture
-def db():
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+def db(db_session):
+    return db_session
 
 
 @pytest.fixture
-def client():
-    return TestClient(app, base_url="http://localhost:3000")
+def client(db_session, monkeypatch):
+    from app.database import get_db
+    from app.dependencies.checkout import require_checkout_enabled
+    from sqlalchemy.orm import sessionmaker
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[require_checkout_enabled] = lambda: None
+    # Legacy helpers use SessionLocal; route them to this same guarded test transaction.
+    import sys
+    module = sys.modules[__name__]
+    from contextlib import contextmanager
+    @contextmanager
+    def scoped_session():
+        yield db_session
+    monkeypatch.setattr(module, 'SessionLocal', scoped_session)
+    try:
+        with TestClient(app, base_url='http://localhost:3000') as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 def _create_owner(db, username=None):
@@ -491,7 +504,12 @@ def test_vendor_shortage_handling_and_owner_resolution(db, client):
     assert target_shortage["reported_count"] == 0
     assert target_shortage["held_reservations"] == 1
 
-    # Owner resolves shortage
+    # A promise to wait cannot resolve a physical shortage. Recount first.
+    recount = client.post(f'/api/v1/vendor/stock/{var_a1.id}/count', json={
+        'counted_quantity': 3, 'expected_version': bal.version, 'reason': 'stock_correction'},
+        headers={'Origin': 'http://localhost:3000', 'X-CSRF-Token': v_csrf})
+    assert recount.status_code == 200, recount.text
+    # Owner resolves shortage after the audited count.
     res_res = client.post(
         f"/api/v1/admin/shortages/{target_shortage['id']}/resolve",
         json={"resolution_action": "resolved", "resolution_note": "Customer contacted and agreed to wait for fresh stock"},

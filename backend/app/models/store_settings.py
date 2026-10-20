@@ -81,6 +81,7 @@ class StoreSettings(Base):
     # Shipping & Operations Rules
     shipping_coverage_area: Mapped[str] = mapped_column(String(100), default='All Pakistan', nullable=False)
     standard_shipping_fee_minor: Mapped[int] = mapped_column(Integer, default=20000, nullable=False)  # PKR 200
+    shipping_rules_configured: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false', nullable=False)
     free_shipping_threshold_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)  # e.g. PKR 5,000 = 500000
     low_stock_threshold: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     stock_staleness_threshold_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)

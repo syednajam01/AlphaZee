@@ -1,7 +1,7 @@
 """API endpoints for VF4 Financial Reports, Period P&L, Per-Order Economics, and CSV Exports."""
 
 from datetime import date, datetime
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Literal
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
@@ -29,7 +29,7 @@ router = APIRouter(
 def get_period_report_endpoint(
     start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD) inclusive in Asia/Karachi"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD) inclusive in Asia/Karachi"),
-    timezone: str = Query("Asia/Karachi", description="Reporting timezone for day boundaries"),
+    timezone: Literal["Asia/Karachi"] = Query("Asia/Karachi", description="Reporting timezone for day boundaries"),
     db: Session = Depends(get_db),
 ) -> PeriodFinancialReportResponse:
     report_dict = report_service.get_period_financial_report(
@@ -76,13 +76,12 @@ def get_order_economics_endpoint(
     summary="Export order economics to CSV with formula injection escaping",
 )
 def export_order_economics_csv_endpoint(
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db),
+    start_date: Optional[date] = Query(None), end_date: Optional[date] = Query(None),
+    status_filter: Optional[str] = Query(None, alias='status'), search: Optional[str] = Query(None),
+    order_id: Optional[str] = Query(None), db: Session = Depends(get_db),
 ) -> Response:
-    csv_data = report_service.export_order_economics_csv(
-        db, start_date=start_date, end_date=end_date
-    )
+    csv_data = report_service.export_order_economics_csv(db, start_date=start_date, end_date=end_date,
+        status=status_filter, search=search, order_id=order_id)
     filename = f"alphazee_order_economics_{date.today().isoformat()}.csv"
     return Response(
         content=csv_data,

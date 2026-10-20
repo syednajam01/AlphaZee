@@ -32,6 +32,7 @@ class PublicStoreSettingsResponse(BaseModel):
     privacy_policy: str | None
     shipping_coverage_area: str
     standard_shipping_fee_minor: int
+    shipping_rules_configured: bool
     free_shipping_threshold_minor: int | None
 
 
@@ -68,6 +69,7 @@ class AdminStoreSettingsResponse(BaseModel):
     privacy_policy_published_at: datetime | None
     shipping_coverage_area: str
     standard_shipping_fee_minor: int
+    shipping_rules_configured: bool
     free_shipping_threshold_minor: int | None
     low_stock_threshold: int
     stock_staleness_threshold_days: int
@@ -88,6 +90,8 @@ VALID_SPACING = {'compact', 'comfortable', 'spacious'}
 
 class UpdateStoreSettingsRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
+    shipping_rules_configured: bool | None = None
+    expected_version: int | None = Field(default=None, ge=1)
 
     brand_name: str | None = Field(default=None, min_length=1, max_length=100)
     tagline: str | None = Field(default=None, max_length=255)

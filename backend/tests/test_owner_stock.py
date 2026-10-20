@@ -55,23 +55,33 @@ def test_mapping_switch_preserves_stock_reservations_and_order_cost(admin_client
     v, original, balance = _setup_store_catalog(db_session, 10)
     placed = order(db_session, v)
     new_supplier = Supplier(name='SAMPLE second', slug='sample-second', status='active')
-    db_session.add(new_supplier); db_session.flush()
+    db_session.add(new_supplier); db_session.commit()
     path = f'/api/v1/admin/suppliers/{new_supplier.id}/variants'
-    response = admin_client.post(path, json={'variant_id': v.id, 'supplier_cost_minor': 1234})
-    assert response.status_code == 200, response.text
+    # Variant controls cannot bypass the product responsibility or move held stock.
+    assert admin_client.post(path, json={'variant_id': v.id, 'supplier_cost_minor': 1234}).status_code == 409
     state = admin_client.get(f'/api/v1/admin/catalog/variants/{v.id}/stock').json()
-    assert state['mapping']['supplier_cost_minor'] == 1234
-    assert state['mapping']['physical_on_hand'] == 0 and state['public_availability'] == 'unavailable'
-    historical = state['historical_mappings'][0]
-    assert (historical['physical_on_hand'], historical['held_reservations'], historical['available_to_sell']) == (10, 2, 8)
-    assert historical['holds'][0]['order_id'] == str(placed.id)
-    assert placed.lines[0].unit_cost_minor == 200000
-    assert len(list(db_session.scalars(select(SupplierVariant).where(SupplierVariant.variant_id == v.id, SupplierVariant.active.is_(True))))) == 1
-    response = admin_client.post(f'/api/v1/admin/suppliers/{original.supplier_id}/variants', json={'variant_id': v.id, 'supplier_cost_minor': 4567})
-    assert response.status_code == 200
-    state = admin_client.get(f'/api/v1/admin/catalog/variants/{v.id}/stock').json()
+    assert state['mapping']['supplier_id'] == str(original.supplier_id)
     assert state['mapping']['physical_on_hand'] == 10 and state['mapping']['held_reservations'] == 2
-    assert state['mapping']['supplier_cost_minor'] == 4567 and placed.lines[0].unit_cost_minor == 200000
+    assert placed.lines[0].unit_cost_minor == 200000
+    # Explicitly resolve the hold and old physical stock before choosing a new vendor.
+    assert admin_client.post(f'/api/v1/admin/orders/{placed.id}/cancel').status_code == 200
+    db_session.refresh(balance)
+    adjusted = admin_client.post('/api/v1/admin/inventory/adjust', json={
+        'supplier_variant_id': str(original.id), 'quantity_delta': -10,
+        'expected_version': balance.version, 'reason': 'manual_count'})
+    assert adjusted.status_code == 200, adjusted.text
+    product = admin_client.get(f'/api/v1/admin/products/{v.product_id}').json()
+    changed = admin_client.post(f'/api/v1/admin/products/{v.product_id}', json={
+        'expected_version': product['edit_version'], 'stock_management_source': 'vendor_managed',
+        'vendor_id': str(new_supplier.id)})
+    assert changed.status_code == 200, changed.text
+    assert admin_client.post(path, json={'variant_id': v.id, 'supplier_cost_minor': 1234}).status_code == 200
+    state = admin_client.get(f'/api/v1/admin/catalog/variants/{v.id}/stock').json()
+    assert state['mapping']['physical_on_hand'] == 0 and state['mapping']['supplier_cost_minor'] == 1234
+    assert state['historical_mappings'][0]['physical_on_hand'] == 0
+    assert placed.lines[0].unit_cost_minor == 200000
+    assert len(list(db_session.scalars(select(SupplierVariant).where(
+        SupplierVariant.variant_id == v.id, SupplierVariant.active.is_(True))))) == 1
 
 
 def test_adjustment_version_zero_audit_and_held_floor(admin_client, db_session, configured_bank):

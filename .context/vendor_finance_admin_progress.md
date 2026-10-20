@@ -1,5 +1,7 @@
 # AlphaZee: Vendor Stock, Finance & Configurable Admin Progress
 
+> **2026-10-20 independent correction:** Preserve the original phase record below as history. Follow-up integration fixes now wire actual fulfillment liabilities, owned return/resale lots, shortage blocking, delivery quotes and report reconciliation. Current migration is `a81f92c6d430`; terminal verification and rollout are recorded in `vf_integration_repairs_report.md`. The earlier milestone completion claims do not constitute browser acceptance of these repairs. Antigravity must run `vf_repairs_browser_verification_guide.md` and report actual UI evidence.
+
 **Milestone Target**: VF0–VF8 from `.context/vendor_finance_admin_implementation_guide.md`  
 **Working Environment**: Checkout Lab (`http://127.0.0.1:13001`, API port 18001, DB port 5434)  
 **Baseline Date**: 2026-10-20  

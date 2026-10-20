@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import uuid
 from typing import Any
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, text
 from sqlalchemy.orm import Session
 
 from app.models.store_settings import StoreSettings, StoreSettingsAuditLog, OwnerPreference
@@ -33,6 +33,9 @@ def _resolve_logo_url(logo_media_id: str | None, db: Session) -> str | None:
 
 def get_or_create_store_settings(db: Session) -> StoreSettings:
     settings = db.scalar(select(StoreSettings).order_by(StoreSettings.version.desc()))
+    if settings is None:
+        db.execute(text('SELECT pg_advisory_xact_lock(71856292352859)'))
+        settings = db.scalar(select(StoreSettings).order_by(StoreSettings.version.desc()))
     if settings is None:
         settings = StoreSettings(
             brand_name='AlphaZee',
@@ -80,6 +83,7 @@ def get_public_store_settings(db: Session) -> PublicStoreSettingsResponse:
         privacy_policy=settings.privacy_policy_content if settings.privacy_policy_status == 'published' else None,
         shipping_coverage_area=settings.shipping_coverage_area,
         standard_shipping_fee_minor=settings.standard_shipping_fee_minor,
+        shipping_rules_configured=settings.shipping_rules_configured,
         free_shipping_threshold_minor=settings.free_shipping_threshold_minor,
     )
 
@@ -118,6 +122,7 @@ def get_admin_store_settings(db: Session) -> AdminStoreSettingsResponse:
         privacy_policy_published_at=settings.privacy_policy_published_at,
         shipping_coverage_area=settings.shipping_coverage_area,
         standard_shipping_fee_minor=settings.standard_shipping_fee_minor,
+        shipping_rules_configured=settings.shipping_rules_configured,
         free_shipping_threshold_minor=settings.free_shipping_threshold_minor,
         low_stock_threshold=settings.low_stock_threshold,
         stock_staleness_threshold_days=settings.stock_staleness_threshold_days,
@@ -133,8 +138,17 @@ def update_store_settings(
     req: UpdateStoreSettingsRequest,
 ) -> AdminStoreSettingsResponse:
     settings = get_or_create_store_settings(db)
+    # Serialize edits; an explicit version prevents stale browser overwrites.
+    db.refresh(settings, with_for_update=True)
     req_dict = req.model_dump(exclude_unset=True)
+    expected = req_dict.pop('expected_version', None)
+    if expected is not None and expected != settings.version:
+        raise ValueError('Settings changed in another session. Reload before saving.')
     change_reason = req_dict.pop('change_reason', None)
+    if 'shipping_coverage_area' in req_dict:
+        coverage = req_dict['shipping_coverage_area']
+        if coverage is None or not coverage.strip() or len(coverage.split(',')) > 20:
+            raise ValueError('Enter All Pakistan or up to 20 comma-separated cities/provinces.')
 
     if not req_dict:
         return get_admin_store_settings(db)
@@ -248,7 +262,7 @@ def get_audit_logs(db: Session, limit: int = 50) -> list[StoreSettingsAuditLog]:
 
 
 DEFAULT_NAV_ORDER = [
-    'products', 'collections', 'hero', 'media', 'inventory',
+    'overview', 'products', 'collections', 'hero', 'media', 'inventory',
     'suppliers', 'orders', 'returns', 'coupons', 'expenses',
     'analytics', 'settings'
 ]
@@ -257,8 +271,8 @@ DEFAULT_DASHBOARD_LAYOUT = {
     'cards': [
         {'id': 'sales', 'visible': True},
         {'id': 'inventory', 'visible': True},
-        {'id': 'liabilities', 'visible': True},
-        {'id': 'expenses', 'visible': True},
+        {'id': 'orders', 'visible': True},
+        {'id': 'low_stock', 'visible': True},
     ]
 }
 
@@ -277,6 +291,15 @@ def get_or_create_owner_preferences(db: Session, user_id: uuid.UUID) -> OwnerPre
         )
         db.add(pref)
         db.flush()
+    layout = pref.dashboard_layout or {}
+    cards = layout.get('cards', [])
+    allowed = {'sales', 'orders', 'inventory', 'low_stock'}
+    valid = []
+    for card in cards:
+        if isinstance(card, dict) and card.get('id') in allowed and type(card.get('visible')) is bool and card['id'] not in {item['id'] for item in valid}:
+            valid.append({'id': card['id'], 'visible': card['visible']})
+    pref.dashboard_layout = {'cards': valid + [card for card in DEFAULT_DASHBOARD_LAYOUT['cards'] if card['id'] not in {item['id'] for item in valid}]}
+    pref.nav_order = list(dict.fromkeys([key for key in pref.nav_order if key in DEFAULT_NAV_ORDER] + DEFAULT_NAV_ORDER))
     return pref
 
 
@@ -287,7 +310,27 @@ def update_owner_preferences(
 ) -> OwnerPreference:
     pref = get_or_create_owner_preferences(db, user_id)
     req_dict = req.model_dump(exclude_unset=True)
+    if 'nav_order' in req_dict:
+        nav = req_dict['nav_order']
+        if nav is None or len(nav) != len(set(nav)) or any(key not in DEFAULT_NAV_ORDER for key in nav):
+            raise ValueError('Choose unique supported navigation sections.')
+        req_dict['nav_order'] = nav + [key for key in DEFAULT_NAV_ORDER if key not in nav]
+    if 'default_date_range' in req_dict and req_dict['default_date_range'] not in {'today', 'this_month', 'last_month', 'all_time'}:
+        raise ValueError('Choose a supported analytics period.')
+    if 'dashboard_layout' in req_dict:
+        layout = req_dict['dashboard_layout']
+        allowed = {'sales', 'inventory', 'orders', 'low_stock'}
+        if not isinstance(layout, dict) or set(layout) != {'cards'} or not isinstance(layout['cards'], list):
+            raise ValueError('Choose the overview card layout using the supported controls.')
+        cards = layout['cards']
+        if len(cards) > 4 or any(not isinstance(c, dict) or set(c) != {'id', 'visible'} or
+                c['id'] not in allowed or type(c['visible']) is not bool for c in cards) or len({c['id'] for c in cards}) != len(cards):
+            raise ValueError('Choose supported overview cards without duplicates.')
+        req_dict['dashboard_layout'] = {'cards': cards + [c for c in DEFAULT_DASHBOARD_LAYOUT['cards']
+            if c['id'] not in {item['id'] for item in cards}]}
     for key, value in req_dict.items():
+        if value is None:
+            raise ValueError('Preferences cannot be null.')
         setattr(pref, key, value)
     pref.updated_at = utcnow()
     db.flush()

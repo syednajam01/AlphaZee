@@ -31,6 +31,9 @@ class OrderItemRequest(BaseModel):
 
 class OrderCreateRequest(BaseModel):
     """Customer checkout payload."""
+    model_config = ConfigDict(extra='forbid')
+    expected_total_minor: int | None = Field(default=None, ge=0)
+
 
     customer_name: str = Field(min_length=2, max_length=100, description="Full recipient name")
     customer_phone: str = Field(description="Pakistan mobile phone number (e.g. 0300-1234567)")
@@ -184,6 +187,7 @@ class OrderResponseSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    supplier_picked_up_at: datetime | None = None
     id: uuid.UUID
     order_number: str
     idempotency_key: Optional[str] = None

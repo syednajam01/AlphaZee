@@ -39,6 +39,19 @@ TEST_DB_URL = os.environ.get(
 )
 
 
+@pytest.fixture(autouse=True)
+def prohibit_application_database_queries():
+    """A test must use the injected disposable session, never the running app DB."""
+    from app.database import engine as application_engine
+    def refuse(*args, **kwargs):
+        raise RuntimeError('Tests cannot query the application database. Use the guarded db_session fixture.')
+    event.listen(application_engine, 'before_cursor_execute', refuse)
+    try:
+        yield
+    finally:
+        event.remove(application_engine, 'before_cursor_execute', refuse)
+
+
 def validate_test_database_url(url_str: str, app_url_str: str | None = None) -> None:
     """
     Validate that the test database URL points to a dedicated disposable database.

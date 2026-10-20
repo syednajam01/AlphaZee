@@ -15,6 +15,18 @@ from app.queries.inventory import StaleInventoryError, adjust_inventory, get_act
 from app.queries.stock_rules import holding_predicate
 from app.services.passwords import hash_password
 from app.services.vendor_session_store import revoke_vendor_user_sessions
+from app.services.stock_ownership import owned_physical
+from app.models.owned_stock import OwnedStockAllocation
+
+
+def vendor_counts(db, mapping_id, balance):
+    owned = owned_physical(db, mapping_id)
+    held = int(db.scalar(select(func.coalesce(func.sum(StockReservation.quantity), 0)).where(
+        StockReservation.supplier_variant_id == mapping_id, holding_predicate())) or 0)
+    owned_held = int(db.scalar(select(func.coalesce(func.sum(OwnedStockAllocation.quantity), 0))
+        .join(StockReservation, StockReservation.id == OwnedStockAllocation.reservation_id).where(
+            StockReservation.supplier_variant_id == mapping_id, holding_predicate())) or 0)
+    return (balance.on_hand if balance else 0) - owned, held - owned_held, owned
 
 
 def _utcnow() -> datetime:
@@ -53,6 +65,11 @@ def provision_vendor_user(
             raise ValueError(f"Username '{clean_username}' is already in use by another shop.")
         existing_user.password_hash = password_hash
         existing_user.is_active = True
+        account = db.get(UserAccount, existing_user.user_id)
+        account.is_active = True
+        membership = db.get(SupplierMembership, (existing_user.user_id, vendor_id))
+        if membership:
+            membership.active = True
         existing_user.updated_at = _utcnow()
         revoke_vendor_user_sessions(db, existing_user.id)
         db.flush()
@@ -175,10 +192,8 @@ def get_vendor_stock_list(
         .outerjoin(InventoryBalance, InventoryBalance.supplier_variant_id == SupplierVariant.id)
         .where(
             Product.status != "archived",
-            or_(
-                Product.vendor_id == vendor_id,
-                SupplierVariant.supplier_id == vendor_id,
-            ),
+            Product.vendor_id == vendor_id,
+            Product.stock_management_source == 'vendor_managed',
         )
     )
 
@@ -215,14 +230,17 @@ def get_vendor_stock_list(
             )
         )
         held = int(db.scalar(held_stmt) or 0)
-        available = max(0, on_hand - held)
+        on_hand, held, _ = vendor_counts(db, sv.id, balance)
+        from app.services.stock_safety import has_open_shortage
+        available = 0 if has_open_shortage(db, sv.id) or (balance and balance.ownership_review_required) else max(0, on_hand - held)
 
         items.append({
             "variant_id": var.id,
             "product_id": prod.id,
             "product_title": prod.title,
             "product_slug": prod.slug,
-            "thumbnail_url": prod.hero_image_url if hasattr(prod, "hero_image_url") else None,
+            "thumbnail_url": next((f'/api/v1/media/{link.asset_id}/content' for link in prod.media_links
+                if link.role == 'primary' and link.asset.state == 'ready'), None),
             "variant_sku": var.sku,
             "size": var.size,
             "color": var.color,
@@ -253,6 +271,12 @@ def update_vendor_counted_quantity(
     WITHOUT overwriting or cancelling customer reservations.
     """
     # 1. Verify variant belongs to this vendor
+    # Serialize against product reassignment before reading the active mapping.
+    product_id = db.scalar(select(Variant.product_id).where(Variant.id == variant_id))
+    product = db.scalar(select(Product).where(Product.id == product_id).with_for_update(read=True)
+                        .execution_options(populate_existing=True))
+    if not product or product.vendor_id != vendor_id or product.stock_management_source != 'vendor_managed':
+        raise ValueError('Variant not assigned to this vendor.')
     sv = db.scalar(
         select(SupplierVariant)
         .join(Variant, Variant.id == SupplierVariant.variant_id)
@@ -289,16 +313,19 @@ def update_vendor_counted_quantity(
         raise StaleInventoryError(
             f"Inventory version conflict. Current version is {balance.version}, physical count {balance.on_hand}, held {held}."
         )
+    if balance.ownership_review_required:
+        raise ValueError('The store owner must reconcile historical returned-stock ownership before vendor counts can change.')
 
     # 3. Check committed holds
-    held_reservations = int(db.scalar(
-        select(func.coalesce(func.sum(StockReservation.quantity), 0))
-        .where(StockReservation.supplier_variant_id == sv.id, holding_predicate())
-    ) or 0)
+    vendor_on_hand, held_reservations, owned = vendor_counts(db, sv.id, balance)
 
     # 4. Shortage detection: counted_quantity < held_reservations
     if counted_quantity < held_reservations:
-        shortage = VendorStockShortage(
+        shortage = db.scalar(select(VendorStockShortage).where(
+            VendorStockShortage.variant_id == variant_id, VendorStockShortage.vendor_id == vendor_id,
+            VendorStockShortage.status == 'open', VendorStockShortage.reported_count == counted_quantity))
+        if shortage is None:
+            shortage = VendorStockShortage(
             variant_id=variant_id,
             vendor_id=vendor_id,
             vendor_user_id=vendor_user.id,
@@ -312,9 +339,9 @@ def update_vendor_counted_quantity(
         db.flush()
         return {
             "variant_id": variant_id,
-            "allocated_on_hand": balance.on_hand,
+            "allocated_on_hand": vendor_on_hand,
             "held_quantity": held_reservations,
-            "available_quantity": max(0, balance.on_hand - held_reservations),
+            "available_quantity": 0,
             "version": balance.version,
             "shortage_detected": True,
             "message": f"Reported count ({counted_quantity}) is below committed holds ({held_reservations}). Shortage alert recorded for owner review; existing reservations are preserved.",
@@ -326,7 +353,7 @@ def update_vendor_counted_quantity(
         db,
         supplier_variant_id=sv.id,
         actor_user_id=vendor_user.user_id,
-        new_on_hand=counted_quantity,
+        new_on_hand=counted_quantity + owned,
         reason="manual_count",
         expected_version=expected_version,
         notes=detailed_note,
@@ -335,7 +362,8 @@ def update_vendor_counted_quantity(
     )
     db.flush()
 
-    new_available = max(0, counted_quantity - held_reservations)
+    from app.services.stock_safety import has_open_shortage
+    new_available = 0 if has_open_shortage(db, sv.id) else max(0, counted_quantity - held_reservations)
     return {
         "variant_id": variant_id,
         "allocated_on_hand": counted_quantity,
@@ -356,6 +384,10 @@ def report_vendor_shortage(
     note: Optional[str] = None,
 ) -> VendorStockShortage:
     """Explicitly report a stock shortage for owner resolution."""
+    product_id = db.scalar(select(Variant.product_id).where(Variant.id == variant_id))
+    product = db.scalar(select(Product).where(Product.id == product_id).with_for_update(read=True))
+    if not product or product.vendor_id != vendor_id or product.stock_management_source != 'vendor_managed':
+        raise ValueError('Variant not assigned to this vendor.')
     sv = db.scalar(
         select(SupplierVariant).where(
             SupplierVariant.variant_id == variant_id,
@@ -367,7 +399,7 @@ def report_vendor_shortage(
         raise ValueError("Variant not assigned to this vendor.")
 
     balance = db.scalar(
-        select(InventoryBalance).where(InventoryBalance.supplier_variant_id == sv.id)
+        select(InventoryBalance).where(InventoryBalance.supplier_variant_id == sv.id).with_for_update()
     )
     on_hand = balance.on_hand if balance else 0
 
@@ -403,7 +435,8 @@ def get_vendor_update_history(
         .join(Variant, Variant.id == SupplierVariant.variant_id)
         .join(Product, Product.id == Variant.product_id)
         .outerjoin(UserAccount, UserAccount.id == StockEvent.actor_user_id)
-        .where(SupplierVariant.supplier_id == vendor_id)
+        .where(SupplierVariant.supplier_id == vendor_id, SupplierVariant.active.is_(True),
+               Product.vendor_id == vendor_id, Product.stock_management_source == 'vendor_managed')
         .order_by(StockEvent.occurred_at.desc())
         .limit(limit)
     )
@@ -416,12 +449,12 @@ def get_vendor_update_history(
             "variant_id": var.id,
             "product_title": prod.title,
             "variant_sku": var.sku,
-            "actor_username": user.display_name if user else "System",
+            "actor_username": user.display_name if user and user.auth_subject.startswith('vendor:') else "Store team",
             "previous_on_hand": ev.previous_on_hand,
             "new_on_hand": ev.new_on_hand,
             "delta": ev.delta,
             "reason": ev.reason,
-            "notes": ev.notes,
+            "notes": ev.notes if user and user.auth_subject.startswith('vendor:') else None,
             "occurred_at": ev.occurred_at,
         })
     return history, len(history)
@@ -455,6 +488,16 @@ def resolve_shortage(
     shortage = db.get(VendorStockShortage, shortage_id)
     if not shortage:
         raise ValueError("Shortage record not found.")
+
+    mapping = db.scalar(select(SupplierVariant).where(SupplierVariant.variant_id == shortage.variant_id,
+        SupplierVariant.supplier_id == shortage.vendor_id, SupplierVariant.active.is_(True)))
+    balance = db.scalar(select(InventoryBalance).where(
+        InventoryBalance.supplier_variant_id == mapping.id).with_for_update()) if mapping else None
+    if not balance or not balance.last_counted_at or balance.last_counted_at <= shortage.reported_at:
+        raise ValueError('Record a fresh physical count after the shortage before resolving it.')
+    physical, held, _ = vendor_counts(db, mapping.id, balance)
+    if physical < held or not resolution_note.strip():
+        raise ValueError('Reconcile committed units and record a resolution note first.')
 
     shortage.status = resolution_action
     shortage.resolved_at = _utcnow()

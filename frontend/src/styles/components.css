@@ -1070,3 +1070,20 @@
 
 
 
+
+/* Scoped owner preferences, including existing inline table styles. */
+#admin-modal[data-table-density="compact"] td,
+#admin-modal[data-table-density="compact"] th { padding-block: 5px !important; }
+#admin-modal[data-owner-theme="light"] .modal-content,
+#admin-modal[data-owner-theme="light"] #admin-sidebar,
+#admin-modal[data-owner-theme="light"] #admin-content-area { background: #f8fafc !important; color: #172033 !important; }
+#admin-modal[data-owner-theme="light"] :is(p, span, label, h2, h3, h4, td, th, strong, button, select, input, textarea, div[style*="color:"]) { color: #172033 !important; }
+#admin-modal[data-owner-theme="light"] :is(input, select, textarea, .admin-input) { background: #fff !important; border-color: #64748b !important; }
+#admin-modal[data-owner-theme="light"] .btn-primary { background: #145c44 !important; color: #fff !important; }
+@media (prefers-color-scheme: light) {
+ #admin-modal[data-owner-theme="system"] .modal-content { background: #f8fafc !important; color: #172033 !important; }
+ #admin-modal[data-owner-theme="system"] :is(p,span,label,h2,h3,h4,td,th,strong,button,div[style*="color:"]) { color: #172033 !important; }
+}
+
+html[data-store-spacing="compact"] :is(.section,.collections-section,.featured-section) { padding-block: 32px; }
+html[data-store-spacing="spacious"] :is(.section,.collections-section,.featured-section) { padding-block: 80px; }

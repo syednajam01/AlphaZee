@@ -184,6 +184,7 @@ class Shipment(Base):
     )
 
     # RTO Tracking
+    rto_cost_recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rto_reason: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,

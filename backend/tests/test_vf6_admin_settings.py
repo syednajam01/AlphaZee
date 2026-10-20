@@ -12,17 +12,30 @@ from app.services.owners import provision_owner
 
 
 @pytest.fixture
-def db():
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+def db(db_session):
+    return db_session
 
 
 @pytest.fixture
-def client():
-    return TestClient(app, base_url="http://localhost:3000")
+def client(db_session, monkeypatch):
+    from app.database import get_db
+    from app.dependencies.checkout import require_checkout_enabled
+    from sqlalchemy.orm import sessionmaker
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[require_checkout_enabled] = lambda: None
+    # Legacy helpers use SessionLocal; route them to this same guarded test transaction.
+    import sys
+    module = sys.modules[__name__]
+    from contextlib import contextmanager
+    @contextmanager
+    def scoped_session():
+        yield db_session
+    monkeypatch.setattr(module, 'SessionLocal', scoped_session)
+    try:
+        with TestClient(app, base_url='http://localhost:3000') as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 def _create_owner(db, username=None):

@@ -1336,3 +1336,15 @@ export async function resetAdminPreferences() {
 
 
 
+
+export async function confirmSupplierPickup(orderId) {
+  return request(`/admin/orders/${encodeURIComponent(orderId)}/confirm-pickup`, { method: 'POST' });
+}
+
+export async function fetchCheckoutQuote(payload) {
+  return request('/orders/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+}
+
+export async function reviewStockOwnership(mappingId, payload) {
+  return request(`/admin/inventory/${encodeURIComponent(mappingId)}/ownership-review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+}

@@ -192,8 +192,8 @@ export function createStoreSettingsComponent() {
 
   function renderShippingTab() {
     const s = currentSettings;
-    const stdPkr = Math.round(s.standard_shipping_fee_minor / 100);
-    const freePkr = s.free_shipping_threshold_minor ? Math.round(s.free_shipping_threshold_minor / 100) : '';
+    const stdPkr = s.standard_shipping_fee_minor / 100;
+    const freePkr = s.free_shipping_threshold_minor ? s.free_shipping_threshold_minor / 100 : '';
 
     return `
       <form id="form-shipping-settings" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
@@ -203,9 +203,10 @@ export function createStoreSettingsComponent() {
             AlphaZee strictly bears 100% of RTO and return transit expenses. Configure customer-facing delivery coverage and flat standard charges below.
           </p>
           
+          <label><input id="confirm-shipping-rules" type="checkbox" ${s.shipping_rules_configured ? 'checked' : ''}> I confirm these customer-facing delivery rules are ready to use.</label>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Coverage Area</label>
+              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Coverage: All Pakistan or comma-separated cities/provinces</label>
               <input type="text" id="input-shipping-coverage" value="${escapeHtml(s.shipping_coverage_area || 'All Pakistan')}" class="admin-input" style="width: 100%;" required>
             </div>
             <div>
@@ -412,6 +413,10 @@ export function createStoreSettingsComponent() {
           </div>
         </div>
 
+        <fieldset><legend>Sidebar order</legend><p>Set a unique position for each section.</p>
+        ${(p.nav_order || []).map((id, index) => `<label style="display:block">${escapeHtml(id)} <input class="pref-nav-position" data-id="${escapeHtml(id)}" type="number" min="1" max="20" value="${index + 1}" required></label>`).join('')}</fieldset>
+        <fieldset><legend>Overview cards</legend>
+        ${(p.dashboard_layout?.cards || []).map((card, index) => `<label style="display:block"><input type="checkbox" class="pref-card-visible" data-id="${escapeHtml(card.id)}" ${card.visible ? 'checked' : ''}> ${escapeHtml(card.id)} <input class="pref-card-position" data-id="${escapeHtml(card.id)}" aria-label="${escapeHtml(card.id)} position" type="number" min="1" max="4" value="${index + 1}" required></label>`).join('')}</fieldset>
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
           <button type="button" id="btn-reset-preferences" class="btn btn-secondary" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4);">
             🔄 Reset to System Defaults
@@ -500,6 +505,7 @@ export function createStoreSettingsComponent() {
             spacing_density: container.querySelector('#select-spacing-density').value,
             change_reason: container.querySelector('#input-change-reason').value.trim() || undefined,
           };
+          payload.expected_version = currentSettings.version;
           const res = await updateAdminStoreSettings(payload);
           currentSettings = res;
           showAlert(`Storefront settings saved! Revision v${res.version} is now active.`);
@@ -523,10 +529,13 @@ export function createStoreSettingsComponent() {
           const payload = {
             shipping_coverage_area: container.querySelector('#input-shipping-coverage').value.trim(),
             standard_shipping_fee_minor: Math.round(feePkr * 100),
+            shipping_rules_configured: container.querySelector('#confirm-shipping-rules').checked,
+            expected_version: currentSettings.version,
             free_shipping_threshold_minor: freePkr !== null ? Math.round(freePkr * 100) : null,
             low_stock_threshold: parseInt(container.querySelector('#input-low-stock-threshold').value, 10),
             stock_staleness_threshold_days: parseInt(container.querySelector('#input-staleness-threshold').value, 10),
           };
+          payload.expected_version = currentSettings.version;
           const res = await updateAdminStoreSettings(payload);
           currentSettings = res;
           showAlert(`Logistics and operational thresholds updated (Revision v${res.version}).`);
@@ -614,8 +623,13 @@ export function createStoreSettingsComponent() {
             table_density: container.querySelector('#select-pref-density').value,
             default_date_range: container.querySelector('#select-pref-date').value,
           };
+          const positions = Array.from(container.querySelectorAll('.pref-nav-position'));
+          if (new Set(positions.map(input => input.value)).size !== positions.length) throw new Error('Choose unique sidebar positions.');
+          payload.nav_order = positions.sort((a,b) => Number(a.value)-Number(b.value)).map(input => input.dataset.id);
+          payload.dashboard_layout = { cards: Array.from(container.querySelectorAll('.pref-card-position')).sort((a,b) => Number(a.value)-Number(b.value)).map(input => ({ id: input.dataset.id, visible: Array.from(container.querySelectorAll('.pref-card-visible')).find(check => check.dataset.id === input.dataset.id).checked })) };
           const res = await updateAdminPreferences(payload);
           currentPreferences = res;
+          container.dispatchEvent(new CustomEvent("owner-preferences-changed", { bubbles: true }));
           showAlert('Personal interface preferences saved.');
           render();
         } catch (err) {
@@ -632,6 +646,7 @@ export function createStoreSettingsComponent() {
         try {
           const res = await resetAdminPreferences();
           currentPreferences = res;
+          container.dispatchEvent(new CustomEvent("owner-preferences-changed", { bubbles: true }));
           showAlert('Preferences reset to system defaults.');
           render();
         } catch (err) {

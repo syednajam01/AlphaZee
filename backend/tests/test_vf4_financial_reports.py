@@ -151,6 +151,7 @@ def test_golden_fixture_1_delivered_cod_economics_and_cash(
     - Supplier paid 700 then 500: liability becomes 0.
     - Paid packaging (50) leaves net recorded cash movement 550 (1,800 - 1,200 - 50 = 550).
     """
+    baseline_cash = get_period_financial_report(db_session)["cash_reconciliation"]
     var = setup_test_entities["variant"]
     sup = setup_test_entities["supplier"]
 
@@ -319,20 +320,23 @@ def test_golden_fixture_1_delivered_cod_economics_and_cash(
     assert report["operating_result"]["contribution_before_overhead_minor"] == 55000
     assert report["operating_result"]["contribution_margin_percent"] == 27.5
 
+    # Compare exact fixture movement against any independently committed concurrency fixtures.
+    cash_delta = {key: value - baseline_cash[key] for key, value in report["cash_reconciliation"].items()
+                  if isinstance(value, int)}
     # Cash Reconciliation:
     # Inflow: Remitted 1,800
-    assert report["cash_reconciliation"]["courier_cod_remitted_minor"] == 180000
-    assert report["cash_reconciliation"]["total_cash_inflow_minor"] == 180000
+    assert cash_delta["courier_cod_remitted_minor"] == 180000
+    assert cash_delta["total_cash_inflow_minor"] == 180000
     # Outflow: Supplier payments (700 + 500 = 1,200) + packaging (50) = 1,250
-    assert report["cash_reconciliation"]["supplier_payments_paid_minor"] == 120000
-    assert report["cash_reconciliation"]["business_expenses_paid_cash_or_bank_minor"] == 5000
-    assert report["cash_reconciliation"]["total_cash_outflow_minor"] == 125000
+    assert cash_delta["supplier_payments_paid_minor"] == 120000
+    assert cash_delta["business_expenses_paid_cash_or_bank_minor"] == 5000
+    assert cash_delta["total_cash_outflow_minor"] == 125000
     # Net cash movement: 1,800 - 1,250 = 550
-    assert report["cash_reconciliation"]["net_cash_movement_minor"] == 55000
+    assert cash_delta["net_cash_movement_minor"] == 55000
     # Supplier liability: 0 (fully paid)
-    assert report["cash_reconciliation"]["supplier_liabilities_outstanding_minor"] == 0
+    assert cash_delta["supplier_liabilities_outstanding_minor"] == 0
     # Courier held COD: 0
-    assert report["cash_reconciliation"]["courier_held_cod_outstanding_minor"] == 0
+    assert cash_delta["courier_held_cod_outstanding_minor"] == 0
 
 
 def test_golden_fixture_2_rto_before_delivery(

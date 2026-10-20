@@ -236,6 +236,12 @@ def test_idempotent_event_posting(db_session, test_supplier):
     db_session.add(line)
     db_session.flush()
     db_session.refresh(order)
+    # Capture the acquisition when stock is reserved, as real checkout does.
+    from app.models.inventory import InventoryBalance
+    from app.queries.reservations import create_stock_reservation
+    db_session.add(InventoryBalance(supplier_variant_id=sv.id, on_hand=2))
+    db_session.flush()
+    create_stock_reservation(db_session, supplier_variant_id=sv.id, order_line_id=line.id, quantity=2)
 
     # 1. Trigger event 'dispatch'
     entries1 = post_event_liability_if_applicable(

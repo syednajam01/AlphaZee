@@ -67,6 +67,7 @@ class RevenueBreakdown(BaseModel):
 
 
 class CogsBreakdown(BaseModel):
+    inventory_writeoffs_minor: int = 0
     gross_cogs_minor: int
     cogs_reversals_minor: int
     net_cogs_minor: int

@@ -92,7 +92,7 @@ def apply_product(db: Session, product, data):
                                fields=[{'field': 'vendor_id', 'code': 'required', 'message': 'Choose an active shop'}])
         from app.models.suppliers import Supplier
         vendor = db.get(Supplier, new_vendor_id)
-        if not vendor or vendor.status != 'active':
+        if not vendor or vendor.status != 'active' or vendor.supplier_type != 'external_vendor':
             raise CatalogError('invalid_vendor', 'Selected vendor does not exist or is not active', 422,
                                fields=[{'field': 'vendor_id', 'code': 'invalid', 'message': 'Choose an active shop'}])
     elif new_source == 'alphazee_managed':
@@ -111,6 +111,15 @@ def apply_product(db: Session, product, data):
         from sqlalchemy import func
         v_ids = [v.id for v in product.variants if v.id]
         if v_ids:
+            from app.models.inventory import InventoryBalance
+            from app.models.vendor_portal import VendorStockShortage
+            balances = db.scalars(select(InventoryBalance).join(SupplierVariant).where(
+                SupplierVariant.variant_id.in_(v_ids)).order_by(InventoryBalance.supplier_variant_id)
+                .with_for_update(of=InventoryBalance)).all()
+            if any(balance.on_hand for balance in balances) or db.scalar(select(VendorStockShortage.id).where(
+                    VendorStockShortage.variant_id.in_(v_ids), VendorStockShortage.status == 'open').limit(1)):
+                raise CatalogError('reassignment_blocked',
+                    'Resolve shortages and explicitly reconcile all source stock to zero before changing responsibility.', 409)
             active_holds = db.scalar(
                 select(func.count(StockReservation.id))
                 .join(SupplierVariant, SupplierVariant.id == StockReservation.supplier_variant_id)
@@ -170,13 +179,14 @@ def apply_product(db: Session, product, data):
                     supplier_id=target_supplier_id,
                     variant_id=v.id,
                     active=True,
-                    supplier_cost_minor=0
+                    supplier_cost_minor=None
                 )
                 db.add(sv)
                 db.flush()
                 db.add(InventoryBalance(supplier_variant_id=sv.id, on_hand=0))
             elif is_reassignment and active_sv.supplier_id != target_supplier_id:
                 active_sv.active = False
+                db.flush()
                 new_sv = db.scalar(select(SupplierVariant).where(
                     SupplierVariant.variant_id == v.id,
                     SupplierVariant.supplier_id == target_supplier_id
@@ -188,7 +198,7 @@ def apply_product(db: Session, product, data):
                         supplier_id=target_supplier_id,
                         variant_id=v.id,
                         active=True,
-                        supplier_cost_minor=active_sv.supplier_cost_minor
+                        supplier_cost_minor=None
                     )
                     db.add(new_sv)
                     db.flush()

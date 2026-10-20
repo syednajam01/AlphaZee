@@ -1,8 +1,24 @@
 # VF0–VF6 independent review for Antigravity
 
+**2026-10-20 correction:** The findings below are historical. Integration repairs are now implemented and terminal-tested; see `vf_integration_repairs_report.md` for evidence and rollout. Actual dispatch/return/resale/shortage journeys now have API regressions. Browser acceptance remains pending under `vf_repairs_browser_verification_guide.md`; earlier screenshots do not verify the repaired flows.
+
 Reviewed 2026-10-20 while VF7 was in progress. Scope: both implementation guides, progress report, and current source/tests. This is a static code review, not a fresh test run or browser certification. Concurrent edits may supersede findings; check current source before fixing. Preserve existing work/data.
 
 **Verdict:** substantial progress, but do not accept VF1–VF6 as fully integrated yet. The new screens, modules, migrations, vendor sessions, product-source selector and test coverage are useful. Several business-critical requirements currently exist as isolated helpers or fields rather than complete journeys.
+
+## Recheck after VF7 completion claim — 2026-10-20
+
+**Acceptance remains blocked.** Re-read the updated progress report and current application code plus `backend/tests/test_vf7_integrated_milestone.py`. The critical integration findings below remain present. No new browser run or test execution was performed for this recheck.
+
+- The liability helper still has no application callers under `backend/app`. VF7 lines 300–310 invoke it directly instead of dispatching through the application's fulfillment flow.
+- VF7 constructs orders, shipments and a completed return directly in the database. Line 456 explicitly sets `ownership_source="alphazee_owned"` on a new line. This proves a conditional skip, not automatic return/restock/resale ownership tracking.
+- The shortage branch still returns availability from the old balance. VF7 lines 270–273 assert that the old physical count/version remain unchanged, but do not prove another customer cannot reserve the unavailable units.
+- Period sales still filter `Order.placed_at`; freight still uses `max()` across unrelated totals. These previously identified reporting defects are unchanged.
+- The public-settings privacy assertion at VF7 line 564 uses `not hasattr(pub, "audit_logs")` on a dictionary. That does not test absence of the JSON key; use `"audit_logs" not in pub` and assert the complete allowed public response shape.
+- VF7's containment assertion changes application settings within TestClient. It is useful dependency coverage, but does not independently verify the running port 13000/18000 deployment.
+- The two final acceptance report files required by the guides were not found in `.context` during this recheck.
+
+Antigravity: address every numbered finding below, then verify real application/API journeys and actual browser flows. Keep direct service tests, but do not present them as end-to-end proof. Replace broad completion claims with explicit remaining gaps until those journeys pass. Passing 45 selected tests does not override missing application wiring.
 
 ## Fix before final acceptance
 

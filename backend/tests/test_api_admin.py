@@ -85,6 +85,8 @@ def _create_admin_setup(db: Session, on_hand: int = 10):
     )
     db.add(supplier)
     db.flush()
+    prod.stock_management_source = 'vendor_managed'
+    prod.vendor_id = supplier.id
 
     sv = SupplierVariant(
         supplier_id=supplier.id,
@@ -340,6 +342,16 @@ def test_admin_supplier_crud_and_variant_cost_assignment(admin_client, db_sessio
         "supplier_cost_minor": 175000,
         "active": True,
     }
+    assign_res = admin_client.post(f"/api/v1/admin/suppliers/{sup_id}/variants", json=assign_payload)
+    assert assign_res.status_code == 409  # Variant controls cannot bypass product responsibility.
+    stock = admin_client.post('/api/v1/admin/inventory/adjust', json={
+        'supplier_variant_id': str(setup['sv'].id), 'quantity_delta': -5,
+        'expected_version': setup['balance'].version, 'reason': 'manual_count'})
+    assert stock.status_code == 200, stock.text
+    product = admin_client.get(f"/api/v1/admin/products/{setup['product'].id}").json()
+    reassigned = admin_client.post(f"/api/v1/admin/products/{setup['product'].id}", json={
+        'expected_version': product['edit_version'], 'stock_management_source': 'vendor_managed', 'vendor_id': sup_id})
+    assert reassigned.status_code == 200, reassigned.text
     assign_res = admin_client.post(f"/api/v1/admin/suppliers/{sup_id}/variants", json=assign_payload)
     assert assign_res.status_code == 200
     assign_data = assign_res.json()

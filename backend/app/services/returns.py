@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.models.inventory import StockReservation, InventoryBalance, SupplierVariant
@@ -235,6 +235,13 @@ def inspect_return_items(db: Session, *, return_id: uuid.UUID, sellable_quantity
             reason='customer_return', expected_version=balance.version,
             notes=notes or f'Customer return inspection {ret.id}',
             source_ref=f'customer_return:{ret.id}:{sellable_quantity}')
+        from app.services.stock_ownership import restock_owned, returned_cost
+        prior = db.scalar(select(func.coalesce(func.sum(OrderReturn.sellable_quantity), 0)).where(
+            OrderReturn.order_line_id == ret.order_line_id, OrderReturn.id != ret.id)) or 0
+        restock_owned(db, supplier_variant_id, db.get(OrderLine, ret.order_line_id), increase,
+                      f'customer_return:{ret.id}:{sellable_quantity}', offset=prior + ret.sellable_quantity)
+        ret.restocked_cost_minor = (ret.restocked_cost_minor or 0) + returned_cost(
+            db.get(OrderLine, ret.order_line_id), increase, prior + ret.sellable_quantity)
         ret.restocked_at = ret.restocked_at or _utcnow()
     ret.sellable_quantity = sellable_quantity
     ret.damaged_quantity = damaged_quantity

@@ -10,6 +10,7 @@ Handles:
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -20,7 +21,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.v1.orders import _order_to_response
 from app.database import get_db
-from app.models.catalog import Variant
+from app.models.catalog import Variant, Product
 from app.models.inventory import InventoryBalance, SupplierVariant
 from app.models.orders import Order
 from app.models.shipments import Shipment
@@ -225,6 +226,7 @@ def adjust_inventory_endpoint(
             reason=payload.reason,
             expected_version=payload.expected_version,
             notes=' | '.join(value for value in (payload.reference_id, payload.notes) if value) or None,
+            last_counted_at=datetime.now(timezone.utc) if payload.reason == 'manual_count' else None,
         )
         db.commit()
     except StaleInventoryError as err:
@@ -359,6 +361,60 @@ def confirm_supplier_endpoint(
         ) from err
 
     return _order_to_response(order)
+
+
+@router.post('/orders/{order_id}/confirm-pickup', response_model=OrderResponseSchema)
+def confirm_pickup_endpoint(order_id: uuid.UUID, db: Session = Depends(get_db),
+                            principal: OwnerPrincipal = Depends(require_owner_session)):
+    from app.services.orders import confirm_supplier_pickup
+    try:
+        order = confirm_supplier_pickup(db, order_id, principal.owner.user_id)
+        db.commit()
+        return _order_to_response(order)
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(409, str(error)) from error
+
+
+class OwnershipLotInput(BaseModel):
+    quantity: int = Field(ge=1, le=2147483647)
+    unit_cost_minor: int = Field(ge=0, le=2147483647)
+
+
+class OwnershipReviewInput(BaseModel):
+    expected_version: int = Field(ge=0)
+    owned_lots: list[OwnershipLotInput] = Field(default_factory=list, max_length=100)
+    note: str = Field(min_length=5, max_length=500)
+
+
+@router.post('/inventory/{mapping_id}/ownership-review')
+def reconcile_inventory_ownership(mapping_id: uuid.UUID, payload: OwnershipReviewInput,
+    db: Session = Depends(get_db), principal: OwnerPrincipal = Depends(require_owner_session)):
+    from app.models.owned_stock import OwnedStockLot
+    balance = db.scalar(select(InventoryBalance).where(InventoryBalance.supplier_variant_id == mapping_id)
+                        .with_for_update().execution_options(populate_existing=True))
+    if not balance or not balance.ownership_review_required:
+        raise HTTPException(409, 'No pending legacy ownership review for this source.')
+    mapping = db.get(SupplierVariant, mapping_id)
+    product = mapping.variant.product
+    if (product.stock_management_source == 'vendor_managed' and product.vendor_id != mapping.supplier_id) or (
+            product.stock_management_source == 'alphazee_managed' and mapping.supplier.supplier_type != 'alphazee_internal'):
+        raise HTTPException(409, 'Reconcile the product stock responsibility first; it must agree with this inventory source.')
+    summary = get_stock_summary(db, mapping_id)
+    if summary.held or balance.version != payload.expected_version:
+        raise HTTPException(409, 'Resolve holds and reload the latest inventory before reviewing ownership.')
+    from app.services.stock_ownership import owned_physical
+    if sum(lot.quantity for lot in payload.owned_lots) + owned_physical(db, mapping_id) > balance.on_hand:
+        raise HTTPException(422, 'Owned units cannot exceed the existing physical balance.')
+    adjust_inventory(db, supplier_variant_id=mapping_id, actor_user_id=principal.owner.user_id,
+        new_on_hand=balance.on_hand, expected_version=balance.version, reason='adjustment_correction',
+        notes=f'Legacy ownership review: {payload.note}')
+    for index, lot in enumerate(payload.owned_lots):
+        db.add(OwnedStockLot(supplier_variant_id=mapping_id, remaining_quantity=lot.quantity,
+            unit_cost_minor=lot.unit_cost_minor, source_ref=f'ownership_review:{mapping_id}:{balance.version}:{index}'))
+    balance.ownership_review_required = False
+    db.commit()
+    return {'reviewed': True}
 
 
 @router.get('/orders/{order_id}/payment-instructions-preview')
@@ -714,6 +770,8 @@ def assign_supplier_variant_endpoint(
             detail=f"Supplier {supplier_id} not found.",
         )
 
+    product_id = db.scalar(select(Variant.product_id).where(Variant.id == payload.variant_id))
+    db.scalar(select(Product).where(Product.id == product_id).with_for_update().execution_options(populate_existing=True))
     variant = db.scalar(select(Variant).where(Variant.id == payload.variant_id).with_for_update().execution_options(populate_existing=True))
     if not variant:
         raise HTTPException(
@@ -723,6 +781,14 @@ def assign_supplier_variant_endpoint(
 
     if payload.active and supplier.status != 'active':
         raise HTTPException(422, 'Choose an active supplier before enabling its mapping')
+    product = variant.product
+    if payload.active:
+        expected_supplier = product.vendor_id
+        if product.stock_management_source == 'alphazee_managed':
+            from app.models.suppliers import get_or_create_internal_supplier
+            expected_supplier = get_or_create_internal_supplier(db).id
+        if supplier_id != expected_supplier:
+            raise HTTPException(409, 'Change stock responsibility in the product editor first; variant suppliers must match the product.')
     # The variant lock serializes assignment with checkout and other assignments.
     if payload.active:
         stmt = (

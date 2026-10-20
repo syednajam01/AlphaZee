@@ -8,7 +8,7 @@ import {
   fetchAdminMarketingAnalytics,
 } from '../../utils/api.js';
 
-export async function renderFinancialReports(container, viewGenerationRef) {
+export async function renderFinancialReports(container, viewGenerationRef, preferences = null) {
   let periodReport = null;
   let orderEconomics = { orders: [], total_orders: 0, page: 1, limit: 50 };
   let marketingAnalytics = null;
@@ -25,7 +25,7 @@ export async function renderFinancialReports(container, viewGenerationRef) {
 
   function setDatePreset(preset) {
     selectedPreset = preset;
-    const now = new Date();
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));
     // Use UTC/local date calculations for presets
     const pad = n => String(n).padStart(2, '0');
     const toIso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -96,6 +96,8 @@ export async function renderFinancialReports(container, viewGenerationRef) {
     const overhead = r.overhead_expenses || {};
 
     const csvOrdersUrl = getOrderEconomicsCsvUrl({
+      status: orderStatusFilter || undefined,
+      search: orderSearchQuery || undefined,
       start_date: startDate || undefined,
       end_date: endDate || undefined,
     });
@@ -702,5 +704,6 @@ export async function renderFinancialReports(container, viewGenerationRef) {
   }
 
   // Initial load
+  setDatePreset(preferences?.default_date_range || 'all_time');
   await loadData();
 }

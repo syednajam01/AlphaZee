@@ -44,7 +44,7 @@ def _utcnow() -> datetime:
 
 def get_or_create_supplier_agreement(db: Session, supplier_id: uuid.UUID) -> SupplierAgreement:
     """Fetch active supplier agreement or create unconfigured manual-only default."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -65,7 +65,6 @@ def get_or_create_supplier_agreement(db: Session, supplier_id: uuid.UUID) -> Sup
         )
         db.add(agreement)
         db.flush()
-        db.commit()
         db.refresh(agreement)
 
     return agreement
@@ -78,7 +77,7 @@ def update_supplier_agreement(
     actor_id: uuid.UUID | None = None,
 ) -> SupplierAgreement:
     """Update supplier settlement agreement terms (applies strictly to future transactions)."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -108,59 +107,32 @@ def update_supplier_agreement(
 
 def get_supplier_ledger_summary(db: Session, supplier_id: uuid.UUID) -> dict:
     """Calculate real-time supplier liability, payments, credits, and unallocated advances."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
     agreement = get_or_create_supplier_agreement(db, supplier_id)
 
-    # 1. Sum posted charges & credit opening balances (Credit direction increases liability)
-    charges_sum = db.scalar(
-        select(func.coalesce(func.sum(SupplierLedgerEntry.amount_minor), 0)).where(
-            SupplierLedgerEntry.supplier_id == supplier_id,
-            SupplierLedgerEntry.status == "posted",
-            SupplierLedgerEntry.direction == LedgerDirection.CREDIT.value,
-            SupplierLedgerEntry.entry_type.in_(["charge", "opening_balance", "adjustment"]),
-        )
-    ) or 0
-
-    # 2. Sum posted credit notes & debit adjustments (Debit direction decreases liability)
-    credits_sum = db.scalar(
-        select(func.coalesce(func.sum(SupplierLedgerEntry.amount_minor), 0)).where(
-            SupplierLedgerEntry.supplier_id == supplier_id,
-            SupplierLedgerEntry.status == "posted",
-            SupplierLedgerEntry.direction == LedgerDirection.DEBIT.value,
-            SupplierLedgerEntry.entry_type.in_(["credit_note", "adjustment"]),
-        )
-    ) or 0
-
-    # 3. Sum total payments & advances made to vendor
-    payments_sum = db.scalar(
-        select(func.coalesce(func.sum(SupplierLedgerEntry.amount_minor), 0)).where(
-            SupplierLedgerEntry.supplier_id == supplier_id,
-            SupplierLedgerEntry.status == "posted",
-            SupplierLedgerEntry.direction == LedgerDirection.DEBIT.value,
-            SupplierLedgerEntry.entry_type.in_(["payment", "advance"]),
-        )
-    ) or 0
-
-    # 4. Sum allocated payments
-    allocated_sum = db.scalar(
-        select(func.coalesce(func.sum(SupplierPaymentAllocation.allocated_amount_minor), 0))
-        .join(
-            SupplierLedgerEntry,
-            SupplierPaymentAllocation.payment_entry_id == SupplierLedgerEntry.id,
-        )
-        .where(
-            SupplierLedgerEntry.supplier_id == supplier_id,
-            SupplierLedgerEntry.status == "posted",
-        )
-    ) or 0
-
-    # Payable balance = (Charges) - (Credit Notes) - (Allocated Payments)
-    # Note: Unallocated payments represent advances and are shown separately.
-    outstanding_payable = max(0, charges_sum - credits_sum - allocated_sum)
-    unallocated_advances = max(0, payments_sum - allocated_sum)
+    rows = list(db.scalars(select(SupplierLedgerEntry).where(SupplierLedgerEntry.supplier_id == supplier_id)))
+    by_id = {row.id: row for row in rows}
+    charges_sum = credits_sum = payments_sum = refunds_sum = 0
+    for row in rows:
+        # A reversal is a new movement; retaining its original in totals preserves history.
+        kind = by_id[row.reversal_entry_id].entry_type if row.reversal_entry_id in by_id else row.entry_type
+        signed = row.amount_minor if row.direction == 'credit' else -row.amount_minor
+        if kind in {'charge', 'opening_balance', 'adjustment'}:
+            charges_sum += signed
+        elif kind == 'credit_note':
+            credits_sum -= signed
+        elif kind in {'payment', 'advance'}:
+            payments_sum -= signed
+        elif kind == 'refund_received':
+            refunds_sum += signed
+    allocated_sum = db.scalar(select(func.coalesce(func.sum(SupplierPaymentAllocation.allocated_amount_minor), 0))
+        .join(SupplierLedgerEntry, SupplierLedgerEntry.id == SupplierPaymentAllocation.payment_entry_id)
+        .where(SupplierLedgerEntry.supplier_id == supplier_id)) or 0
+    outstanding_payable = charges_sum - credits_sum - allocated_sum
+    unallocated_advances = payments_sum - allocated_sum - refunds_sum
 
     return {
         "supplier_id": supplier_id,
@@ -258,7 +230,7 @@ def post_manual_charge(
     actor_id: uuid.UUID | None = None,
 ) -> SupplierLedgerEntry:
     """Manually post an approved supplier charge (increases liability)."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -291,7 +263,7 @@ def post_manual_credit_note(
     actor_id: uuid.UUID | None = None,
 ) -> SupplierLedgerEntry:
     """Manually post an acknowledged vendor credit note (decreases liability)."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -326,12 +298,14 @@ def reverse_ledger_entry(
     Immutably reverse a posted ledger entry by generating an opposing adjustment.
     Never alters or deletes the historical original entry.
     """
-    entry = db.get(SupplierLedgerEntry, entry_id)
+    entry = db.scalar(select(SupplierLedgerEntry).where(SupplierLedgerEntry.id == entry_id).with_for_update())
     if not entry:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Ledger entry {entry_id} not found")
 
     if entry.status == "reversed":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Entry is already reversed")
+    if entry.reversal_entry_id is not None:
+        raise HTTPException(400, 'A reversal cannot itself be reversed. Record an explicit new correction.')
 
     # Check if entry is tied to allocations
     has_allocs = db.scalar(
@@ -388,7 +362,7 @@ def preview_opening_balance(
     payload: OpeningBalanceRequest,
 ) -> dict:
     """Preview the exact financial impact of an opening balance entry before committing."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -398,7 +372,7 @@ def preview_opening_balance(
     if payload.direction == "credit":
         projected = current_out + payload.amount_minor
     else:
-        projected = max(0, current_out - payload.amount_minor)
+        projected = current_out - payload.amount_minor
 
     return {
         "supplier_id": supplier_id,
@@ -420,7 +394,7 @@ def apply_opening_balance(
     actor_id: uuid.UUID | None = None,
 ) -> SupplierLedgerEntry:
     """Commit a validated opening balance entry with audit reference."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -452,91 +426,53 @@ def apply_opening_balance(
 
 
 def post_event_liability_if_applicable(
-    db: Session,
-    order: Order,
-    trigger_type: PayableTriggerType,
-    shipment_id: uuid.UUID | None = None,
-    actor_id: uuid.UUID | None = None,
+    db: Session, order: Order, trigger_type: PayableTriggerType,
+    shipment_id: uuid.UUID | None = None, actor_id: uuid.UUID | None = None,
 ) -> list[SupplierLedgerEntry]:
-    """
-    Idempotently post supplier ledger charges for eligible order lines upon fulfillment events.
-    Checks each supplier's active agreement:
-    - If agreement trigger does NOT match trigger_type, skips.
-    - If agreement is 'manual', skips automatic accrual.
-    - Idempotency key prevents duplicate postings on retry or repeated status updates.
-    """
-    created_entries: list[SupplierLedgerEntry] = []
-
-    for line in order.lines:
-        supplier_id = getattr(line, "supplier_id", None)
-        if not supplier_id and line.variant_id:
-            sv = db.scalar(
-                select(SupplierVariant).where(
-                    SupplierVariant.variant_id == line.variant_id,
-                    SupplierVariant.active.is_(True),
-                )
-            )
-            if sv:
-                supplier_id = sv.supplier_id
-
-        if not supplier_id:
+    """Post once per acquisition, using purchase snapshots in the caller's transaction."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    from app.models.shipments import ShipmentAllocation
+    from app.models.inventory import StockReservation
+    db.flush()  # Production sessions disable autoflush; include the new exact allocations.
+    db.scalar(select(Order).where(Order.id == order.id).with_for_update())
+    lines = list(db.scalars(select(OrderLine).where(OrderLine.order_id == order.id)))
+    if shipment_id:
+        ids = set(db.scalars(select(StockReservation.order_line_id).join(
+            ShipmentAllocation, ShipmentAllocation.reservation_id == StockReservation.id).where(
+                ShipmentAllocation.shipment_id == shipment_id)))
+        lines = [line for line in lines if line.id in ids]
+    created = []
+    for line in lines:
+        snapshot = line.acquisition_snapshot
+        # Historical purchases never inherit today's supplier or agreement.
+        if not snapshot or snapshot['payable_trigger'] != trigger_type:
             continue
-        from app.models.suppliers import Supplier
-        supplier = db.get(Supplier, supplier_id)
-        if supplier and getattr(supplier, 'supplier_type', None) == 'alphazee_internal':
+        quantity = snapshot['vendor_quantity']
+        if not quantity:
             continue
-        if not line.unit_cost_minor or line.unit_cost_minor <= 0:
+        source_key = f'acquisition:{line.id}'
+        if db.scalar(select(SupplierLedgerEntry.id).where(
+                SupplierLedgerEntry.order_line_id == line.id,
+                SupplierLedgerEntry.entry_type == 'charge')):
             continue
-        # If fulfilled from AlphaZee-owned returned inventory, do NOT incur vendor liability
-        if getattr(line, "ownership_source", None) == "alphazee_owned" or getattr(line, "is_alphazee_owned", False) or line.fulfillment_kind == "replacement":
+        vendor_segments = [s for s in snapshot['segments'] if not s['owned']]
+        amount = sum(s['quantity'] * s['unit_cost_minor'] for s in vendor_segments)
+        if not amount:
             continue
-
-        agreement = get_or_create_supplier_agreement(db, supplier_id)
-        if agreement.payable_trigger != trigger_type:
-            continue
-
-        # Idempotent source event key
-        source_key = f"order:{order.id}:line:{line.id}:trigger:{trigger_type}"
-        existing = db.scalar(
-            select(SupplierLedgerEntry).where(
-                SupplierLedgerEntry.source_event_key == source_key
-            )
-        )
-        if existing:
-            continue
-
-        cost_amount = line.unit_cost_minor * line.quantity
+        event_date = _utcnow().astimezone(timezone(timedelta(hours=5))).date()
+        due_date = event_date + timedelta(days=snapshot['payment_terms_days'])
         entry = SupplierLedgerEntry(
-            supplier_id=supplier_id,
-            entry_type=LedgerEntryType.CHARGE.value,
-            amount_minor=cost_amount,
-            direction=LedgerDirection.CREDIT.value,
-            source_event_key=source_key,
-            order_id=order.id,
-            order_line_id=line.id,
-            shipment_id=shipment_id,
-            reference=f"PO #{order.order_number} ({trigger_type})",
-            effective_date=date.today(),
-            status="posted",
-            notes=f"Auto-posted payable on {trigger_type} under agreement ({agreement.payable_trigger})",
-            recorded_by_user_id=actor_id,
-            recorded_at=_utcnow(),
-        )
+            supplier_id=uuid.UUID(snapshot['supplier_id']), entry_type='charge',
+            direction='credit', amount_minor=amount, source_event_key=source_key,
+            order_id=order.id, order_line_id=line.id, shipment_id=shipment_id,
+            reference=f'PO #{order.order_number} ({trigger_type})', effective_date=event_date,
+            status='posted', recorded_by_user_id=actor_id, recorded_at=_utcnow(),
+            notes=f"Agreement {snapshot['agreement_id']}; due {due_date.isoformat()}; {quantity} vendor units")
         db.add(entry)
-        try:
-            db.flush()
-            created_entries.append(entry)
-        except IntegrityError:
-            db.rollback()
-            # Concurrently created by another worker/thread
-            continue
-
-    if created_entries:
-        db.commit()
-        for e in created_entries:
-            db.refresh(e)
-
-    return created_entries
+        created.append(entry)
+    db.flush()
+    return created
 
 
 def post_supplier_payment(
@@ -550,7 +486,7 @@ def post_supplier_payment(
     Supports idempotency, row-level locking to prevent concurrent overpayment,
     and partial payments with unallocated portion preserved as advance.
     """
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -567,6 +503,9 @@ def post_supplier_payment(
         )
         if existing:
             # Idempotent response: payment already recorded
+            if (existing.amount_minor != payload.amount_minor or existing.reference != payload.reference
+                    or existing.effective_date != payload.effective_date):
+                raise HTTPException(409, 'This payment key belongs to different payment details.')
             existing_allocs = db.scalars(
                 select(SupplierPaymentAllocation).where(
                     SupplierPaymentAllocation.payment_entry_id == existing.id
@@ -641,6 +580,7 @@ def post_supplier_payment(
             )
             db.add(alloc)
             created_allocations.append(alloc)
+            db.flush()
             remaining_payment_minor -= item.allocated_amount_minor
 
     elif payload.auto_allocate_fifo:
@@ -679,6 +619,7 @@ def post_supplier_payment(
             )
             db.add(alloc)
             created_allocations.append(alloc)
+            db.flush()
             remaining_payment_minor -= to_allocate
 
     db.flush()
@@ -697,7 +638,7 @@ def post_supplier_advance(
     actor_id: uuid.UUID | None = None,
 ) -> SupplierLedgerEntry:
     """Disburse an unallocated advance payment to a supplier."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -811,7 +752,7 @@ def post_supplier_refund(
     actor_id: uuid.UUID | None = None,
 ) -> SupplierLedgerEntry:
     """Record a cash refund received FROM the vendor back to AlphaZee."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -854,7 +795,7 @@ def get_unpaid_charges_and_advances(
     supplier_id: uuid.UUID,
 ) -> dict:
     """Return lists of unpaid charges and unallocated payments/advances for this supplier."""
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -946,7 +887,7 @@ def get_supplier_statement(
     Generate period statement with exact opening, movement, and closing balances.
     Formula: Opening Balance + Period Movement == Closing Balance.
     """
-    supplier = db.get(Supplier, supplier_id)
+    supplier = db.scalar(select(Supplier).where(Supplier.id == supplier_id).with_for_update())
     if not supplier:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Supplier {supplier_id} not found")
 
@@ -955,7 +896,6 @@ def get_supplier_statement(
     prior_credits = db.scalar(
         select(func.coalesce(func.sum(SupplierLedgerEntry.amount_minor), 0)).where(
             SupplierLedgerEntry.supplier_id == supplier_id,
-            SupplierLedgerEntry.status == "posted",
             SupplierLedgerEntry.direction == LedgerDirection.CREDIT.value,
             SupplierLedgerEntry.effective_date < start_date,
         )
@@ -964,7 +904,6 @@ def get_supplier_statement(
     prior_debits = db.scalar(
         select(func.coalesce(func.sum(SupplierLedgerEntry.amount_minor), 0)).where(
             SupplierLedgerEntry.supplier_id == supplier_id,
-            SupplierLedgerEntry.status == "posted",
             SupplierLedgerEntry.direction == LedgerDirection.DEBIT.value,
             SupplierLedgerEntry.effective_date < start_date,
         )
@@ -977,7 +916,6 @@ def get_supplier_statement(
         select(SupplierLedgerEntry)
         .where(
             SupplierLedgerEntry.supplier_id == supplier_id,
-            SupplierLedgerEntry.status == "posted",
             SupplierLedgerEntry.effective_date >= start_date,
             SupplierLedgerEntry.effective_date <= end_date,
         )

@@ -146,6 +146,7 @@ class InventoryBalance(Base):
     """
 
     __tablename__ = "inventory_balances"
+    ownership_review_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false', nullable=False)
     __table_args__ = (
         CheckConstraint("on_hand >= 0", name="ck_inventory_on_hand_nonnegative"),
     )

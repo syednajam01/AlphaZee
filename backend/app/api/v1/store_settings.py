@@ -108,9 +108,13 @@ def update_preferences(
     db: Session = Depends(get_db),
 ):
     """Update personalized interface preferences (theme, density, date filters, layout)."""
-    pref = service.update_owner_preferences(db, principal.owner.user_id, payload)
-    db.commit()
-    return pref
+    try:
+        pref = service.update_owner_preferences(db, principal.owner.user_id, payload)
+        db.commit()
+        return pref
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(400, str(error)) from error
 
 
 @admin_router.post('/preferences/reset', response_model=OwnerPreferencesResponse)

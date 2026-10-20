@@ -14,11 +14,11 @@ This is the canonical project agent guide. Read it at the start of each task. Ke
 
 ## Current state and scope
 
-**VF0–VF7 are complete for the vendor stock, finance, reports and configurable admin milestone.** There is no automatically authorized next phase; follow the owner's next task. The old October 9 database pause is obsolete: subsequent owner instructions authorized migrations, commerce, authentication, media management and the completed phases.
+**VF integration repairs are implemented; browser acceptance remains pending.** Read `.context/vf_integration_repairs_report.md` for current evidence and `.context/vf_repairs_browser_verification_guide.md` for Antigravity's real UI journeys. `.context/vf6_independent_review.md` preserves the historical findings. Follow the owner's next task; do not infer another phase.
 
 Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging, separate checkout lab, vendor agreements and financial ledgers, FIFO payment allocations, vendor stock counting portal with shortage detection, period financial reporting and P&L, configurable admin branding/legal policies and per-owner preferences.
 
-Latest recorded VF0–VF7 verification: 45 / 45 backend tests across VF1–VF7 suites, 137 frontend tests, production frontend build (0 errors), and 34 browser verification screenshots (VF4: 4, VF5: 6, VF6: 7). Migration head: `6e4a2b8d0c1f`. Detailed results in `.context/vendor_finance_admin_progress.md`. Production has not been deployed. Normal checkout remains closed (503); checkout lab remains isolated on port 13001.
+Repair verification: full backend suite 321 passed, final reporting/vendor regressions 63 passed, frontend 137 passed, frontend and all container packaging builds passed. Migration head: `a81f92c6d430`; additive upgrade/downgrade/reupgrade tested with legacy data. Detailed evidence/rollout in `.context/vf_integration_repairs_report.md`. Earlier browser screenshots do not certify these repairs. Production is not deployed; normal checkout stays closed (503), lab isolated on 13001.
 
 ## Environments and checkout decision
 
@@ -34,8 +34,10 @@ The owner explicitly selected **open checkout only in the isolated local lab**. 
 
 - Preserve primary development data. Never insert SAMPLE fixtures into the real catalog, rename development as a test DB, reset databases, remove volumes or overwrite private environment files.
 - Use guarded disposable databases for destructive schema tests. Inspect migrations, verify them in isolation first, and preserve applied migration history. Normal upgrades must be deliberate and additive. Do not use `create_all()`/`drop_all()` against existing application databases.
+- Run backend tests with `backend/scripts/run_isolated_verification.py`: fresh random `_test` DB, deleted afterward. Old VF5–VF7 fixtures wrote to development; corrected fixtures/global guard now reject that. Exact accidental test accounts/catalog were disabled/archived; details in the repair report.
 - Money uses integer paisas, with exact PKR conversion. Preserve immutable purchased item, price, supplier-cost and address snapshots; archive referenced catalog records.
 - Availability depends on active catalog/supplier mappings, confirmed owner availability and available inventory. Keep physical, reserved and available stock distinct. Reuse existing reservation, concurrency, adjustment, dispatch and inspection services.
+- Open shortages and pending legacy ownership review block new sales without cancelling holds. Returned owned lots preserve exact original costs through resale; only newly acquired vendor units incur snapshotted liabilities. Never invent historical ownership or retroactive charges.
 - Supplier acceptance precedes bank instruction handoff. Preview is read-only; explicit handoff starts the four-hour window. Proof is evidence only. Expiry requires explicit funds review before releasing stock.
 - Keep order, payment, delivery and settlement states separate. COD delivery is not cash remittance. Refund completion creates a liability; actual payment is recorded separately. Receipt alone does not restock: inspection determines sellable quantities.
 - Reuse existing financial definitions. Distinguish delivered sales, cash, courier-held COD, refunds and estimated contribution. Never present contribution as final net profit.
@@ -64,6 +66,4 @@ Antigravity's v2 report and `.local/antigravity-browser/run_20261018_pass2/` wer
 
 Finance/admin brief: `.context/vendor_finance_admin_implementation_guide.md` (VF0–VF8); latest stock-portal refinement: `.context/vendor_stock_portal_implementation_guide.md`. Optional vendor linking requires AlphaZee-managed inventory support. AlphaZee bears RTO/return costs; payable triggers/credits remain undecided. Preserve ongoing VF work. Reviews: `.context/vendor_stock_and_money_review.md`, `.context/production_readiness_summary.md`.
 
-Read `.context/summary.md`, `.context/owner_catalog_phase_status.json`, `.context/owner_dashboard_catalog_media_implementation_plan.md` and `.context/next_target.txt` for task context. Use phase guides and JSON evidence, especially `m8_checkout_lab_runbook.md`, `m7_operations_runbook.md` and `m3_media_runbook.md`.
-
-Older `docs/` records may describe superseded pauses/proposals. Reconcile them with explicit owner decisions and current evidence. Update this guide and relevant `.context/` documents after meaningful work; keep detailed histories out of this file.
+Context: `.context/summary.md`, `owner_catalog_phase_status.json`, and M3/M7/M8 runbooks. Older `docs/` proposals may be superseded. Update this guide and relevant `.context/` records after meaningful work.

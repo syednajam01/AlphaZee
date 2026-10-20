@@ -10,6 +10,8 @@ Handles:
 from __future__ import annotations
 
 from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
+from app.schemas.orders import OrderItemRequest
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
@@ -46,6 +48,38 @@ from app.services.orders import (
 )
 
 router = APIRouter(prefix="/orders", tags=["Storefront Orders"])
+
+
+class CheckoutQuoteRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    items: list[OrderItemRequest] = Field(min_length=1, max_length=100)
+    shipping_city: str = Field(min_length=2, max_length=60)
+    shipping_province: str = Field(min_length=2, max_length=60)
+    coupon_code: str | None = None
+
+
+@router.post('/quote', dependencies=[Depends(require_checkout_enabled), Depends(require_trusted_origin)])
+def checkout_quote(payload: CheckoutQuoteRequest, db: Session = Depends(get_db)):
+    from app.services.shipping import quote_shipping
+    from app.services.promotions import validate_coupon
+    quantities = {}
+    for item in payload.items:
+        quantities[item.variant_id] = quantities.get(item.variant_id, 0) + item.quantity
+    subtotal = 0
+    try:
+        for variant_id, quantity in quantities.items():
+            variant = db.get(Variant, variant_id)
+            if not variant or not variant.is_active or variant.price_minor is None:
+                raise ValueError('A cart item is unavailable. Refresh your cart.')
+            subtotal += variant.price_minor * quantity
+        fee, rule = quote_shipping(db, subtotal, payload.shipping_city.strip(), payload.shipping_province.strip())
+        discount = validate_coupon(db, code=payload.coupon_code, subtotal_minor=subtotal,
+            shipping_fee_minor=fee).discount_amount_minor if payload.coupon_code else 0
+        return {'subtotal_minor': subtotal, 'shipping_fee_minor': fee,
+                'discount_minor': discount, 'total_minor': max(0, subtotal - discount + fee),
+                'shipping_rule': rule}
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 @router.get('/checkout-session', dependencies=[Depends(require_checkout_enabled)])
@@ -106,6 +140,7 @@ def _order_to_response(order: Order) -> OrderResponseSchema:
         )
 
     return OrderResponseSchema(
+        supplier_picked_up_at=order.supplier_picked_up_at,
         id=order.id,
         order_number=order.order_number,
         idempotency_key=order.idempotency_key,
@@ -171,6 +206,7 @@ def create_customer_order(
     effective_idemp = idempotency_key
 
     dto = CreateOrderDTO(
+        expected_total_minor=payload.expected_total_minor,
         customer_name=payload.customer_name,
         customer_phone=payload.customer_phone,
         customer_email=payload.customer_email,

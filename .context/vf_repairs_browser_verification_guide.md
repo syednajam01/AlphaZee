@@ -1,0 +1,35 @@
+# Antigravity: browser verification after VF integration repairs
+
+Read `.agent/AGENTS.md`, `.context/vf_integration_repairs_report.md`, and this file. The earlier VF7 report used manually constructed orders/returns and a manually assigned ownership flag; those checks did not prove the real journeys below. Preserve the repairs and existing data. Do not repeat that shortcut or restart the milestone.
+
+## Environment and evidence
+
+Use **http://127.0.0.1:13001**, owner `/admin`, vendor `/vendor`. Keep SAMPLE labels visible, separate owner/vendor/customer browser profiles, and use only new clearly named SAMPLE lab records. Never use real transfers, reset credentials, remove volumes, deploy publicly, or create fixtures on port 13000. Credentials are private; do not put them in reports or screenshots.
+
+The implementation report records the terminal results and rollout status. Confirm the lab runs that source and migration `a81f92c6d430` before browser acceptance. Do not call an old running bundle a failure of the repaired source.
+
+Save evidence under `.local/vendor-finance/repairs-browser/<run>/`. For each scenario record exact UI actions, expected/observed quantities and paisas, URLs, console/network errors, and redacted screenshots. API fixture setup is allowed for initial media or dates, but operational steps under test must use actual forms. Mark API-only, browser-verified, failed, and not-tested separately.
+
+## Required scenarios
+
+1. **Owner product sources and vendor access.** Create vendors A/B and their stock-only logins through owner forms. Create a vendor-managed product, select A, set an explicit acquisition cost and counts per size/color, attach ready media, and publish. Also create an AlphaZee-managed product with no external vendor, real cost, and stock. New source mappings intentionally have unknown cost until entered. Vendor A sees only A's SKUs and quantities; B and AlphaZee stock remain inaccessible. Check mobile layout at 390px and desktop at 1440px, exact variant identity, thumbnails, search, logout, reset, and revoked-session behavior. Forbidden retail/cost/customer fields must never appear in vendor responses or audit notes.
+
+2. **Real purchase and fulfillment.** For a new fixture choose a dispatch agreement before checkout. Price PKR 2,000, vendor cost 1,200, outbound courier cost 200. Buy using the customer form. Checkout now quotes delivery and asks for a second confirmation showing the exact total. Use zero customer shipping for this fixture. Confirm supplier acceptance and dispatch through admin. Check the actual supplier ledger acquires exactly 1,200 once. Deliver, reload, and retry safe actions; no second charge or second stock deduction. Test a separate pickup agreement with the explicit **Record physical pickup** button, and a delivery agreement whose liability appears at delivery. Later agreement changes must not alter an existing purchase's rule.
+
+3. **Money reconciliation.** Record packaging 50 and courier remittance 1,800, with the already recorded 200 courier deduction. Pay the supplier 700 then 500: payable 500 then zero; contribution stays 550. Recorded cash movement becomes 550 after paid packaging. Link duplicate courier expense evidence to the existing shipment; an unrelated additional 100 expense must add 100. Reverse a separate mistaken 500 charge: original plus reversal net to zero in summary and statement. Refunds received, credits, advances and supplier payments must remain distinguishable.
+
+4. **Actual return and resale.** Customer requests one return. Owner approves, receives, inspects as sellable, and completes it through UI. Receipt alone cannot restock. Repurchase this unit and dispatch: zero additional vendor charge, original cost preserved. Then buy two units when only one owned unit remains and the new vendor cost differs: only the new vendor unit creates liability; total acquisition cost must retain exact paisas. Vendor absolute counts must change only vendor supply, leaving AlphaZee-owned units intact. Cancel an owned-stock hold and prove the owned unit becomes available again.
+
+5. **RTO, exchange and damage.** Use a separate dispatch/pickup fixture. Record outbound 200 and RTO 150, actual parcel receipt, and inspection with one sellable/one damaged unit. Retry inspection: no duplicate restock. AlphaZee bears transport; no automatic vendor credit. Resell the retained unit without another payable. Damaged RTO acquisition cost must appear as a write-off. Exercise a size exchange: a newly acquired replacement can incur its own vendor liability; an already owned replacement cannot.
+
+6. **Shortage and concurrency.** With stored count 10 and one held unit, vendor reports zero. The report is recorded, the hold remains one, and public availability/new checkout is blocked despite the old stored count. Repeating the same report must not create duplicate alerts. An owner cannot dismiss it with a note alone: enter a fresh, valid physical recount and then resolve. Confirm available stock recovers correctly. In two tabs test stale count rejection and stale product edits. With nonzero source stock, holds, or unresolved shortages, reassignment must fail. After explicit reconciliation to zero, reassign to B; A's old page and requests immediately lose access.
+
+7. **Reports and settings.** Test a purchase placed on one day, delivered later, and returned in a later period. Compare delivery-period sales, return-period cost reversal, paid-date cash, filtered order rows and CSV exports. The order list uses placement-date filters; outstanding cards are explicitly current balances. CSV filters must match the table and formula-like references remain safe. Edit delivery rules, explicitly confirm activation, verify coverage/threshold quotes, and ensure later changes do not rewrite old orders. Test stale settings rejection. Save different theme/density/date/sidebar/card layouts for two owners, reload, reset one, and verify the other is unchanged. Verify policy publishing, banner/fonts/radius, media hover/gallery/hero behavior, and visible SAMPLE labels even if the announcement is disabled.
+
+## Historical stock and completion
+
+Old returned stock whose remaining ownership cannot be reconstructed is blocked for an explicit owner review in the variant stock panel. Do not invent counts/costs to clear this. For a SAMPLE fixture, demonstrate the audited review with known remaining units; existing historical purchases stay manual and receive no retroactive automatic debt.
+
+Also verify 13000/18000 still reject the real checkout endpoints with 503 while lab checkout works, and settings/accounts/data survive a controlled lab restart. Test keyboard focus, validation/retry/offline behavior, and a real 200% browser zoom rather than changing device pixel ratio.
+
+Write `.context/vf_repairs_browser_acceptance_report.md`, then update both vendor finance/portal acceptance reports. Include remaining business decisions and unsupported controls honestly. No completion claim until real owner/vendor/customer journeys pass; screenshots and passing service tests alone are insufficient.

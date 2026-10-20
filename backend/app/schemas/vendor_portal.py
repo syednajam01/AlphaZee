@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Optional
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # --- Auth Schemas ---
@@ -72,6 +72,7 @@ class VendorStockListResponse(BaseModel):
 
 
 class VendorStockCountUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
     counted_quantity: int = Field(..., ge=0, description="Count allocated to AlphaZee (includes reserved units)")
     expected_version: int = Field(..., description="Optimistic concurrency control balance version")
     reason: str = Field("shop_sale", description="Reason: shop_sale, restock, inventory_count_correction, other")

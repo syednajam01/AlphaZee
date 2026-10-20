@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models.suppliers import Supplier, UserAccount
+from app.models.suppliers import Supplier, UserAccount, SupplierMembership
 from app.models.vendor_portal import VendorSession, VendorUser
 from app.services.vendor_session_store import csrf_token, token_hash, utcnow
 
@@ -64,11 +64,16 @@ def require_vendor_session(
         select(VendorSession, VendorUser, Supplier)
         .join(VendorUser, VendorUser.id == VendorSession.vendor_user_id)
         .join(Supplier, Supplier.id == VendorUser.vendor_id)
+        .join(UserAccount, UserAccount.id == VendorUser.user_id)
+        .join(SupplierMembership, (SupplierMembership.user_id == VendorUser.user_id) &
+              (SupplierMembership.supplier_id == VendorUser.vendor_id))
         .where(
             VendorSession.token_hash == token_hash(token),
             VendorSession.revoked_at.is_(None),
             VendorSession.expires_at > utcnow(),
             VendorUser.is_active.is_(True),
+            UserAccount.is_active.is_(True), SupplierMembership.active.is_(True),
+            Supplier.status == 'active', Supplier.supplier_type == 'external_vendor',
         )
     )
 

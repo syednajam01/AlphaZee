@@ -101,7 +101,7 @@ export function createHeader() {
   function updateAnnouncement(checkoutEnabled) {
     if (!announcementBar || !announcementSpan) return;
 
-    if (publicSettings && publicSettings.announcement_banner_enabled === false) {
+    if (publicSettings && publicSettings.announcement_banner_enabled === false && !checkoutEnabled) {
       announcementBar.style.display = 'none';
       return;
     }
@@ -130,6 +130,11 @@ export function createHeader() {
 
   fetchPublicStoreSettings().then(settings => {
     publicSettings = settings;
+    const root = document.documentElement;
+    if (settings.font_family) root.style.setProperty('--font-family', settings.font_family);
+    const radius = { none: '0px', sm: '4px', md: '8px', lg: '16px', full: '999px' }[settings.border_radius];
+    if (radius) { root.style.setProperty('--radius-btn', radius); root.style.setProperty('--radius-control', radius); }
+    root.dataset.storeSpacing = settings.spacing_density || 'comfortable';
     updateAnnouncement(capabilities.getState().checkoutEnabled);
   }).catch(() => {
     // Graceful fallback to default message if offline

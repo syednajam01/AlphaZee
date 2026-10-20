@@ -51,6 +51,7 @@ class OrderReturn(Base):
     """
 
     __tablename__ = "order_returns"
+    restocked_cost_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     __table_args__ = (
         CheckConstraint("refund_amount_minor >= 0", name="ck_order_returns_refund_nonnegative"),
         CheckConstraint('replacement_charge_minor >= 0', name='ck_order_returns_replacement_charge_nonnegative'),

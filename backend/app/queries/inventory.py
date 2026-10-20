@@ -115,6 +115,10 @@ def adjust_inventory(
         raise ValueError(f"InventoryBalance not found for supplier_variant_id {supplier_variant_id}")
 
     previous_on_hand = current_balance.on_hand
+    if reason in {'manual_count', 'supplier_receipt', 'adjustment_correction'}:
+        from app.services.stock_ownership import owned_physical
+        if new_on_hand < owned_physical(db, supplier_variant_id):
+            raise ValueError('A count correction cannot erase AlphaZee-owned inventory. Record its inspected disposition separately.')
     if current_balance.version != expected_version:
         raise StaleInventoryError(
             f"Inventory version conflict for {supplier_variant_id}. Expected version {expected_version}."

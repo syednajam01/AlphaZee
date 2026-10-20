@@ -239,6 +239,8 @@ def import_bundle(db, path, username, stock=0, apply=False):
         for row in bundle.products:
             values=row.fields.model_dump(exclude={'variants'})
             values['collection_id']=collection_map.get(values['collection_id'])
+            values['stock_management_source'] = 'vendor_managed'
+            values['vendor_id'] = supplier.id
             # Validate variant commands through the existing authoring schema.
             values['variants']=[v.fields.model_dump(exclude={'id'}) for v in row.variants]
             command=ProductCreate(**values)
@@ -248,10 +250,14 @@ def import_bundle(db, path, username, stock=0, apply=False):
             variant_map={v.source_id:new.id for v,new in zip(row.variants,product.variants)}
             for v,new in zip(row.variants,product.variants):
                 if v.cost_minor is None: continue
-                link=SupplierVariant(supplier_id=supplier.id,variant_id=new.id,supplier_cost_minor=v.cost_minor,active=True)
-                db.add(link);db.flush();db.add(InventoryBalance(supplier_variant_id=link.id,on_hand=0,version=1));db.flush()
+                # Authoring already created the source mapping and empty balance.
+                link=db.scalar(select(SupplierVariant).where(SupplierVariant.variant_id==new.id,
+                    SupplierVariant.supplier_id==supplier.id, SupplierVariant.active.is_(True)))
+                link.supplier_cost_minor=v.cost_minor
+                db.flush()
+                balance=db.get(InventoryBalance,link.id)
                 if stock: adjust_inventory(db,supplier_variant_id=link.id,actor_user_id=owner.user_id,
-                    new_on_hand=stock,expected_version=1,reason='supplier_receipt',notes='SAMPLE lab import '+digest)
+                    new_on_hand=stock,expected_version=balance.version,reason='supplier_receipt',notes='SAMPLE lab import '+digest)
             links=[]
             for link in row.media:
                 if link.asset_id not in media_map or link.variant_id is not None and link.variant_id not in variant_map:

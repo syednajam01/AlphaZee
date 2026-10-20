@@ -82,6 +82,7 @@ class CreateOrderDTO:
     customer_notes: str | None = None
     idempotency_key: str | None = None
     checkout_session_hash: str | None = None
+    expected_total_minor: int | None = None
 
 
 class CheckoutAttemptConflict(ValueError):
@@ -196,6 +197,9 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         )
 
     # 2. Validate Coupon and Calculate Discount
+    from app.services.shipping import quote_shipping
+    shipping_fee_minor, shipping_rule_snapshot = quote_shipping(
+        db, subtotal_minor, order_data.shipping_city.strip(), order_data.shipping_province.strip())
     discount_amount_minor = 0
     applied_coupon_code = None
 
@@ -205,7 +209,7 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
             db,
             code=order_data.coupon_code,
             subtotal_minor=subtotal_minor,
-            shipping_fee_minor=order_data.shipping_fee_minor,
+            shipping_fee_minor=shipping_fee_minor,
         )
         discount_amount_minor = coupon_res.discount_amount_minor
         applied_coupon_code = coupon_res.code
@@ -219,7 +223,9 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         if balance is None:
             raise InsufficientStockError(f'No physical stock for supplier variant {supplier_variant_id}.')
 
-    total_minor = max(0, subtotal_minor - discount_amount_minor + order_data.shipping_fee_minor)
+    total_minor = max(0, subtotal_minor - discount_amount_minor + shipping_fee_minor)
+    if order_data.expected_total_minor is not None and total_minor != order_data.expected_total_minor:
+        raise ValueError('Order total changed. Review a fresh delivery quote before confirming.')
 
     # 3. Create Order Header
     order = Order(
@@ -238,7 +244,8 @@ def place_order(db: Session, order_data: CreateOrderDTO) -> Order:
         subtotal_minor=subtotal_minor,
         discount_amount_minor=discount_amount_minor,
         coupon_code_snapshot=applied_coupon_code,
-        shipping_fee_minor=order_data.shipping_fee_minor,
+        shipping_fee_minor=shipping_fee_minor,
+        shipping_rule_snapshot=shipping_rule_snapshot,
         total_minor=total_minor,
         utm_source=order_data.utm_source.strip() if order_data.utm_source else None,
         utm_medium=order_data.utm_medium.strip() if order_data.utm_medium else None,
@@ -394,6 +401,19 @@ def confirm_supplier_acceptance(
             continue
         transition_reservation_stage(db, reservation_id=res.id, new_stage="confirmed")
 
+    db.flush()
+    return order
+
+
+def confirm_supplier_pickup(db: Session, order_id: uuid.UUID, actor_user_id=None) -> Order:
+    order = _locked_order(db, order_id)
+    if order.supplier_picked_up_at:
+        return order
+    if order.order_status != 'confirmed' or not order.supplier_confirmed_at:
+        raise ValueError('Confirm supplier acceptance before recording physical pickup.')
+    order.supplier_picked_up_at = _utcnow()
+    from app.services.supplier_finance import post_event_liability_if_applicable
+    post_event_liability_if_applicable(db, order, 'confirmed_pickup', actor_id=actor_user_id)
     db.flush()
     return order
 

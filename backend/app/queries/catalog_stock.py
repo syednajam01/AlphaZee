@@ -5,6 +5,7 @@ from app.models.inventory import InventoryBalance, StockReservation, SupplierVar
 from app.models.orders import Order, OrderLine
 from app.models.suppliers import Supplier
 from app.queries.stock_rules import holding_predicate
+from app.services.stock_safety import shortage_predicate, has_open_shortage
 
 
 def public_availability(db, variants):
@@ -17,6 +18,8 @@ def public_availability(db, variants):
         .outerjoin(held, held.c.sv_id == SupplierVariant.id).where(
             SupplierVariant.variant_id.in_(ids), SupplierVariant.active.is_(True), Supplier.status == 'active',
             SupplierVariant.supplier_cost_minor.is_not(None), SupplierVariant.supplier_cost_minor >= 0,
+            ~shortage_predicate(SupplierVariant.id),
+            InventoryBalance.ownership_review_required.is_(False),
             InventoryBalance.on_hand > func.coalesce(held.c.quantity, 0))))
     return {v.id: ('available' if v.is_active and v.price_minor is not None and v.id in eligible else 'unavailable')
             if v.availability == AvailabilityStatus.AVAILABLE else v.availability.value for v in variants}
@@ -35,7 +38,8 @@ def hold_details(db, supplier_variant_id, page=1, page_size=20):
         .where(*predicate).order_by(StockReservation.created_at, StockReservation.id).offset((page-1)*page_size).limit(page_size)).all()
     physical = balance.on_hand if balance else 0
     return {'supplier_variant_id': supplier_variant_id, 'physical_on_hand': physical, 'held_reservations': held,
-            'available_to_sell': max(0, physical-held), 'version': balance.version if balance else None,
+            'ownership_review_required': bool(balance and balance.ownership_review_required),
+            'available_to_sell': 0 if has_open_shortage(db, supplier_variant_id) or (balance and balance.ownership_review_required) else max(0, physical-held), 'version': balance.version if balance else None,
             'total': count, 'page': page, 'page_size': page_size,
             'holds': [{'reservation_id': r.id, 'order_line_id': r.order_line_id, 'quantity': r.quantity,
                        'stage': r.stage, 'legacy_stock_hold': r.legacy_stock_hold, 'created_at': r.created_at,
@@ -64,6 +68,7 @@ def variant_stock(db, identifier):
         result['mapping'] = next(item for item in details if item['active'])
         if sv.supplier.status != 'active': reasons.append('Choose an active supplier')
         if sv.supplier_cost_minor is None: reasons.append('Set a wholesale cost')
+        if result['mapping']['ownership_review_required']: reasons.append('Review the ownership of legacy returned inventory')
         if result['mapping']['available_to_sell'] <= 0: reasons.append('Receive stock or review current holds')
     product = variant.product
     if product.status != 'published' or not product.collection or not product.collection.is_active:

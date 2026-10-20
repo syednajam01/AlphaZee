@@ -71,6 +71,10 @@ def create_shipment(
 
     if not order.supplier_confirmed_at:
         raise OrderNotDispatchableError('Supplier acceptance must be recorded before dispatch.')
+    if any((line.acquisition_snapshot or {}).get('payable_trigger') == 'confirmed_pickup'
+           and (line.acquisition_snapshot or {}).get('vendor_quantity', 0) for line in order.lines
+           if line.fulfillment_kind == 'original') and not order.supplier_picked_up_at:
+        raise OrderNotDispatchableError('Record physical supplier pickup before dispatch under this agreement.')
     if db.scalar(select(Shipment.id).where(Shipment.order_id == order.id,
                                                Shipment.replacement_return_id.is_(None))) is not None:
         raise OrderNotDispatchableError('Order already has a shipment; dispatch it through its existing allocation.')
@@ -125,6 +129,8 @@ def create_shipment(
     order.order_status = "dispatched"
     order.updated_at = now
 
+    from app.services.supplier_finance import post_event_liability_if_applicable
+    post_event_liability_if_applicable(db, order, 'dispatch', shipment.id, actor_user_id)
     db.flush()
     return shipment
 
@@ -142,6 +148,9 @@ def update_shipment_status(
     """
     Update a shipment's delivery status and synchronize parent order & stock lifecycle.
     """
+    parent_id = db.scalar(select(Shipment.order_id).where(Shipment.id == shipment_id))
+    if parent_id:
+        db.scalar(select(Order).where(Order.id == parent_id).with_for_update())
     shipment = db.scalar(select(Shipment).where(Shipment.id == shipment_id).with_for_update()
                          .execution_options(populate_existing=True))
     if not shipment:
@@ -184,6 +193,8 @@ def update_shipment_status(
             transition_reservation_stage(db, reservation_id=allocation.reservation_id,
                                          new_stage='fulfilled', actor_user_id=actor_user_id)
         shipment.delivered_at = now
+        from app.services.supplier_finance import post_event_liability_if_applicable
+        post_event_liability_if_applicable(db, order, 'delivery', shipment.id, actor_user_id)
         if shipment.replacement_return_id is None:
             order.order_status = "delivered"
             order.updated_at = now
@@ -191,6 +202,8 @@ def update_shipment_status(
                 order.payment_status = "verified"
 
     elif clean_status == 'rto_initiated':
+        if rto_courier_cost_minor > 0:
+            shipment.rto_cost_recorded_at = shipment.rto_cost_recorded_at or now
         if shipment.replacement_return_id is None:
             order.order_status = "rto"
             order.updated_at = now
@@ -199,6 +212,10 @@ def update_shipment_status(
         if rto_courier_cost_minor > 0:
             shipment.rto_courier_cost_minor = int(rto_courier_cost_minor)
     elif clean_status == 'rto_delivered':
+        if rto_courier_cost_minor > 0:
+            if shipment.rto_cost_recorded_at and shipment.rto_courier_cost_minor != rto_courier_cost_minor:
+                raise ShipmentError('RTO freight was already recorded. Record any additional transport as a separate expense.')
+            shipment.rto_cost_recorded_at = shipment.rto_cost_recorded_at or now
         by_line = received_quantities or {}
         allocated_lines = {a.reservation.order_line_id for a in allocations}
         if set(by_line) != allocated_lines:
@@ -259,6 +276,11 @@ def dispatch_replacement(db: Session, *, return_id: uuid.UUID, courier_code: str
                                  actor_user_id=actor_user_id)
     db.add(ShipmentAllocation(shipment_id=shipment.id, reservation_id=reservation.id,
                               quantity=reservation.quantity))
+    db.flush()
+    from app.services.supplier_finance import post_event_liability_if_applicable
+    # An explicit replacement dispatch is also its physical pickup event.
+    post_event_liability_if_applicable(db, ret.order, 'confirmed_pickup', shipment.id, actor_user_id)
+    post_event_liability_if_applicable(db, ret.order, 'dispatch', shipment.id, actor_user_id)
     db.flush()
     return shipment
 
@@ -505,6 +527,10 @@ def inspect_rto_shipment(db: Session, *, shipment_id: uuid.UUID,
                 reason='rto_return', expected_version=balance.version,
                 notes=notes or f'RTO inspection for allocation {allocation.id}',
                 source_ref=f'rto:{allocation.id}:{sellable}')
+            from app.services.stock_ownership import restock_owned
+            restock_owned(db, allocation.reservation.supplier_variant_id,
+                db.get(OrderLine, allocation.reservation.order_line_id), increase,
+                f'rto:{allocation.id}:{sellable}', offset=allocation.sellable_quantity)
         allocation.sellable_quantity = sellable
         allocation.damaged_quantity = damaged
         if increase or damaged_increase:

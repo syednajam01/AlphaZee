@@ -81,7 +81,8 @@ def get_inventory_summary(
     open_res = db.scalars(stmt).all()
 
     held = sum(r.quantity for r in open_res)
-    available = max(0, physical - held)
+    from app.services.stock_safety import has_open_shortage
+    available = 0 if has_open_shortage(db, supplier_variant_id) or (balance and balance.ownership_review_required) else max(0, physical - held)
 
     open_breakdown = [
         {
@@ -146,6 +147,11 @@ def create_stock_reservation(
     )
     balance = db.scalars(stmt).one_or_none()
     physical = balance.on_hand if balance is not None else 0
+    from app.services.stock_safety import has_open_shortage
+    if has_open_shortage(db, supplier_variant_id):
+        raise InsufficientStockError('This stock source has an unresolved physical shortage. Owner review is required.')
+    if balance and balance.ownership_review_required:
+        raise InsufficientStockError('Review historical returned-stock ownership before accepting new orders.')
 
     # 3. Sum open reservations under lock
     held_stmt = (
@@ -174,6 +180,10 @@ def create_stock_reservation(
     )
     db.add(reservation)
     db.flush()
+    from app.services.stock_ownership import allocate_acquisition
+    mapping = db.get(SupplierVariant, supplier_variant_id)
+    if mapping.supplier_cost_minor is not None:
+        allocate_acquisition(db, reservation)
 
     return reservation
 
@@ -244,6 +254,12 @@ def transition_reservation_stage(
         reservation.closed_at = now
     elif new_stage in ("cancelled", "returned"):
         reservation.closed_at = now
+        if new_stage == 'cancelled':
+            # Restore owned-lot availability under the same lock used by checkout.
+            db.scalar(select(InventoryBalance).where(
+                InventoryBalance.supplier_variant_id == reservation.supplier_variant_id).with_for_update())
+            from app.services.stock_ownership import release_owned_allocation
+            release_owned_allocation(db, reservation)
 
     reservation.stage = new_stage
     db.flush()

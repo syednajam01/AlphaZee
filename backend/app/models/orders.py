@@ -20,6 +20,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     text,
@@ -77,6 +78,8 @@ class Order(Base):
     """
 
     __tablename__ = "orders"
+    shipping_rule_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    supplier_picked_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     __table_args__ = (
         CheckConstraint("subtotal_minor >= 0", name="ck_orders_subtotal_nonnegative"),
         CheckConstraint("shipping_fee_minor >= 0", name="ck_orders_shipping_fee_nonnegative"),
@@ -392,6 +395,8 @@ class OrderLine(Base):
                                                    server_default=text("'original'"))
     ownership_source: Mapped[str] = mapped_column(String(32), nullable=False, default='vendor_consignment',
                                                    server_default=text("'vendor_consignment'"))
+    acquisition_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    acquisition_cost_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     replacement_return_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey('order_returns.id', ondelete='RESTRICT',
                                      use_alter=True, name='fk_order_lines_replacement_return'), nullable=True)

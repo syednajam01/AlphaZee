@@ -95,6 +95,11 @@ class TestOrderPlacementAndSnapshots:
     def test_place_order_creates_snapshots_and_holds_reservation(self, db_session):
         """Placing an order creates immutable snapshots and locks stock reservations."""
         var, sv, ib = _setup_store_catalog(db_session, on_hand=10)
+        from app.services.store_settings import get_or_create_store_settings
+        delivery = get_or_create_store_settings(db_session)
+        delivery.shipping_rules_configured = True
+        delivery.standard_shipping_fee_minor = 25000
+        db_session.flush()
 
         dto = CreateOrderDTO(
             customer_name="Zainab Ahmed",

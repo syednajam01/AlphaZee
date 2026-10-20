@@ -6,6 +6,7 @@ import {
   adjustAdminInventory,
   fetchAdminOrders,
   confirmSupplierAcceptance,
+  confirmSupplierPickup,
   reviewExpiredOrders,
   fetchPaymentInstructionsPreview,
   markPaymentInstructionsSent,
@@ -44,6 +45,7 @@ import {
   loginOwner,
   logoutOwner,
   fetchOwnerSession,
+  fetchAdminPreferences,
   onOwnerSessionExpired,
   removeLegacyAdminCredentials,
 } from '../utils/api.js';
@@ -79,6 +81,21 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   let settlementGeneration = 0;
   removeLegacyAdminCredentials();
   let isCollapsed = false;
+  let ownerPreferences = null;
+  modal.addEventListener('owner-preferences-changed', () => { applyOwnerPreferences().catch(error => showSessionMessage(error.message)); });
+  async function applyOwnerPreferences() {
+    const prefs = await fetchAdminPreferences();
+    if (!authenticated) return;
+    ownerPreferences = prefs;
+    modal.dataset.ownerTheme = prefs.theme === 'system' ? (window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : prefs.theme;
+    modal.dataset.tableDensity = prefs.table_density;
+    const nav = modal.querySelector('.admin-tab-btn')?.parentElement;
+    if (nav) for (const id of prefs.nav_order || []) {
+      const button = Array.from(nav.querySelectorAll('.admin-tab-btn')).find(node => node.dataset.tab === id);
+      if (button) nav.append(button);
+    }
+  }
+
 
   modal.innerHTML = `
     <div class="drawer-backdrop" style="z-index: 1;"></div>
@@ -515,6 +532,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         passwordInput.value = '';
         if (generation !== authGeneration) return;
         authenticated = true;
+        await applyOwnerPreferences();
         if (page) sidebar.hidden = false;
         modal.querySelector('#btn-refresh-admin-tab').hidden = false;
         showSessionMessage('');
@@ -577,6 +595,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         contentArea.innerHTML = '<section class="admin-empty-state"><h3>Section not found</h3><p>Choose a section from the owner navigation.</p></section>';
       }
       if (view !== viewGeneration) return;
+      if (authenticated) await applyOwnerPreferences();
       if (generation !== authGeneration && !authenticated) renderLogin('Sign in again to continue.');
     } catch (err) {
       if (err.status === 401) {
@@ -600,7 +619,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     if (view !== viewGeneration) return;
     container.innerHTML = `
       <div class="admin-financial-overview">${[['Cash received after refunds',data.cash_received_minor],['Courier-held COD',data.courier_held_cod_minor],['Refund outstanding',data.refund_outstanding_minor],['Estimated contribution',data.estimated_contribution_minor]].map(([label,amount])=>`<div><span>${label}</span><strong>${escapeHtml(formatPkr(amount ?? 0))}</strong></div>`).join('')}</div>
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+      <div id="owner-kpi-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px;">
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
           <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Delivered Sales</div>
           <div style="font-size: 1.5rem; font-weight: 800; color: #4ADE80;">${escapeHtml(data.formatted_gross_revenue)}</div>
@@ -623,6 +642,16 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         </div>
       </div>
     `;
+    const cards = container.querySelector('#owner-kpi-cards');
+    const ids = ['sales', 'orders', 'inventory', 'low_stock'];
+    if (cards) {
+      const nodes = Array.from(cards.children);
+      const layout = ownerPreferences?.dashboard_layout?.cards || ids.map(id => ({ id, visible: true }));
+      for (const card of layout) {
+        const node = nodes[ids.indexOf(card.id)];
+        if (node) { node.hidden = !card.visible; cards.append(node); }
+      }
+    }
   }
 
   async function openSettlement(shipmentId, opener, view) {
@@ -697,6 +726,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
                 Confirm Supplier
               </button>
             ` : ''}
+            ${o.order_status === 'confirmed' && !o.supplier_picked_up_at ? `<button class="btn btn-secondary btn-confirm-pickup" data-order-id="${o.id}">Record physical pickup</button>` : ''}
             ${isBank && o.order_status === 'confirmed' && !isPaid && !o.payment_instructions_sent_at && o.payment_review_status !== 'required' ? `
               <button class="btn btn-secondary btn-prepare-instructions" data-order-id="${o.id}">Prepare Instructions</button>
             ` : ''}
@@ -890,6 +920,12 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       });
     });
 
+    container.querySelectorAll('.btn-confirm-pickup').forEach(button => button.addEventListener('click', async () => {
+      if (!window.confirm('Confirm the goods have physically been collected? This may record a vendor payable under the snapshotted agreement.')) return;
+      button.disabled = true;
+      try { await confirmSupplierPickup(button.dataset.orderId); await loadActiveTabData(); }
+      catch (error) { showSessionMessage(error.message); button.disabled = false; }
+    }));
     container.querySelectorAll('.btn-confirm-supplier').forEach(b => {
       b.addEventListener('click', async () => {
         const orderId = b.getAttribute('data-order-id');
@@ -1659,7 +1695,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
 
   // 7. Analytics & Financial Reports Tab (VF4)
   async function renderAnalyticsTab(container, view) {
-    await renderFinancialReports(container, view);
+    await renderFinancialReports(container, view, ownerPreferences);
   }
 
   // 8. Store Settings & Preferences Tab (VF6)
@@ -1681,6 +1717,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       await fetchOwnerSession();
       if (generation !== authGeneration) return;
       authenticated = true;
+      await applyOwnerPreferences();
       if (page) sidebar.hidden = false;
       modal.querySelector('#btn-refresh-admin-tab').hidden = false;
       modal.querySelector('#btn-admin-logout').hidden = false;

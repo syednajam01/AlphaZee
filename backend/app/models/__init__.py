@@ -17,6 +17,7 @@ from app.models.inventory import (  # noqa: F401
     SupplierVariant,
 )
 from app.models.orders import Order, OrderLine, PaymentReceipt  # noqa: F401
+from app.models.owned_stock import OwnedStockLot, OwnedStockAllocation  # noqa: F401
 from app.models.shipments import Shipment, ShipmentAllocation  # noqa: F401
 from app.models.promotions import Coupon  # noqa: F401
 from app.models.returns import OrderReturn  # noqa: F401

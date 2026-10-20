@@ -5,7 +5,7 @@ import { capabilities, CHECKOUT_UNAVAILABLE } from '../utils/capabilities.js';
 import { storeConfig } from '../data/store-config.js';
 import { formatPkr } from '../utils/money.js';
 import { escapeHtml, createSafeImageElement } from '../utils/dom.js';
-import { submitOrder, uploadReceipt, validateCoupon, recoverPendingOrder, getPendingCheckoutAttempt, ApiError } from '../utils/api.js';
+import { fetchCheckoutQuote, submitOrder, uploadReceipt, validateCoupon, recoverPendingOrder, getPendingCheckoutAttempt, ApiError } from '../utils/api.js';
 import { getStoredUtmParams } from '../utils/utm.js';
 
 export function createCheckoutView(onClose) {
@@ -151,7 +151,7 @@ export function createCheckoutView(onClose) {
                 </div>
                 <div class="checkout-total-row">
                   <span>Estimated Delivery (${escapeHtml(storeConfig.shippingInfo.standardTime)})</span>
-                  <span id="checkout-shipping-label" class="checkout-free-shipping">PKR 0 (test checkout)</span>
+                  <span id="checkout-shipping-label" class="checkout-free-shipping">Calculated before confirmation</span>
                 </div>
                 <div class="checkout-total-row checkout-grand-total">
                   <span>Total Payable</span>
@@ -392,6 +392,7 @@ export function createCheckoutView(onClose) {
     }
   });
 
+  let confirmedQuote = null;
   // Form submit handler with inline field-level validation
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -525,6 +526,20 @@ export function createCheckoutView(onClose) {
     placeBtn.textContent = 'Processing Order...';
 
     try {
+      const quote = await fetchCheckoutQuote({ items: itemsPayload, shipping_city: city, shipping_province: province, coupon_code: orderPayload.coupon_code });
+      const signature = JSON.stringify([orderPayload, quote]);
+      modal.querySelector('#checkout-shipping-label').textContent = formatPkr(quote.shipping_fee_minor);
+      modal.querySelector('#checkout-total').textContent = formatPkr(quote.total_minor);
+      modal.querySelector('#checkout-subtotal').textContent = formatPkr(quote.subtotal_minor);
+      if (confirmedQuote !== signature) {
+        confirmedQuote = signature;
+        errorBanner.textContent = `Order total: ${formatPkr(quote.total_minor)}, including delivery ${formatPkr(quote.shipping_fee_minor)}. Review and confirm to place your order.`;
+        errorBanner.style.display = 'block';
+        placeBtn.disabled = false;
+        placeBtn.textContent = `Confirm order ? ${formatPkr(quote.total_minor)}`;
+        return;
+      }
+      orderPayload.expected_total_minor = quote.total_minor;
       const order = await submitOrder(orderPayload);
       // Clear shopping cart on confirmed order placement
       cart.clear();
