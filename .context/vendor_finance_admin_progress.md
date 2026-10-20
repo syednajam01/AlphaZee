@@ -633,5 +633,36 @@ Real browser automation executed via Chrome DevTools Protocol (CDP) against `htt
 | `vf6_06` | `vf6_06_owner_preferences_saved.png` | Admin Preferences tab: Theme and table density customized and saved. |
 | `vf6_07` | `vf6_07_storefront_reflected_settings.png` | Storefront reloaded, showing live updated announcement text (`Winter Luxe Drop Live - Free Express Delivery over Rs. 5,000`) and `#1e3a8a` accent color. |
 
+---
+
+## 10. Phase VF7: Integrated Milestone Acceptance & End-to-End Scenarios
+
+### 10.1 Scope & Architecture
+Phase VF7 executes comprehensive end-to-end operational scenarios spanning all subsystems implemented across VF0–VF6, validating business logic, cross-cutting invariants, security containment, and financial integrity:
+1. **Full Operational Commerce Lifecycle**: Supplier onboarding, agreement creation, vendor stock portal physical counts with shortage detection and hold preservation, order placement, dispatch with automated supplier liability posting, courier shipment and delivery, COD remittance and deduction reconciliation, FIFO supplier partial payment allocation, customer return inspection with 100% AlphaZee-borne reverse transport, restock as AlphaZee-owned inventory, secondary resale with zero duplicate liability, period financial reporting, and CSV injection protection.
+2. **Security & Boundary Containment**: Vendor role access boundaries, unauthenticated access rejection (HTTP 401), and port 13000 / 18000 checkout containment guard (HTTP 503).
+3. **Store Settings & Preference Persistence**: Public vs admin store configuration, policy draft/publish toggle, audit log revision tracking, and per-owner interface preferences.
+
+### 10.2 Milestone Acceptance Test Results
+| Test Suite | File | Checks / Assertions | Status | Execution Time |
+| :--- | :--- | :--- | :--- | :--- |
+| **VF7 Integrated Milestone** | `backend/tests/test_vf7_integrated_milestone.py` | Complete cross-functional lifecycle, security role boundaries, checkout containment, settings & preferences persistence | **3 / 3 PASS (100%)** | 30.09s |
+| **VF6 Admin Settings** | `backend/tests/test_vf6_admin_settings.py` | Store settings, policies draft/publish, audit log, owner preferences & reset | **6 / 6 PASS (100%)** | 34.56s |
+| **VF5 Vendor Portal** | `backend/tests/test_vf5_vendor_portal.py` | Multi-tenant isolation, rate-limiting, optimistic locking, shortage creation, auth | **6 / 6 PASS (100%)** | 18.44s |
+| **VF4 Financial Reports** | `backend/tests/test_vf4_financial_reports.py` | 5 Golden fixtures: COD economics, RTO freight, customer return reversal, P&L, CSV guard | **5 / 5 PASS (100%)** | 16.82s |
+| **VF3 Stock & Expenses** | `backend/tests/test_vf3_stock_and_expenses.py` | Stock ownership, responsibility toggle, reassignment guard, expense validation & KPIs | **9 / 9 PASS (100%)** | 26.68s |
+| **VF2 Supplier Payments** | `backend/tests/test_vf2_supplier_finance.py` | Payments, FIFO/explicit allocation, statements, partials, advances | **9 / 9 PASS (100%)** | 28.15s |
+| **VF1 Supplier Agreements** | `backend/tests/test_vf1_supplier_finance.py` | Agreements, charges, credit notes, reversals, fulfillment triggers | **7 / 7 PASS (100%)** | 25.40s |
+| **Complete Backend VF Regression** | `tests/test_vf1` through `test_vf7` | Comprehensive vendor finance, stock, reports, portal & settings regression | **45 / 45 PASS (100%)** | 120.43s |
+| **Frontend Test Suite** | `frontend/` (`npm test`) | Unit and integration tests across storefront, admin dashboard, portal, and money utilities | **137 / 137 PASS (100%)** | 12.51s |
+| **Frontend Production Build** | `frontend/` (`npm run build`) | Vite v7.3.7 production bundle | **SUCCESS (0 errors)** | 9.73s |
+
+### 10.3 Invariant Summary
+- **Zero Duplicate Liability**: Resale of returned/AlphaZee-owned units generates exactly 0 supplier charges.
+- **100% AlphaZee-Borne Transport**: RTO and customer-return courier fees are never charged to customers or deducted from vendor payouts.
+- **Customer Hold Protection**: Vendor count below reserved holds triggers shortage workflows without clamping customer reservations.
+- **Role Isolation**: External vendors have zero visibility into wholesale costs, margins, retail prices, customer data, or other vendors' variants.
+- **Production Containment**: Normal checkout remains strictly closed (HTTP 503); checkout lab is fully isolated on port 13001.
+
 
 

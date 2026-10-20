@@ -151,6 +151,12 @@ def update_store_settings(
         if old_val != value:
             changed_fields[key] = {'old': old_val, 'new': value}
             setattr(settings, key, value)
+            if key in ('delivery_policy_content', 'return_policy_content', 'terms_policy_content', 'privacy_policy_content'):
+                status_field = key.replace('_content', '_status')
+                old_status = getattr(settings, status_field)
+                if old_status != 'draft':
+                    setattr(settings, status_field, 'draft')
+                    changed_fields[status_field] = {'old': old_status, 'new': 'draft'}
 
     if changed_fields:
         settings.version += 1

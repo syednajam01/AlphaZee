@@ -192,7 +192,15 @@ def test_policy_draft_and_publish_lifecycle(client, db):
     uname, pwd = _create_owner(db)
     csrf = _login_owner(client, uname, pwd)
 
-    policy_text = "All domestic orders are delivered within 3-5 business days via tracked courier services."
+    # Ensure clean initial draft state for test isolation
+    client.post(
+        "/api/v1/admin/settings/policies/delivery/publish",
+        json={"publish": False},
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+
+    token = secrets.token_hex(4)
+    policy_text = f"All domestic orders are delivered within 3-5 business days via tracked courier services ({token})."
 
     # Step 1: Save draft delivery policy
     res = client.put(

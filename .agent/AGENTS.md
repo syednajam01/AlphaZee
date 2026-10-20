@@ -1,6 +1,6 @@
 # AlphaZee: agent operating guide
 
-Owner: Syed Najam. Updated: 2026-10-15, through M9.
+Owner: Syed Najam. Updated: 2026-10-20, through VF0–VF7.
 This is the canonical project agent guide. Read it at the start of each task. Keep it under 1,200 words; put detailed plans, verification and operating instructions in `.context/`.
 
 ## Authority and working rules
@@ -14,13 +14,11 @@ This is the canonical project agent guide. Read it at the start of each task. Ke
 
 ## Current state and scope
 
-**M0–M9 are complete for the local implementation milestone.** There is no automatically authorized next phase; follow the owner's next task. The old October 9 database pause is obsolete: subsequent owner instructions authorized migrations, commerce, authentication, media management and the completed phases.
+**VF0–VF7 are complete for the vendor stock, finance, reports and configurable admin milestone.** There is no automatically authorized next phase; follow the owner's next task. The old October 9 database pause is obsolete: subsequent owner instructions authorized migrations, commerce, authentication, media management and the completed phases.
 
-Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging and the separate checkout lab.
+Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging, separate checkout lab, vendor agreements and financial ledgers, FIFO payment allocations, vendor stock counting portal with shortage detection, period financial reporting and P&L, configurable admin branding/legal policies and per-owner preferences.
 
-Latest recorded M9/MM5 verification: 260 backend tests, 136 frontend tests, 145 commerce/mobile/archive Chrome checks plus 83 authoring/storefront checks, production frontend build, normal/production/lab image builds, migration comparison/cycle and archived-history restart persistence. One existing AnyIO deprecation warning was recorded. Vite 7.3.7/esbuild 0.28.2 returned zero npm advisories at verification. These are dated results, not substitutes for checking later changes. Migration head: `2c8a1b3e5f70`.
-
-M9 completed purchased-product archive/history, mobile checkout/offline recovery, partial COD and replacement-RTO acceptance. The owner guide is `.context/m9_owner_handoff.md`; detailed results are in `m9_implementation_report.md`. Production has not been deployed. Domain and hosting proposals in older documents are not verified deployments.
+Latest recorded VF0–VF7 verification: 45 / 45 backend tests across VF1–VF7 suites, 137 frontend tests, production frontend build (0 errors), and 34 browser verification screenshots (VF4: 4, VF5: 6, VF6: 7). Migration head: `6e4a2b8d0c1f`. Detailed results in `.context/vendor_finance_admin_progress.md`. Production has not been deployed. Normal checkout remains closed (503); checkout lab remains isolated on port 13001.
 
 ## Environments and checkout decision
 

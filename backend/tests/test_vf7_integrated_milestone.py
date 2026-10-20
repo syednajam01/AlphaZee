@@ -602,6 +602,15 @@ def test_vf7_store_settings_and_preferences_persistence(db, client):
     assert policy_res.json()["delivery_policy_status"] == "published"
     assert policy_res.json()["delivery_policy_published_at"] is not None
 
+    # Unpublish back to draft to verify toggle and leave clean singleton state
+    unpub_res = client.post(
+        "/api/v1/admin/settings/policies/delivery/publish",
+        json={"publish": False},
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+    assert unpub_res.status_code == 200
+    assert unpub_res.json()["delivery_policy_status"] == "draft"
+
     # 5. Owner preferences via API
     pref_res = client.put(
         "/api/v1/admin/preferences",
