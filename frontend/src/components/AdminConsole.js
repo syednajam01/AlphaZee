@@ -346,7 +346,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       ['suppliers', 'Suppliers'], ['orders', 'Orders and payments'],
       ['returns', 'Returns and exchanges'], ['coupons', 'Coupons & Promos'],
       ['expenses', 'Business Expenses'],
-      ['analytics', 'Reports & Analytics']
+      ['analytics', 'Reports & Analytics'],
+      ['settings', 'Store Settings']
     ];
     const icons = new Map([...nav.querySelectorAll('.admin-tab-btn')].map(button =>
       [button.getAttribute('data-tab'), button.querySelector('svg')?.outerHTML || '']));

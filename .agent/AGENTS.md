@@ -14,11 +14,11 @@ This is the canonical project agent guide. Read it at the start of each task. Ke
 
 ## Current state and scope
 
-**VF integration repairs are implemented; browser acceptance remains pending.** Read `.context/vf_integration_repairs_report.md` for current evidence and `.context/vf_repairs_browser_verification_guide.md` for Antigravity's real UI journeys. `.context/vf6_independent_review.md` preserves the historical findings. Follow the owner's next task; do not infer another phase.
+**VF integration repairs and real browser acceptance are complete and verified.** Read `.context/vf_repairs_browser_acceptance_report.md` for the authoritative UI evidence across all 8 scenarios (41 screenshots captured, 100% PASS), `.context/vf_integration_repairs_report.md` for rollout details, and `.context/vendor_finance_admin_acceptance_report.md` for subsystem certification. Follow the owner's next task; do not infer another phase.
 
 Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging, separate checkout lab, vendor agreements and financial ledgers, FIFO payment allocations, vendor stock counting portal with shortage detection, period financial reporting and P&L, configurable admin branding/legal policies and per-owner preferences.
 
-Repair verification: full backend suite 321 passed, final reporting/vendor regressions 63 passed, frontend 137 passed, frontend and all container packaging builds passed. Migration head: `a81f92c6d430`; additive upgrade/downgrade/reupgrade tested with legacy data. Detailed evidence/rollout in `.context/vf_integration_repairs_report.md`. Earlier browser screenshots do not certify these repairs. Production is not deployed; normal checkout stays closed (503), lab isolated on 13001.
+Verification: full backend suite 321 passed, final reporting/vendor regressions 63 passed, frontend 137 passed, frontend and all container packaging builds passed. Real browser acceptance: all 8 scenarios (41 screenshots) 100% PASS under migration head `a81f92c6d430`. Production is not deployed; normal checkout stays closed (503), lab isolated on 13001.
 
 ## Environments and checkout decision
 
