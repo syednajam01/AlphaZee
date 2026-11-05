@@ -40,12 +40,18 @@ export function mountProductGallery(host, product, variantId) {
       </div>
     </div>
 
-    <div class="product-gallery-thumbs" role="group" aria-label="Product media">
-      ${media.map((m, i) => `
-        <button type="button" class="option-pill product-gallery-thumb" data-gallery-index="${i}" aria-label="${esc((m.kind === 'video' ? 'Play video: ' : 'View image: ') + (m.alt_text || product.title))}" aria-pressed="${i === index}">
-          ${m.kind === 'video' ? 'Video' : 'Image'} ${i + 1}
+    <div class="product-gallery-thumbs" role="group" aria-label="Product media gallery thumbnails">
+      ${media.map((m, i) => {
+        const isVideo = m.kind === 'video';
+        const thumbSrc = sanitizeMediaUrl(isVideo ? (m.poster_url || m.url) : m.url, '');
+        const label = esc((isVideo ? 'Play video: ' : 'View image: ') + (m.alt_text || product.title));
+        return `
+        <button type="button" class="option-pill product-gallery-thumb ${i === index ? 'is-active' : ''}" data-gallery-index="${i}" aria-label="${label}" aria-pressed="${i === index}">
+          ${thumbSrc ? `<img class="thumb-media-img" src="${thumbSrc}" alt="" loading="lazy" decoding="async" />` : ''}
+          ${isVideo ? `<span class="thumb-video-badge" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></span>` : ''}
+          <span class="visually-hidden">${isVideo ? 'Video' : 'Image'} ${i + 1}</span>
         </button>
-      `).join('')}
+      `;}).join('')}
     </div>
 
     <p class="product-media-feedback" role="status" aria-live="polite"></p>

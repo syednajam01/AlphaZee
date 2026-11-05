@@ -142,6 +142,7 @@ export function initApp() {
     const route = parseRoute();
     main.innerHTML = '';
     if (route.type === 'product') {
+      header.setActiveNav?.(null);
       main.appendChild(productPage.element);
       productPage.load(route.slug, route.variantId);
       window.scrollTo(0, 0);

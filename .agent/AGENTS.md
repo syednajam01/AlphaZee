@@ -1,6 +1,6 @@
 # AlphaZee: agent operating guide
 
-Owner: Syed Najam. Updated: 2026-10-20, through VF0–VF7.
+Owner: Syed Najam. Updated: 2026-11-06, through Three-Portal UI/UX & Performance Acceptance.
 This is the canonical project agent guide. Read it at the start of each task. Keep it under 1,200 words; put detailed plans, verification and operating instructions in `.context/`.
 
 ## Authority and working rules
@@ -14,7 +14,7 @@ This is the canonical project agent guide. Read it at the start of each task. Ke
 
 ## Current state and scope
 
-**VF integration repairs and real browser acceptance are complete and verified.** Read `.context/vf_repairs_browser_acceptance_report.md` for the authoritative UI evidence across all 8 scenarios (41 screenshots captured, 100% PASS), `.context/vf_integration_repairs_report.md` for rollout details, and `.context/vendor_finance_admin_acceptance_report.md` for subsystem certification. Follow the owner's next task; do not infer another phase.
+**Three-portal UI/UX, performance and browser acceptance are complete and verified.** Read `.context/three_portal_quality_report.md` for authoritative evidence across all 6 gates (82 screenshots captured, 100% PASS), and `.context/three_portal_quality_progress.md` for phase history. Follow the owner's next task; do not infer another phase.
 
 Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging, separate checkout lab, vendor agreements and financial ledgers, FIFO payment allocations, vendor stock counting portal with shortage detection, period financial reporting and P&L, configurable admin branding/legal policies and per-owner preferences.
 

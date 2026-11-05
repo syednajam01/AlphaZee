@@ -203,7 +203,12 @@ export function createStoreSettingsComponent() {
             AlphaZee strictly bears 100% of RTO and return transit expenses. Configure customer-facing delivery coverage and flat standard charges below.
           </p>
           
-          <label><input id="confirm-shipping-rules" type="checkbox" ${s.shipping_rules_configured ? 'checked' : ''}> I confirm these customer-facing delivery rules are ready to use.</label>
+          <div style="background: rgba(20, 92, 68, 0.25); border: 1px solid rgba(74, 222, 128, 0.3); border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px;">
+            <input id="confirm-shipping-rules" type="checkbox" ${s.shipping_rules_configured ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <label for="confirm-shipping-rules" style="font-size: 0.875rem; font-weight: 500; color: #FFFFFF; cursor: pointer; margin: 0;">
+              I confirm these customer-facing delivery rules are verified and ready for live storefront use.
+            </label>
+          </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
             <div>
               <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Coverage: All Pakistan or comma-separated cities/provinces</label>
@@ -375,17 +380,44 @@ export function createStoreSettingsComponent() {
     `;
   }
 
+  const NAV_METADATA = {
+    overview: { icon: '📊', name: 'Store Overview', desc: 'Financial KPIs & active orders summary' },
+    products: { icon: '👗', name: 'Products & Catalog', desc: 'Catalog management, pricing & stock' },
+    collections: { icon: '📁', name: 'Collections', desc: 'Grouping and sorting product collections' },
+    hero: { icon: '🖼️', name: 'Homepage Hero', desc: 'Slide sequencing, video & hero playlists' },
+    media: { icon: '🎬', name: 'Media Library', desc: 'Durable image & video asset repository' },
+    inventory: { icon: '📦', name: 'Inventory & Stock', desc: 'Physical balances, holds & adjustments' },
+    suppliers: { icon: '🏭', name: 'Suppliers & Vendors', desc: 'Agreements, costs & vendor credentials' },
+    orders: { icon: '🚚', name: 'Orders & Payments', desc: 'Fulfillment, bank verify & courier dispatch' },
+    returns: { icon: '🔄', name: 'Returns & Refunds', desc: 'Size exchanges, inspections & refunds' },
+    coupons: { icon: '🏷️', name: 'Coupons & Promos', desc: 'Discount vouchers, fixed & percent promos' },
+    expenses: { icon: '💼', name: 'Business Expenses', desc: 'Freight, packaging & overhead ledgers' },
+    analytics: { icon: '📈', name: 'Reports & Analytics', desc: 'P&L statements, COGS, attribution & export' },
+    settings: { icon: '⚙️', name: 'Store Settings', desc: 'Branding, shipping policies & console setup' },
+  };
+
+  const CARD_METADATA = {
+    sales: { icon: '💰', title: 'Delivered Sales', desc: 'Gross delivered revenue & realized sales' },
+    orders: { icon: '📦', title: 'Total Orders', desc: 'Total order volume and pending action count' },
+    inventory: { icon: '🏷️', title: 'Active Catalog SKUs', desc: 'Total active variants linked to suppliers' },
+    low_stock: { icon: '⚠️', title: 'Low Stock Alerts', desc: 'Variants with ≤ 2 units available to sell' },
+  };
+
   function renderPreferencesTab() {
     const p = currentPreferences;
+    const navItems = p.nav_order || [];
+    const dashboardCards = p.dashboard_layout?.cards || [];
+
     return `
-      <form id="form-admin-preferences" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
-        <div class="settings-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
-          <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 16px 0;">👤 Personal Console Preferences</h3>
-          <p style="font-size: 0.8125rem; color: rgba(255, 255, 255, 0.6); margin: 0 0 16px 0;">
-            Preferences are isolated to your owner account. Changes here do not alter storefront behavior or other administrators' consoles.
+      <form id="form-admin-preferences" style="display: flex; flex-direction: column; gap: 24px; max-width: 860px;">
+        <!-- Theme & Display Density -->
+        <div class="settings-card">
+          <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 8px 0;">👤 Personal Console Preferences</h3>
+          <p style="font-size: 0.8125rem; color: rgba(255, 255, 255, 0.6); margin: 0 0 18px 0;">
+            Preferences are isolated to your owner account. Changes here customize your working environment without altering customer-facing storefront settings.
           </p>
 
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
             <div>
               <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Interface Theme</label>
               <select id="select-pref-theme" class="admin-input" style="width: 100%;">
@@ -413,12 +445,69 @@ export function createStoreSettingsComponent() {
           </div>
         </div>
 
-        <fieldset><legend>Sidebar order</legend><p>Set a unique position for each section.</p>
-        ${(p.nav_order || []).map((id, index) => `<label style="display:block">${escapeHtml(id)} <input class="pref-nav-position" data-id="${escapeHtml(id)}" type="number" min="1" max="20" value="${index + 1}" required></label>`).join('')}</fieldset>
-        <fieldset><legend>Overview cards</legend>
-        ${(p.dashboard_layout?.cards || []).map((card, index) => `<label style="display:block"><input type="checkbox" class="pref-card-visible" data-id="${escapeHtml(card.id)}" ${card.visible ? 'checked' : ''}> ${escapeHtml(card.id)} <input class="pref-card-position" data-id="${escapeHtml(card.id)}" aria-label="${escapeHtml(card.id)} position" type="number" min="1" max="4" value="${index + 1}" required></label>`).join('')}</fieldset>
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-          <button type="button" id="btn-reset-preferences" class="btn btn-secondary" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4);">
+        <!-- Sidebar Navigation Order -->
+        <fieldset class="settings-card" style="padding: 20px;">
+          <legend style="display: flex; align-items: center; gap: 8px;">
+            <span>🧭</span> Sidebar Navigation Order
+          </legend>
+          <p style="margin: 4px 0 16px 0;">
+            Set a unique position number (1–20) for each operational section to arrange the admin sidebar to your workflow preference.
+          </p>
+          <div class="pref-items-grid">
+            ${navItems.map((id, index) => {
+              const meta = NAV_METADATA[id] || { icon: '📌', name: id, desc: `Section ${id}` };
+              return `
+                <div class="pref-item-card">
+                  <div class="pref-item-info">
+                    <span class="pref-item-icon">${meta.icon}</span>
+                    <div class="pref-item-text">
+                      <span class="pref-item-name">${escapeHtml(meta.name)}</span>
+                      <p class="pref-item-desc">${escapeHtml(meta.desc)}</p>
+                    </div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">Pos:</label>
+                    <input class="pref-nav-position pref-number-input" data-id="${escapeHtml(id)}" type="number" min="1" max="20" value="${index + 1}" required aria-label="${escapeHtml(meta.name)} sidebar position">
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </fieldset>
+
+        <!-- Overview KPI Cards -->
+        <fieldset class="settings-card" style="padding: 20px;">
+          <legend style="display: flex; align-items: center; gap: 8px;">
+            <span>📊</span> Overview Dashboard Cards
+          </legend>
+          <p style="margin: 4px 0 16px 0;">
+            Choose which metric cards appear on your Store Overview screen and specify their display order (1–4).
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            ${dashboardCards.map((card, index) => {
+              const meta = CARD_METADATA[card.id] || { icon: '📈', title: card.id, desc: `KPI card ${card.id}` };
+              return `
+                <div class="pref-card-row">
+                  <div class="pref-card-left">
+                    <input type="checkbox" class="pref-card-visible" data-id="${escapeHtml(card.id)}" id="pref-card-${escapeHtml(card.id)}" ${card.visible ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                    <label for="pref-card-${escapeHtml(card.id)}" class="pref-card-info" style="cursor: pointer;">
+                      <span class="pref-card-title">${meta.icon} ${escapeHtml(meta.title)}</span>
+                      <p class="pref-card-desc">${escapeHtml(meta.desc)}</p>
+                    </label>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                    <label for="pos-${escapeHtml(card.id)}" style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">Order:</label>
+                    <input id="pos-${escapeHtml(card.id)}" class="pref-card-position pref-number-input" data-id="${escapeHtml(card.id)}" aria-label="${escapeHtml(meta.title)} position" type="number" min="1" max="4" value="${index + 1}" required>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </fieldset>
+
+        <!-- Submit & Reset Actions -->
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <button type="button" id="btn-reset-preferences" class="btn btn-secondary" style="color: #F87171 !important; border-color: rgba(239, 68, 68, 0.4) !important;">
             🔄 Reset to System Defaults
           </button>
           <button type="submit" id="btn-save-preferences" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">

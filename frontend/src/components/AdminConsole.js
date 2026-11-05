@@ -512,9 +512,9 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         <p>Sign in to manage your store.</p>
         <form id="admin-auth-form" style="display:flex; flex-direction:column; gap:12px;">
           <label for="admin-username">Username</label>
-          <input id="admin-username" name="username" autocomplete="username" required maxlength="100" />
+          <input id="admin-username" name="username" class="admin-input" autocomplete="username" required maxlength="100" />
           <label for="admin-password">Password</label>
-          <input id="admin-password" name="password" type="password" autocomplete="current-password" required maxlength="128" />
+          <input id="admin-password" name="password" type="password" class="admin-input" autocomplete="current-password" required maxlength="128" />
           <p id="admin-login-error" role="alert"></p>
           <button type="submit" class="btn btn-primary" id="admin-login-submit">Sign in</button>
         </form>
@@ -772,8 +772,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     }).join('');
 
     container.innerHTML = `
-      <form id="admin-order-filters" class="catalog-toolbar"><label>Order number or phone<input name="search" maxlength="100" value="${escapeHtml(ordersSearch)}"></label>
-        <label>Order status<select name="status"><option value="">All statuses</option>${['placed','confirmed','dispatched','delivered','rto','cancelled'].map(s=>`<option value="${s}" ${s===ordersStatus?'selected':''}>${s}</option>`).join('')}</select></label>
+      <form id="admin-order-filters" class="catalog-toolbar"><label>Order number or phone<input name="search" class="admin-input" maxlength="100" value="${escapeHtml(ordersSearch)}"></label>
+        <label>Order status<select name="status" class="admin-input"><option value="">All statuses</option>${['placed','confirmed','dispatched','delivered','rto','cancelled'].map(s=>`<option value="${s}" ${s===ordersStatus?'selected':''}>${s}</option>`).join('')}</select></label>
         <button type="submit" class="btn btn-secondary">Apply order filters</button>${orderId ? '<a class="admin-return-link" href="/admin/orders">Show all orders</a>' : ''}</form>
       <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
         <button id="btn-review-expired-orders" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
@@ -1140,10 +1140,10 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         </table>
       </div>
       ${items.length ? `<form id="inventory-adjust-form" style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: end;">
-        <label>Supplier / variant <select id="inventory-target" required>${items.map(it => `<option value="${it.supplier_variant_id}">${escapeHtml(it.supplier_name || '')} / ${escapeHtml(it.sku)} / ${escapeHtml([it.size, it.color].filter(Boolean).join(' / '))}</option>`).join('')}</select></label>
-        <label>Quantity change <input id="inventory-delta" type="number" required step="1" placeholder="+ received / - loss"></label>
-        <label>Reason <select id="inventory-reason" required><option value="supplier_receipt">Supplier receipt</option><option value="manual_count">Physical count</option><option value="adjustment_correction">Damage or correction</option></select></label>
-        <label>Invoice / audit ref <input id="inventory-reference" maxlength="100"></label>
+        <label>Supplier / variant <select id="inventory-target" class="admin-input" required>${items.map(it => `<option value="${it.supplier_variant_id}">${escapeHtml(it.supplier_name || '')} / ${escapeHtml(it.sku)} / ${escapeHtml([it.size, it.color].filter(Boolean).join(' / '))}</option>`).join('')}</select></label>
+        <label>Quantity change <input id="inventory-delta" type="number" class="admin-input" required step="1" placeholder="+ received / - loss"></label>
+        <label>Reason <select id="inventory-reason" class="admin-input" required><option value="supplier_receipt">Supplier receipt</option><option value="manual_count">Physical count</option><option value="adjustment_correction">Damage or correction</option></select></label>
+        <label>Invoice / audit ref <input id="inventory-reference" class="admin-input" maxlength="100"></label>
         <button type="submit" class="btn btn-primary">Save adjustment</button>
         <p id="inventory-adjust-feedback" role="status" style="width: 100%;"></p>
       </form>` : '<p>No active supplier variants. Assign a catalog variant to a supplier first.</p>'}
@@ -1362,7 +1362,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     container.innerHTML = `
       <div>
         <h3 style="font-size: 0.9375rem; font-weight: 700; margin-bottom: 12px;">Customer Return & Size Exchange Inquiries</h3>
-        <form id="admin-return-filters" class="catalog-toolbar"><label>Return status<select name="status"><option value="">All statuses</option>${['requested','approved','item_received','inspected_passed','completed','rejected'].map(s=>`<option value="${s}" ${s===returnsStatus?'selected':''}>${s}</option>`).join('')}</select></label><button type="submit" class="btn btn-secondary">Filter returns</button></form>
+        <form id="admin-return-filters" class="catalog-toolbar"><label>Return status<select name="status" class="admin-input"><option value="">All statuses</option>${['requested','approved','item_received','inspected_passed','completed','rejected'].map(s=>`<option value="${s}" ${s===returnsStatus?'selected':''}>${s}</option>`).join('')}</select></label><button type="submit" class="btn btn-secondary">Filter returns</button></form>
         <div style="overflow-x: auto;">
           <table style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead>

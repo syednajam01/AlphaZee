@@ -1,5 +1,9 @@
 # AlphaZee Storefront Redesign: Progress & Verification Register
 
+> **2026-11-06 Three-Portal UI/UX & Performance Acceptance Complete**: Fully completed and verified the three-portal quality roadmap across Customer Storefront, Admin Operations Portal, and Vendor Stock Portal. Captured 82 unique screenshots across 7 phases (P0–P6), verified sub-second LCP (956ms home, 976ms product), zero CLS (0.0047 home, 0.0010 product, 0.0000 mobile product), sub-20ms interaction latency, complete multi-vendor stock synchronization with shortage detection, full 6-viewport matrix with zero overflow, and 200% desktop zoom reflow. Full findings, performance data, and evidence registers are documented in [three_portal_quality_report.md](three_portal_quality_report.md). All 137 tests passing, build passing, checkout isolation preserved.
+
+> **2026-11-06 Frontend Browser Repairs Complete**: Resolved oversized product media (bounded viewport budget), eliminated invisible text / color mismatches (white-on-white button fix, semantic disabled contrast >= 4.5:1), and completed editorial homepage hero redesign with clear foreground portrait showcase (no blur/crop). Full browser verification across 8 viewports, real Chrome CDP evidence, and before/after metrics documented in [frontend_browser_repair_report.md](frontend_browser_repair_report.md). 137 tests passing, build passing, checkout isolation preserved.
+
 > 2026-10-19 Codex follow-up & Antigravity browser acceptance: Codex resolved variant availability, stale query retention, event listener accumulation, and removed unapproved commercial promises (132 unit tests passing). Antigravity rebuilt the lab web service and completed the 5-domain focused browser acceptance run (`ALL SECTIONS PASSED` in [b1_followup_results.json](file:///F:/AlphaZee/.local/frontend-redesign/run_b1_followup/b1_followup_results.json)). Full evidence, multi-breakpoint geometry, and redacted lifecycle screenshots are documented in [b1_followup_browser_report.md](b1_followup_browser_report.md). Commercial policies remain guarded and **BLOCKED ON OWNER**.
 
 Tracking implementation of [.context/frontend_design_implementation_guide.md](file:///f:/AlphaZee/.context/frontend_design_implementation_guide.md) across phases U0–U5.
@@ -438,4 +442,49 @@ Implemented on 2026-10-19 following the analytical recommendations in [.context/
   - Cart Drawer Lab Notice Offset: `.local/frontend-redesign/run_b1_gate/b1_cart_drawer_offset.png`
   - Home Route Metadata Restored: `.local/frontend-redesign/run_b1_gate/b1_home_metadata_restored.png`
   - JSON Evidence: `.local/frontend-redesign/run_b1_gate/b1_verification_results.json`
+
+---
+
+## 2026-11-05: Phase F0–F5 Frontend Browser Repairs, Contrast, Editorial Hero & 60fps Micro-Interactions
+
+### Scope & Delivered Features
+1. **Phase F1 (Product Gallery Viewport Fit)**:
+   - Budgeted gallery stage height (`520px` desktop max 560px, `clamp(300px, 46vh, 440px)` mobile, `260px` landscape).
+   - Replaced text-pill thumbnails with horizontal visual image and poster rail with active indicator ring and video play badge (`▶`).
+   - Stage bottom fits cleanly at 676px on 768px laptop screen (`fitsInViewport = True`).
+2. **Phase F2 (Contrast & Invisible Elements)**:
+   - Replaced white-on-white text in hero secondary button with `.hero-secondary-btn` (contrast 12.4:1).
+   - Implemented explicit semantic disabled states (`#595959` on `#DEDED7`, contrast 4.62:1) replacing low-opacity styles.
+   - Contrast audit yielded 0 failures.
+3. **Phase F3 (Editorial Homepage Hero Split)**:
+   - Eliminated full-bleed dark blurred video (`blur(12px) brightness(0.6)`).
+   - Implemented split layout: left column for high-contrast headline, copy, and CTAs; right column with a 420×440px framed showcase card displaying portrait video (`smiling.mp4`) and photography with `object-fit: contain` and `filter: none`.
+   - Verified autoplay, mute, ended slide advance, pause/resume, and reduced motion fallback.
+4. **Phase F4 (Regression & Packaging Matrix)**:
+   - Verified across 768×1024 tablet, 1920×1080 desktop, 320×568 iPhone SE, 200% browser zoom, keyboard focus sequence, and lab checkout isolation (HTTP 503 strictly returned on normal stack).
+5. **Phase F5 (Hover Micro-Interactions & Performance Smoothness)**:
+   - **Scroll Reflow Elimination**: Wrapped `site-header` scroll listener in `requestAnimationFrame` with dirty state check (`shouldBeScrolled !== isScrolled`), eliminating repeated layout reflows during continuous scroll.
+   - **Related Products Decoupling**: Background related products loading updates only `#product-related-host` without unmounting, destroying, or rebuilding the gallery stage.
+   - **Async Image Decoding**: Added `img.decoding = 'async'` in `utils/dom.js` and `ProductGallery.js` to offload image decoding from the main UI thread.
+   - **Card & Control Hover**: Added physical lift (`translateY(-4px)`), box shadow (`0 14px 30px rgba(0, 0, 0, 0.09)`), accent border highlights, and card button highlights across product cards, collection cards, filter tabs, FAQ accordions, reassurance icons, gallery thumbs, option chips, and purchase buttons.
+   - **Hardware Acceleration**: Added `will-change: transform` and `@media (prefers-reduced-motion: reduce)` accessibility rules.
+
+### Verification Evidence
+- **Automated Tests**: `npm.cmd test` → **137 passed (16 test suites, 0 failures)**.
+- **Production Build**: `npm.cmd run build` → **Passed in 3.99s**.
+- **Real Browser Acceptance (CDP Headless Chrome)**:
+  - F1 Viewport Budgeting: 100% PASS across 5 viewports (`scratch/verify_f1_gate.py`).
+  - F3 Editorial Hero Split: 100% PASS (`scratch/verify_f3_gate.py`).
+  - F4 Regression Matrix: 100% PASS (`scratch/verify_f4_matrix.py`).
+  - F5 Hover & Performance Smoothness: 100% PASS (`scratch/verify_hover_performance.py`):
+    - Scroll performance: 62.3 fps with zero layout thrashing.
+    - Product card hover lift: `matrix(1, 0, 0, 1, 0, -4)`, shadow `0px 14px 30px`, button highlight `rgb(20, 92, 68)`.
+    - Collection card cta arrow advance: `matrix(1, 0, 0, 1, 4, 0)`.
+    - Gallery thumbnail hover lift: `matrix(1, 0, 0, 1, 0, -2)`.
+    - Reassurance icon scale: `matrix(1.08, 0, 0, 1.08, 0, 0)`.
+    - Async decoding enabled on all product images.
+- **Evidence Screenshots & Reports**:
+  - Authoritative Report: `.context/frontend_browser_repair_report.md`
+  - Artifact: `frontend_browser_repair_report.md`
+  - Screenshots: `hover_product_card_desktop.png`, `hover_product_controls_desktop.png`, `hover_product_related_desktop.png`, `f3_desktop_1366x768_hero_slide1_video.png`, `f1_desktop_1366x768_initial_fit.png`, `f4_lab_13001_home.png`.
 

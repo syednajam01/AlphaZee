@@ -48,6 +48,7 @@ export function createHero(onProductClick) {
           </p>
           <div class="hero-cta-group">
             <a href="#featured" class="btn btn-hero">Explore Collection</a>
+            <a href="#collections" class="btn btn-secondary hero-secondary-btn">View Collections</a>
           </div>
         </div>
       </div>
@@ -61,7 +62,6 @@ export function createHero(onProductClick) {
       return;
     }
 
-    section.innerHTML = '';
     const isSingle = heroItems.length === 1;
 
     // 1. Media container
@@ -164,10 +164,10 @@ export function createHero(onProductClick) {
           ${priceText ? `<div class="hero-price-tag">${priceText}</div>` : ''}
           <div class="hero-cta-group">
             <button class="btn btn-hero hero-cta-btn" data-slug="${escapeHtml(item.slug || '')}" data-id="${escapeHtml(item.id || '')}">
-              ${item.slug || item.id ? 'View Product Details' : 'Explore Collection'}
+              ${item.slug || item.id ? 'View Product Details' : 'Explore Pieces'}
             </button>
-            <a href="#featured" class="btn btn-secondary" style="color: #FFFFFF; border-color: rgba(255,255,255,0.3);">
-              Browse Catalog
+            <a href="#collections" class="btn btn-secondary hero-secondary-btn">
+              View Collections
             </a>
           </div>
         </div>
@@ -204,10 +204,15 @@ export function createHero(onProductClick) {
     controls.querySelector('#hero-next')?.addEventListener('click', () => goToSlide(currentSlide + 1));
     controls.querySelector('#hero-play-pause')?.addEventListener('click', togglePlayPause);
 
-    section.appendChild(bgContainer);
-    section.appendChild(overlay);
-    section.appendChild(motif);
-    section.appendChild(container);
+    if (typeof section.replaceChildren === 'function') {
+      section.replaceChildren(bgContainer, overlay, motif, container);
+    } else {
+      section.innerHTML = '';
+      section.appendChild(bgContainer);
+      section.appendChild(overlay);
+      section.appendChild(motif);
+      section.appendChild(container);
+    }
 
     setupObserver();
     scheduleImageSlide();

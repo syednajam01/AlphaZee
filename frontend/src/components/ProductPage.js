@@ -20,6 +20,7 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
   let gallery = null;
   let ctaObserver = null;
   let mobileBar = null;
+  let mobileScrollListener = null;
   let loadGeneration = 0;
 
   function updateMetadata(product) {
@@ -73,8 +74,13 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
         </div>
         <div class="product-page-grid" style="opacity: 0.6;">
           <div class="product-page-gallery">
-            <div class="product-gallery-stage catalog-skeleton-card" style="aspect-ratio: 3/4;">
+            <div class="product-gallery-stage catalog-skeleton-card">
               <div class="catalog-skeleton-img" style="width: 100%; height: 100%;"></div>
+            </div>
+            <div class="product-gallery-thumbs" style="display: flex; gap: 8px; margin-top: 12px; min-height: 64px;">
+              <div class="catalog-skeleton-img" style="width: 56px; height: 64px; border-radius: 4px; aspect-ratio: auto; flex-shrink: 0;"></div>
+              <div class="catalog-skeleton-img" style="width: 56px; height: 64px; border-radius: 4px; aspect-ratio: auto; flex-shrink: 0;"></div>
+              <div class="catalog-skeleton-img" style="width: 56px; height: 64px; border-radius: 4px; aspect-ratio: auto; flex-shrink: 0;"></div>
             </div>
           </div>
           <div class="product-page-details">
@@ -298,35 +304,10 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
         </div>
       </div>
 
-      <!-- Related Pieces Section -->
-      ${relatedProducts && relatedProducts.length > 0 ? `
-        <section class="product-related-section">
-          <div class="product-related-header">
-            <div class="product-related-eyebrow">Curated Pieces</div>
-            <h2 class="product-related-title">Complete the Silhouette</h2>
-          </div>
-          <div class="product-related-grid">
-            ${relatedProducts.map(p => {
-              const pPrice = extractPriceMinor(p.min_price_minor ?? p.min_price);
-              const pDisplayPrice = formatDisplayPrice(pPrice);
-              const pImg = sanitizeMediaUrl(p.image_url, '');
-              const pHoverImg = sanitizeMediaUrl(p.hover_image_url || p.secondary_image_url, '');
-              return `
-                <a href="/products/${encodeURIComponent(p.slug)}" data-nav="/products/${encodeURIComponent(p.slug)}" class="product-related-card">
-                  <div class="product-related-media ${pHoverImg ? 'has-hover' : ''}">
-                    ${pImg ? `<img src="${pImg}" alt="${escapeHtml(p.title)}" class="product-related-img product-related-img-primary ${pHoverImg ? 'has-hover' : ''}" loading="lazy" />` : '<div class="product-gallery-neutral-fallback"><span>AZ</span></div>'}
-                    ${pHoverImg ? `<img src="${pHoverImg}" alt="${escapeHtml(p.title)} alternate view" class="product-related-img product-related-img-hover" loading="lazy" />` : ''}
-                  </div>
-                  <div class="product-related-meta">
-                    <h3 class="product-related-card-title">${escapeHtml(p.title)}</h3>
-                    <span class="product-related-price price-tabular">${pDisplayPrice}</span>
-                  </div>
-                </a>
-              `;
-            }).join('')}
-          </div>
-        </section>
-      ` : ''}
+      <!-- Related Pieces Host Container -->
+      <div id="product-related-host">
+        ${renderRelatedHtml()}
+      </div>
 
       <!-- Mobile Sticky Purchase Bar -->
       <div class="mobile-purchase-bar" id="mobile-purchase-bar" aria-hidden="true">
@@ -360,6 +341,54 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
 
     // Setup Mobile Bar Intersection Observer
     setupMobileBarObserver();
+  }
+
+  function renderRelatedHtml() {
+    if (!relatedProducts || relatedProducts.length === 0) return '';
+    return `
+      <section class="product-related-section" aria-labelledby="related-products-title">
+        <div class="product-related-header">
+          <div class="product-related-eyebrow">Curated Pieces</div>
+          <h2 class="product-related-title" id="related-products-title">Complete the Silhouette</h2>
+        </div>
+        <div class="product-related-grid">
+          ${relatedProducts.map(p => {
+            const pPrice = extractPriceMinor(p.min_price_minor ?? p.min_price);
+            const pDisplayPrice = formatDisplayPrice(pPrice);
+            const pImg = sanitizeMediaUrl(p.image_url, '');
+            const pHoverImg = sanitizeMediaUrl(p.hover_image_url || p.secondary_image_url, '');
+            return `
+              <a href="/products/${encodeURIComponent(p.slug)}" data-nav="/products/${encodeURIComponent(p.slug)}" class="product-related-card">
+                <div class="product-related-media ${pHoverImg ? 'has-hover' : ''}">
+                  ${pImg ? `<img src="${pImg}" alt="${escapeHtml(p.title)}" class="product-related-img product-related-img-primary ${pHoverImg ? 'has-hover' : ''}" loading="lazy" decoding="async" />` : '<div class="product-gallery-neutral-fallback"><span>AZ</span></div>'}
+                  ${pHoverImg ? `<img src="${pHoverImg}" alt="${escapeHtml(p.title)} alternate view" class="product-related-img product-related-img-hover" loading="lazy" decoding="async" />` : ''}
+                </div>
+                <div class="product-related-meta">
+                  <h3 class="product-related-card-title">${escapeHtml(p.title)}</h3>
+                  <span class="product-related-price price-tabular">${pDisplayPrice}</span>
+                </div>
+              </a>
+            `;
+          }).join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  function updateRelatedSection() {
+    const host = container.querySelector('#product-related-host');
+    if (!host) return;
+    host.innerHTML = renderRelatedHtml();
+    host.querySelectorAll('a[data-nav]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        const target = link.getAttribute('data-nav') || link.getAttribute('href');
+        if (target && onNavigate) {
+          e.preventDefault();
+          onNavigate(target);
+        }
+      });
+    });
   }
 
   function attachNavLinks() {
@@ -481,22 +510,48 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
   function setupMobileBarObserver() {
     const mainBtn = container.querySelector('#btn-add-to-cart');
     mobileBar = container.querySelector('#mobile-purchase-bar');
-    if (!mainBtn || !mobileBar || typeof IntersectionObserver === 'undefined') return;
+    if (!mainBtn || !mobileBar) return;
 
-    ctaObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
-          mobileBar.classList.add('is-visible');
-          mobileBar.setAttribute('aria-hidden', 'false');
-        } else {
-          mobileBar.classList.remove('is-visible');
-          mobileBar.setAttribute('aria-hidden', 'true');
-        }
-      });
-    }, { threshold: 0.1 });
+    if (typeof window !== 'undefined' && mobileScrollListener) {
+      window.removeEventListener?.('scroll', mobileScrollListener);
+      mobileScrollListener = null;
+    }
 
-    ctaObserver.observe(mainBtn);
+    const checkVisibility = () => {
+      if (!mainBtn || !mobileBar || typeof mainBtn.getBoundingClientRect !== 'function') return;
+      const rect = mainBtn.getBoundingClientRect();
+      const scrollY = typeof window !== 'undefined' ? (window.scrollY || 0) : 0;
+      const isPast = rect.bottom <= 60 || (rect.top <= 80 && scrollY > 300);
+      if (isPast) {
+        mobileBar.classList.add('is-visible');
+        mobileBar.setAttribute('aria-hidden', 'false');
+      } else {
+        mobileBar.classList.remove('is-visible');
+        mobileBar.setAttribute('aria-hidden', 'true');
+      }
+    };
 
+    if (typeof IntersectionObserver !== 'undefined') {
+      ctaObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting && entry.boundingClientRect.top <= 100) {
+            mobileBar.classList.add('is-visible');
+            mobileBar.setAttribute('aria-hidden', 'false');
+          } else if (entry.isIntersecting) {
+            mobileBar.classList.remove('is-visible');
+            mobileBar.setAttribute('aria-hidden', 'true');
+          }
+        });
+      }, { threshold: [0, 0.1] });
+
+      ctaObserver.observe(mainBtn);
+    }
+
+    if (typeof window !== 'undefined') {
+      mobileScrollListener = checkVisibility;
+      window.addEventListener?.('scroll', mobileScrollListener, { passive: true });
+    }
+    checkVisibility();
   }
 
   // Bind once: rendering options must not accumulate container listeners.
@@ -509,12 +564,15 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
 
   async function load(slug, variantIdQuery = null) {
     const currentGen = ++loadGeneration;
-    isLoading = true;
-    errorMessage = null;
-    currentProduct = null;
-    relatedProducts = [];
-    quantity = 1;
-    render();
+    const isSameProduct = Boolean(currentProduct && currentProduct.slug === slug);
+    if (!isSameProduct) {
+      isLoading = true;
+      errorMessage = null;
+      currentProduct = null;
+      relatedProducts = [];
+      quantity = 1;
+      render();
+    }
 
     try {
       const prod = await fetchProductBySlug(slug);
@@ -534,19 +592,19 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
       if (initialVariant) {
         selectedSize = initialVariant.size || null;
         selectedColor = initialVariant.color || null;
-      } else {
+      } else if (!isSameProduct) {
         selectedColor = colors[0] || null;
         // Require deliberate size choice if multiple sizes exist
         selectedSize = sizes.length === 1 ? sizes[0] : null;
       }
 
-      // Fetch related products in background
+      // Fetch related products in background (updates only related container without unmounting stage/gallery)
       fetchProducts({ collectionId: prod.collection_id || null, pageSize: 5 })
         .then(res => {
           if (currentGen !== loadGeneration) return;
           const raw = res?.products || [];
           relatedProducts = raw.filter(p => p.id !== prod.id && p.slug !== prod.slug).slice(0, 4);
-          render();
+          updateRelatedSection();
         })
         .catch(() => {
           // Non-blocking: related products failure does not block primary product view
@@ -574,6 +632,10 @@ export function createProductPage({ onAddedToCart, onNavigate }) {
       if (ctaObserver) {
         ctaObserver.disconnect();
         ctaObserver = null;
+      }
+      if (typeof window !== 'undefined' && mobileScrollListener) {
+        window.removeEventListener?.('scroll', mobileScrollListener);
+        mobileScrollListener = null;
       }
       container.innerHTML = '';
       currentProduct = null;

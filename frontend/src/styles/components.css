@@ -10,7 +10,7 @@
   font-weight: var(--font-weight-medium);
   line-height: 1.5;
   border-radius: var(--radius-btn);
-  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
   cursor: pointer;
   text-decoration: none;
   min-height: var(--control-height); /* 48px touch target */
@@ -19,7 +19,8 @@
 }
 
 .btn:active {
-  transform: translateY(1px);
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .btn:focus-visible {
@@ -29,8 +30,13 @@
 
 .btn:disabled, .btn[aria-disabled="true"] {
   cursor: not-allowed;
-  opacity: 0.5;
+  background-color: #E5E5DE;
+  color: #595959;
+  border-color: #DEDED7;
+  opacity: 1;
   pointer-events: none;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-primary {
@@ -39,9 +45,19 @@
   border: 1px solid var(--color-accent);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background-color: var(--color-accent-hover);
   border-color: var(--color-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(20, 92, 68, 0.22);
+}
+
+.btn-primary:disabled, .btn-primary[aria-disabled="true"] {
+  background-color: #DEDED7;
+  color: #595959;
+  border-color: #DEDED7;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-secondary {
@@ -50,9 +66,20 @@
   border: 1px solid var(--color-border);
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background-color: var(--color-bg);
-  border-color: var(--color-text-muted);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.btn-secondary:disabled, .btn-secondary[aria-disabled="true"] {
+  background-color: #EFEFEA;
+  color: #737373;
+  border-color: #DEDED7;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-tertiary {
@@ -392,7 +419,7 @@
 }
 
 .catalog-skeleton-img {
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 3 / 4;
   background: linear-gradient(90deg, #f0f0ea 25%, #f9f9f5 50%, #f0f0ea 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;

@@ -71,12 +71,24 @@ export function createHeader() {
     logoSlot.appendChild(logo);
   }
 
-  // Dynamic header background on scroll
+  // Dynamic header background on scroll (rAF-throttled to avoid layout reflows on every pixel)
+  let isScrolled = false;
+  let scrollTicking = false;
   window.addEventListener('scroll', () => {
-    if (window.scrollY > 40) {
-      header.classList.add('is-scrolled');
-    } else {
-      header.classList.remove('is-scrolled');
+    if (!scrollTicking) {
+      window.requestAnimationFrame(() => {
+        const shouldBeScrolled = window.scrollY > 40;
+        if (shouldBeScrolled !== isScrolled) {
+          isScrolled = shouldBeScrolled;
+          if (isScrolled) {
+            header.classList.add('is-scrolled');
+          } else {
+            header.classList.remove('is-scrolled');
+          }
+        }
+        scrollTicking = false;
+      });
+      scrollTicking = true;
     }
   }, { passive: true });
 
@@ -143,6 +155,54 @@ export function createHeader() {
   capabilities.subscribe(({ checkoutEnabled }) => {
     updateAnnouncement(checkoutEnabled);
   });
+
+  // Active navigation link tracking
+  function setActiveNav(targetHref) {
+    const navLinks = header.querySelectorAll('.nav-desktop .nav-link');
+    navLinks.forEach(link => {
+      const href = link.getAttribute('href');
+      if (targetHref && href === targetHref) {
+        link.classList.add('is-active');
+        link.setAttribute('aria-current', 'page');
+      } else {
+        link.classList.remove('is-active');
+        link.removeAttribute('aria-current');
+      }
+    });
+  }
+
+  // Observe home page sections when on the storefront home
+  if (typeof IntersectionObserver !== 'undefined' && typeof window !== 'undefined') {
+    const sectionObserver = new IntersectionObserver((entries) => {
+      if (window.location.pathname.startsWith('/products/')) {
+        setActiveNav(null);
+        return;
+      }
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          setActiveNav(`#${entry.target.id}`);
+        }
+      });
+    }, {
+      rootMargin: '-20% 0px -65% 0px',
+      threshold: 0
+    });
+
+    const observeSections = () => {
+      ['featured', 'collections', 'reassurance', 'faq'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) sectionObserver.observe(el);
+      });
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', observeSections, { once: true });
+    } else {
+      setTimeout(observeSections, 100);
+    }
+  }
+
+  header.setActiveNav = setActiveNav;
 
   return header;
 }
