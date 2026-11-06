@@ -21,10 +21,10 @@ export function createCapabilitiesStore(fetchCapabilities = fetchStorefrontCapab
       if (pending) return pending;
       publish({ checkoutEnabled: false, testMode: false, paymentMethods: ['cod'] });
       pending = Promise.resolve().then(fetchCapabilities).then(data => {
-        const enabled = data?.checkout_enabled === true && data?.test_mode === true;
+        const enabled = data?.checkout_enabled === true && typeof data?.test_mode === 'boolean';
         const paymentMethods = Array.isArray(data?.payment_methods)
           ? data.payment_methods.filter(method => method === 'cod' || method === 'bank_transfer') : ['cod'];
-        publish({ checkoutEnabled: enabled, testMode: enabled, paymentMethods });
+        publish({ checkoutEnabled: enabled, testMode: enabled && data.test_mode === true, paymentMethods });
       }).catch(() => {
         publish({ checkoutEnabled: false, testMode: false, paymentMethods: ['cod'] });
       }).finally(() => { pending = null; });

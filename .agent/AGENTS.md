@@ -22,12 +22,12 @@ Verification: full backend suite 321 passed, final reporting/vendor regressions 
 
 ## Environments and checkout decision
 
-The owner explicitly selected **open checkout only in the isolated local lab**. Preserve this decision unless changed by a later instruction.
+Owner authorized production checkout code on 2026-11-06. Use `PRODUCTION_CHECKOUT_ENABLED` with production Compose; see `.context/production_checkout_release.md`. Defaults stay closed; lab remains isolated.
 
 - Normal: http://localhost:13000, admin `/admin`, API 18000, PostgreSQL 5433. Start with `docker compose --env-file .env.docker.local up --build --wait -d`.
 - Lab: http://127.0.0.1:13001, admin `/admin`, API 18001, PostgreSQL 5434. Start with `docker compose -f compose.checkout-lab.yml up --build --wait -d`.
 - Lab project/database: `alphazee-checkout-lab` / `alphazee_checkout_test`. Database/media volumes and owner/order/checkout cookies are separate. COD and bank verification are simulated; no real transfer is required. Keep the SAMPLE label visible.
-- Preserve the checkout gate: test environment, explicit flag, loopback PostgreSQL connection, `_test` database and no connection-query overrides. Lab API/migrations share the DB namespace to meet that gate. Normal and production checkout remain closed.
+- Preserve the lab gate: test environment, explicit flag, loopback PostgreSQL, `_test` database, no query overrides. Production uses its separate release switch. Never bypass lab restrictions for production.
 - The persistent development owner `syed123` already exists. Never recreate/reset it without a request. Lab owners are separately provisioned using `docker compose -f compose.checkout-lab.yml exec api python scripts/provision_owner.py YOUR_LAB_USERNAME`.
 
 ## Data and commerce invariants
@@ -60,9 +60,11 @@ The 2026-10-19 `.context/business_and_architecture_review.md` defines B0–B5. O
 
 Storefront design: `.context/frontend_design_implementation_guide.md`; progress: `.context/frontend_redesign_progress.md`. Media specification: `.context/admin_media_implementation_guide.md` (MM0–MM5), verified complete in `.context/admin_media_acceptance_report.md` with admin-managed hero sequencing, collection flat-folders, explicit card front/back images, container restart persistence, and checkout isolation. Muted hero autoplay supersedes earlier hero restrictions; product-gallery video remains user-initiated.
 
-Antigravity's v2 report and `.local/antigravity-browser/run_20261018_pass2/` were reviewed on 2026-10-19: JSON records 33 PASS/1 NOT TESTED, but some claims exceed assertions. Read `.context/browser_acceptance_v2_review.md` for keyboard/zoom/security-negative/coverage limits and next priorities. Treat this as partial evidence, not completed acceptance or production certification. Preserve reports; `.context/next_target.md` contains second-pass instructions and `.context/next_target.txt` is older.
+Historical browser evidence limitations: `.context/browser_acceptance_v2_review.md`. Preserve reports and distinguish recorded claims from independently verified outcomes; local acceptance is not production certification.
 
-`.context/next_priorities_and_browser_testing.md` covers acceptance, commercial decisions, UX, staging and a controlled pilot; it includes runner prerequisites and manual/device checks, not fresh verification evidence.
+Azure preparation: Students subscription, approximately $100 credit. Read `.context/azure_system_and_budget_guide.md` and `.context/azure_ai_setup_context.md`. Proposed staging: one Linux VM/Compose. Confirm commercial subscription eligibility. Release switch implemented; no cloud deployment verified.
+
+`.context/next_priorities_and_browser_testing.md` covers acceptance planning; it is not fresh evidence.
 
 Finance/admin brief: `.context/vendor_finance_admin_implementation_guide.md` (VF0–VF8); latest stock-portal refinement: `.context/vendor_stock_portal_implementation_guide.md`. Optional vendor linking requires AlphaZee-managed inventory support. AlphaZee bears RTO/return costs; payable triggers/credits remain undecided. Preserve ongoing VF work. Reviews: `.context/vendor_stock_and_money_review.md`, `.context/production_readiness_summary.md`.
 

@@ -270,7 +270,7 @@ export function createCheckoutView(onClose) {
     }
     const capabilityMessage = modal.querySelector('#checkout-capability-message');
     if (capabilityMessage) capabilityMessage.textContent = availability.checkoutEnabled
-      ? 'SAMPLE / TEST checkout. No real orders.' : CHECKOUT_UNAVAILABLE;
+      ? (availability.testMode ? 'SAMPLE / TEST checkout. No real orders.' : 'Review your delivery details and confirm the order total.') : CHECKOUT_UNAVAILABLE;
     const itemsList = modal.querySelector('#checkout-items-list');
     const subtotalEl = modal.querySelector('#checkout-subtotal');
     const totalEl = modal.querySelector('#checkout-total');

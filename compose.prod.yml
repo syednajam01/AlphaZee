@@ -26,6 +26,7 @@ services:
         APP_ENV: production
         DEBUG: "false"
         TEST_CHECKOUT_ENABLED: "false"
+        PRODUCTION_CHECKOUT_ENABLED: ${PRODUCTION_CHECKOUT_ENABLED:-false}
         ALLOWED_ORIGINS: https://${SITE_DOMAIN:?Set SITE_DOMAIN}
         SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN}
         BANK_NAME: ${BANK_NAME:-}

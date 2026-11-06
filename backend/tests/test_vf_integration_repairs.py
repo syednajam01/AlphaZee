@@ -311,3 +311,48 @@ def test_cash_reversals_use_original_payment_kind(db_session, catalog):
     assert result['supplier_payments_paid_minor'] == baseline['supplier_payments_paid_minor']
     assert result['total_cash_inflow_minor'] == baseline['total_cash_inflow_minor']
     assert result['net_cash_movement_minor'] == baseline['net_cash_movement_minor']
+
+
+def test_real_production_checkout_quote_order_retry_and_shutdown(admin_client, db_session, catalog, monkeypatch):
+    import httpx
+    from app.config import settings
+    from app.main import app
+    from app.dependencies.checkout import require_checkout_enabled
+    from app.services.store_settings import get_or_create_store_settings
+    rules = get_or_create_store_settings(db_session)
+    rules.shipping_rules_configured = True
+    rules.shipping_coverage_area = 'All Pakistan'
+    rules.standard_shipping_fee_minor = 25000
+    rules.free_shipping_threshold_minor = None
+    db_session.commit()
+    for key, value in dict(app_env='production', debug=False, production_checkout_enabled=True,
+                          test_checkout_enabled=False, checkout_lab=False,
+                          allowed_origins=['https://localhost:3000']).items():
+        monkeypatch.setattr(settings, key, value)
+    # Keep database access on the guarded disposable fixture; exercise the real gate.
+    override = app.dependency_overrides.pop(require_checkout_enabled, None)
+    admin_client.base_url = httpx.URL('https://localhost:3000')
+    admin_client.headers['Origin'] = 'https://localhost:3000'
+    try:
+        post(admin_client, '/api/v1/orders/quote', {'items': [{'variant_id': catalog[2].id, 'quantity': 1}],
+            'shipping_city': 'Karachi', 'shipping_province': 'Sindh'})
+        admin_client.get('/api/v1/orders/checkout-session')
+        payload = {'customer_name': 'SAMPLE Production Regression', 'customer_phone': '03001234567',
+            'shipping_address_line1': 'SAMPLE Test Street', 'shipping_city': 'Karachi', 'shipping_province': 'Sindh',
+            'payment_method': 'cod', 'expected_total_minor': 225000,
+            'items': [{'variant_id': catalog[2].id, 'quantity': 1}]}
+        headers = {'Idempotency-Key': 'production-regression-' + uuid.uuid4().hex}
+        first = admin_client.post('/api/v1/orders', json=payload, headers=headers)
+        assert first.status_code == 201, first.text
+        again = admin_client.post('/api/v1/orders', json=payload, headers=headers)
+        assert again.status_code in (200, 201), again.text
+        assert again.json()['id'] == first.json()['id']
+        assert first.json()['total']['minor'] == 225000
+        assert db_session.scalar(select(func.count(StockReservation.id)).where(
+            StockReservation.supplier_variant_id == catalog[3].id)) == 1
+        monkeypatch.setattr(settings, 'production_checkout_enabled', False)
+        assert admin_client.post('/api/v1/orders', json=payload, headers=headers).status_code == 503
+        assert db_session.get(Order, uuid.UUID(first.json()['id'])) is not None
+    finally:
+        if override is not None:
+            app.dependency_overrides[require_checkout_enabled] = override

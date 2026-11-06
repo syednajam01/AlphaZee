@@ -34,11 +34,12 @@ class Settings(BaseSettings):
     app_title: str = "AlphaZee API"
     app_version: str = "0.1.0"
     test_checkout_enabled: bool = False
+    production_checkout_enabled: bool = False
     checkout_lab: bool = False
 
     @property
-    def checkout_enabled(self) -> bool:
-        """Public checkout remains closed until the later release decision."""
+    def test_checkout_allowed(self) -> bool:
+        """The isolated lab gate is independent of production release."""
         url = make_url(self.database_url)
         return bool(
             self.test_checkout_enabled
@@ -49,15 +50,27 @@ class Settings(BaseSettings):
             and not url.query
         )
 
+    @property
+    def checkout_enabled(self) -> bool:
+        return self.test_checkout_allowed or (self.is_production and self.production_checkout_enabled)
+
     @model_validator(mode="after")
     def validate_test_checkout(self):
-        if self.test_checkout_enabled and not self.checkout_enabled:
+        if self.test_checkout_enabled and not self.test_checkout_allowed:
             raise ValueError(
                 "Test checkout requires APP_ENV=test and a loopback PostgreSQL "
                 "DATABASE_URL ending in _test, without connection query overrides."
             )
-        if self.checkout_lab and not self.checkout_enabled:
+        if self.checkout_lab and not self.test_checkout_allowed:
             raise ValueError('CHECKOUT_LAB requires the isolated test checkout gate.')
+        if self.production_checkout_enabled:
+            url = make_url(self.database_url)
+            if (not self.is_production or self.debug or self.test_checkout_enabled or self.checkout_lab
+                    or url.get_backend_name() != 'postgresql' or not url.host or url.query
+                    or not url.database or url.database.endswith('_test')
+                    or not url.username or len(url.password or '') < 20
+                    or any(marker in (url.password or '').upper() for marker in ('REPLACE', 'CHANGEME'))):
+                raise ValueError('Production checkout requires production mode, debug off, a real PostgreSQL database with strong credentials, and no test/lab flags.')
         return self
 
     # ── Security & Authentication ─────────────────────────────────────────────

@@ -110,10 +110,10 @@ export function createHeader() {
   const announcementBar = header.querySelector('.announcement-bar');
   const announcementSpan = announcementBar?.querySelector('span');
 
-  function updateAnnouncement(checkoutEnabled) {
+  function updateAnnouncement(checkoutEnabled, testMode = capabilities.getState().testMode) {
     if (!announcementBar || !announcementSpan) return;
 
-    if (publicSettings && publicSettings.announcement_banner_enabled === false && !checkoutEnabled) {
+    if (publicSettings && (publicSettings.announcement_banner_enabled === false || !publicSettings.announcement_banner_text)) {
       announcementBar.style.display = 'none';
       return;
     }
@@ -124,12 +124,12 @@ export function createHeader() {
     }
 
     const customText = publicSettings?.announcement_banner_text;
-    if (checkoutEnabled) {
+    if (testMode) {
       announcementSpan.textContent = customText
         ? `AlphaZee SAMPLE / TEST: ${customText}`
         : 'AlphaZee SAMPLE / TEST store - no real orders';
     } else {
-      announcementSpan.textContent = customText || 'AlphaZee preview - browse and save your cart. Checkout is temporarily unavailable.';
+      announcementSpan.textContent = customText || (checkoutEnabled ? 'Discover your next piece with AlphaZee.' : 'AlphaZee preview - browse and save your cart. Checkout is temporarily unavailable.');
     }
 
     if (publicSettings?.announcement_banner_link) {

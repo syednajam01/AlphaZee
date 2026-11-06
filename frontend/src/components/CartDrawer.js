@@ -183,7 +183,7 @@ export function createCartDrawer(onCheckout, onExplore) {
     render(state);
     const availability = capabilities.getState();
     drawer.querySelector('#checkout-availability').textContent = availability.checkoutEnabled
-      ? 'SAMPLE / TEST checkout. No real orders.' : CHECKOUT_UNAVAILABLE;
+      ? (availability.testMode ? 'SAMPLE / TEST checkout. No real orders.' : 'Review your items and continue to checkout.') : CHECKOUT_UNAVAILABLE;
     if (!availability.checkoutEnabled) {
       const button = drawer.querySelector('#btn-checkout');
       button.disabled = true;

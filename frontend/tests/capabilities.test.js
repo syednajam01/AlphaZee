@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCapabilitiesStore } from '../src/utils/capabilities.js';
 
-test('checkout starts closed and requires explicit isolated test capabilities', async () => {
+test('checkout starts closed and requires explicit valid capabilities', async () => {
   for (const payload of [null, {}, { checkout_enabled: true }, { checkout_enabled: 'true', test_mode: true }]) {
     const store = createCapabilitiesStore(async () => payload);
     assert.equal(store.getState().checkoutEnabled, false);
@@ -13,6 +13,17 @@ test('checkout starts closed and requires explicit isolated test capabilities', 
   await store.refresh();
   assert.equal(store.getState().checkoutEnabled, true);
   assert.deepEqual(store.getState().paymentMethods, ['cod']);
+});
+
+test('production checkout enables ordering without simulation mode and can be closed', async () => {
+  let enabled = true;
+  const store = createCapabilitiesStore(async () => ({ checkout_enabled: enabled, test_mode: false }));
+  await store.refresh();
+  assert.equal(store.getState().checkoutEnabled, true);
+  assert.equal(store.getState().testMode, false);
+  enabled = false;
+  await store.refresh();
+  assert.equal(store.getState().checkoutEnabled, false);
 });
 
 test('bank transfer is advertised only when the API explicitly enables it', async () => {

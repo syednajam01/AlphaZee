@@ -13,6 +13,11 @@ def main() -> None:
         raise SystemExit('Production deployment requires DEBUG=false.')
     if os.environ.get('TEST_CHECKOUT_ENABLED', '').lower() != 'false':
         raise SystemExit('Production deployment requires TEST_CHECKOUT_ENABLED=false.')
+    release = os.environ.get('PRODUCTION_CHECKOUT_ENABLED', 'false').lower()
+    if release not in {'true', 'false'}:
+        raise SystemExit('PRODUCTION_CHECKOUT_ENABLED must be true or false.')
+    if os.environ.get('CHECKOUT_LAB', 'false').lower() != 'false':
+        raise SystemExit('Production cannot run the checkout lab.')
 
     domain = os.environ.get('SITE_DOMAIN', '').strip().lower()
     parsed = urlsplit(f'https://{domain}')
@@ -34,6 +39,8 @@ def main() -> None:
             not database.password or len(database.password) < 20 or
             'REPLACE' in database.password.upper() or 'CHANGEME' in database.password.upper()):
         raise SystemExit('Use a strong production PostgreSQL URL pointing to db:5432.')
+    if database.query or (database.database or '').endswith('_test'):
+        raise SystemExit('Production requires a non-test database without connection query overrides.')
     if (database.username != os.environ.get('POSTGRES_USER') or
             database.database != os.environ.get('POSTGRES_DB') or
             database.password != os.environ.get('POSTGRES_PASSWORD')):
