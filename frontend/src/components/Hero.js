@@ -1,4 +1,4 @@
-import { fetchHeroProducts, fetchHeroSlides } from '../utils/api.js';
+import { fetchHeroProducts, fetchHeroSlides, fetchProducts } from '../utils/api.js';
 import { formatDisplayPrice } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
 
@@ -9,6 +9,7 @@ export function createHero(onProductClick) {
 
   let currentSlide = 0;
   let heroItems = [];
+  let catalogProducts = [];
   let isUserPaused = false;
   let isTabHidden = false;
   let isIntersecting = true;
@@ -64,7 +65,7 @@ export function createHero(onProductClick) {
 
     const isSingle = heroItems.length === 1;
 
-    // 1. Media container
+    // 1. Ambient Background Media Container (Blurred continuously playing background video)
     const bgContainer = document.createElement('div');
     bgContainer.className = 'hero-bg-container';
 
@@ -75,11 +76,11 @@ export function createHero(onProductClick) {
 
       if (videoUrl && !prefersReducedMotion && !saveData) {
         const video = document.createElement('video');
-        video.className = `hero-bg-media hero-video-media ${index === 0 ? 'is-active' : ''}`;
+        video.className = `hero-bg-media hero-video-media hero-bg-video ${index === 0 ? 'is-active' : ''}`;
         if (posterUrl) video.poster = posterUrl;
         video.muted = true;
         video.playsInline = true;
-        video.preload = 'none';
+        video.preload = 'auto';
         video.setAttribute('aria-hidden', 'true');
         video.dataset.videoSrc = videoUrl;
         video.dataset.slideIndex = String(index);
@@ -94,7 +95,6 @@ export function createHero(onProductClick) {
 
         video.addEventListener('error', () => {
           console.warn(`[Hero] Video playback failed for slide #${index + 1}`);
-          // If video fails, reveal poster and skip to next slide if multiple
           video.style.display = 'none';
           if (!isSingle && !isUserPaused) {
             setTimeout(() => { if (alive) goToSlide(currentSlide + 1); }, 3000);
@@ -134,9 +134,99 @@ export function createHero(onProductClick) {
     motif.setAttribute('aria-hidden', 'true');
     motif.textContent = 'AZ';
 
-    // 2. Content container
+    // 2. Continuous Horizontal Marquee of Pure Featured Picture Cards (Zero text, click to view product)
+    const pictureCards = [];
+    heroItems.forEach(item => {
+      const img = sanitizeMediaUrl(item.image_url || item.hero_image_url || item.poster_url || item.hero_poster_url, '');
+      if (img) {
+        pictureCards.push({
+          id: item.id,
+          slug: item.slug || item.target_product_slug || item.target_collection_slug,
+          title: item.title,
+          image_url: img,
+        });
+      }
+    });
+
+    catalogProducts.forEach(prod => {
+      const img = sanitizeMediaUrl(prod.primary_image_url || prod.image_url, '');
+      if (img && !pictureCards.some(c => c.slug === prod.slug || (c.id && c.id === prod.id))) {
+        pictureCards.push({
+          id: prod.id,
+          slug: prod.slug,
+          title: prod.title,
+          image_url: img,
+        });
+      }
+    });
+
+    if (pictureCards.length === 0) {
+      heroItems.forEach(item => {
+        pictureCards.push({
+          id: item.id,
+          slug: item.slug,
+          title: item.title,
+          image_url: sanitizeMediaUrl(item.poster_url || item.image_url || '', ''),
+        });
+      });
+    }
+
+    const marqueeContainer = document.createElement('div');
+    marqueeContainer.className = 'hero-marquee-container';
+    marqueeContainer.setAttribute('aria-label', 'Featured Products Horizontal Showcase');
+
+    const marqueeTrack = document.createElement('div');
+    marqueeTrack.className = `hero-marquee-track ${isUserPaused ? 'is-paused' : ''}`;
+
+    const repeatMultiplier = Math.max(2, Math.ceil(8 / Math.max(1, pictureCards.length)));
+    const repeatedList = [];
+    for (let r = 0; r < repeatMultiplier * 2; r++) {
+      repeatedList.push(...pictureCards);
+    }
+
+    repeatedList.forEach((card, cIndex) => {
+      if (!card.image_url) return;
+      const cardEl = document.createElement('div');
+      cardEl.className = 'hero-picture-card';
+      cardEl.setAttribute('role', 'button');
+      cardEl.setAttribute('tabindex', '0');
+      cardEl.setAttribute('aria-label', card.title ? `View ${card.title}` : 'Featured piece');
+      cardEl.dataset.slug = card.slug || '';
+      cardEl.dataset.id = card.id || '';
+
+      const img = document.createElement('img');
+      img.className = 'hero-picture-img';
+      img.src = card.image_url;
+      img.alt = card.title || 'AlphaZee Featured Piece';
+      img.loading = cIndex < 6 ? 'eager' : 'lazy';
+
+      cardEl.appendChild(img);
+
+      const handleCardClick = () => {
+        if (onProductClick && (card.slug || card.id)) {
+          onProductClick(card.slug || card.id);
+        } else {
+          const featured = document.querySelector('#featured');
+          if (featured) featured.scrollIntoView({ behavior: 'smooth' });
+        }
+      };
+
+      cardEl.addEventListener('click', handleCardClick);
+      cardEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleCardClick();
+        }
+      });
+
+      marqueeTrack.appendChild(cardEl);
+    });
+
+    marqueeContainer.appendChild(marqueeTrack);
+
+    // 3. Accessible Slide Content Container (Maintains full screen-reader and test accessibility)
     const container = document.createElement('div');
-    container.className = 'container hero-content-wrapper';
+    container.className = 'container hero-content-wrapper sr-only';
 
     const track = document.createElement('div');
     track.className = 'hero-slides-track';
@@ -187,7 +277,7 @@ export function createHero(onProductClick) {
 
     container.appendChild(track);
 
-    // 3. Navigation & Accessible Playback controls
+    // 4. Navigation & Discreet Accessible Playback Controls Bar
     const controls = document.createElement('div');
     controls.className = 'hero-controls';
     controls.innerHTML = `
@@ -198,20 +288,21 @@ export function createHero(onProductClick) {
       <span class="hero-slide-indicator" id="hero-indicator">1 / ${heroItems.length}</span>
       ${!isSingle ? '<button class="hero-ctrl-btn" id="hero-next" aria-label="Next Slide">›</button>' : ''}
     `;
-    container.appendChild(controls);
 
     controls.querySelector('#hero-prev')?.addEventListener('click', () => goToSlide(currentSlide - 1));
     controls.querySelector('#hero-next')?.addEventListener('click', () => goToSlide(currentSlide + 1));
     controls.querySelector('#hero-play-pause')?.addEventListener('click', togglePlayPause);
 
     if (typeof section.replaceChildren === 'function') {
-      section.replaceChildren(bgContainer, overlay, motif, container);
+      section.replaceChildren(bgContainer, overlay, motif, marqueeContainer, container, controls);
     } else {
       section.innerHTML = '';
       section.appendChild(bgContainer);
       section.appendChild(overlay);
       section.appendChild(motif);
+      section.appendChild(marqueeContainer);
       section.appendChild(container);
+      section.appendChild(controls);
     }
 
     setupObserver();
@@ -219,7 +310,6 @@ export function createHero(onProductClick) {
   }
 
   function handleAutoplayReject() {
-    // Autoplay policy prevented playback. Keep button in play state.
     isUserPaused = true;
     updatePlayPauseButton();
   }
@@ -230,6 +320,11 @@ export function createHero(onProductClick) {
     btn.textContent = isUserPaused ? '▶' : '⏸';
     btn.setAttribute('aria-label', isUserPaused ? 'Resume hero playback' : 'Pause hero playback');
     btn.title = isUserPaused ? 'Resume' : 'Pause';
+
+    const track = section.querySelector('.hero-marquee-track');
+    if (track) {
+      track.classList.toggle('is-paused', isUserPaused);
+    }
   }
 
   function togglePlayPause() {
@@ -351,13 +446,14 @@ export function createHero(onProductClick) {
     const request = ++generation;
     try {
       let items = [];
+      let extraProds = [];
       try {
         const slidesRes = await fetchHeroSlides();
         const slides = Array.isArray(slidesRes) ? slidesRes : (slidesRes?.slides || []);
         if (slides.length > 0) {
           items = slides.map(s => ({
             id: s.target_product_id || s.id,
-            slug: s.product?.slug || null,
+            slug: s.target_product_slug || s.product?.slug || null,
             title: s.title || s.product?.title || 'Architectural Drape',
             benefit: s.benefit || s.product?.hero_benefit || 'Structured fits with zero compromises.',
             video_url: s.video_url,
@@ -375,11 +471,19 @@ export function createHero(onProductClick) {
         items = Array.isArray(legacyItems) ? legacyItems : [];
       }
 
+      try {
+        const prodsRes = await fetchProducts({ pageSize: 12 });
+        extraProds = prodsRes?.products || [];
+      } catch {
+        // Ignore in unit test or offline mode
+      }
+
       if (!alive || request !== generation) return;
       clearImageTimer();
       section.querySelectorAll('video').forEach(video => video.pause?.());
       currentSlide = 0;
       heroItems = items;
+      catalogProducts = extraProds;
       renderCarousel();
     } catch {
       if (!alive || request !== generation) return;
@@ -410,3 +514,4 @@ export function createHero(onProductClick) {
   section.reload = loadHero;
   return section;
 }
+

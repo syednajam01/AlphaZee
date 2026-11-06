@@ -746,10 +746,35 @@ export function mountCatalogSection(section, container, context) {
         ${button('➕ Add new hero slide', 'catalog-new-hero-slide', 'class="btn btn-primary"')}
         ${button('Reload playlist', 'catalog-reload-hero')}
       </div>
-      <p style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); margin-top: 4px;">
-        Homepage hero playlist controls the responsive horizontal video and imagery on the storefront.
-        The active video starts muted and plays to its end before transitioning to the next. A single video loops continuously.
-      </p>
+
+      <div class="hero-guidelines-card" style="margin: 16px 0 20px 0; padding: 18px 20px; background: rgba(20, 92, 68, 0.14); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 10px; color: #FFFFFF;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+          <span style="font-size: 1.25rem;">🎬</span>
+          <strong style="font-size: 1rem; color: #38BDF8; letter-spacing: 0.02em;">Homepage Hero Video & Picture Showcase Specifications</strong>
+        </div>
+        <p style="margin: 0 0 12px 0; font-size: 0.875rem; line-height: 1.5; color: rgba(255, 255, 255, 0.9);">
+          The Hero section plays an ambient, atmospheric background video full-bleed behind a subtle blur and vignette, while featured product pictures scroll horizontally in front without text clutter.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; font-size: 0.8125rem;">
+          <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
+            <strong style="color: #6EE7B7; display: block; margin-bottom: 4px;">📐 Dimensions & Breadth</strong>
+            <span><strong>1920 × 1080 px</strong> (16:9 Full HD) or <strong>2560 × 1440 px</strong> (2K). Keep central subject in the middle 60% of frame for flawless mobile cropping.</span>
+          </div>
+          <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
+            <strong style="color: #6EE7B7; display: block; margin-bottom: 4px;">⏱️ Duration & Length</strong>
+            <span><strong>10 to 30 seconds</strong> seamless ambient loop. Avoid jarring camera cuts; prefer slow pans, model motion, or fabric drape.</span>
+          </div>
+          <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
+            <strong style="color: #6EE7B7; display: block; margin-bottom: 4px;">💾 File Size & Codec</strong>
+            <span>Under <strong>15 MB</strong> (max 25 MB). Format: <strong>MP4 (H.264 video, muted / no audio)</strong> for instant autoplay without buffering.</span>
+          </div>
+          <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
+            <strong style="color: #6EE7B7; display: block; margin-bottom: 4px;">🖼️ Featured Pictures Strip</strong>
+            <span>Active slides with images and products marked "Featured in hero" scroll horizontally. Hovering pauses scroll; clicking lands on the product page.</span>
+          </div>
+        </div>
+      </div>
+
       <div id="catalog-hero-editor" style="margin-bottom: 20px;"></div>
       <div id="catalog-hero-slides"></div>
     `);
@@ -857,22 +882,22 @@ export function mountCatalogSection(section, container, context) {
           <div class="catalog-fields">
             ${field('title', 'Slide Title', slide?.title || '', { max: 200 })}
             ${field('benefit', 'Benefit / Headline', slide?.benefit || '', { textarea: true, max: 2000 })}
-            <label>Video asset (for video slides)
+            <label>Background video asset (plays continuously & blurred behind hero)
               <select name="video_asset_id">
                 ${options([['', 'None (image slide)'], ...videoAssets.map(a => [a.id, `${a.original_name} (${(a.byte_size / 1024 / 1024).toFixed(1)} MiB)`])], slide?.video_asset_id)}
               </select>
             </label>
-            <label>Video poster image (required for video slides)
+            <label>Video poster image (instant background display & product card image)
               <select name="poster_asset_id">
                 ${options([['', 'Choose poster image'], ...imageAssets.map(a => [a.id, a.original_name])], slide?.poster_asset_id)}
               </select>
             </label>
-            <label>Image asset (for image-only slides)
+            <label>Image asset (for image-only featured cards)
               <select name="image_asset_id">
                 ${options([['', 'None (use video above)'], ...imageAssets.map(a => [a.id, a.original_name])], slide?.image_asset_id)}
               </select>
             </label>
-            <label>Destination product (optional click target)
+            <label>Destination product (clicking featured image navigates here)
               <select name="target_product_id">
                 ${options([['', 'None (no product link)'], ...allProds.map(p => [p.id, `${p.title || 'Untitled'} (${p.status})`])], slide?.target_product_id)}
               </select>
