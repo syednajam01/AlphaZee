@@ -395,6 +395,10 @@ describe('Hero Carousel Component & Media Streaming', () => {
     const videos = heroSection.querySelectorAll('video');
     assert.strictEqual(videos.length, 2);
     assert.strictEqual(videos[0].loop, false, 'Multi-video hero elements must not loop individually');
+    const slides = heroSection.querySelectorAll('.hero-slide');
+    assert.equal(slides[0].inert, false);
+    assert.equal(slides[1].inert, true, 'Hidden slide actions must not enter keyboard navigation');
+    assert.equal(videos[1].src, '', 'Inactive video must not download eagerly');
     assert.strictEqual(videos[1].loop, false);
 
     const indicator = heroSection.querySelector('#hero-indicator');
@@ -405,6 +409,8 @@ describe('Hero Carousel Component & Media Streaming', () => {
 
     // Should have advanced to slide 2
     assert.strictEqual(indicator.textContent, '2 / 2');
+    assert.equal(slides[0].inert, true);
+    assert.equal(slides[1].inert, false);
     assert.strictEqual(videos[1].classList.contains('is-active'), true);
     assert.strictEqual(videos[1].paused, false);
     assert.strictEqual(videos[0].classList.contains('is-active'), false);
@@ -478,18 +484,18 @@ describe('Hero Carousel Component & Media Streaming', () => {
 
     // Initially playing
     assert.strictEqual(video.paused, false);
-    assert.strictEqual(playPauseBtn.textContent.trim(), '⏸');
+    assert.ok(playPauseBtn.querySelector('svg'));
 
     // Click pause
     playPauseBtn.click();
     assert.strictEqual(video.paused, true, 'Video must pause when pause button is clicked');
-    assert.strictEqual(playPauseBtn.textContent.trim(), '▶');
+    assert.ok(playPauseBtn.innerHTML.includes('m9 5 10 7-10 7z'));
     assert.strictEqual(playPauseBtn.getAttribute('aria-label'), 'Resume hero playback');
 
     // Click resume
     playPauseBtn.click();
     assert.strictEqual(video.paused, false, 'Video must resume when play button is clicked');
-    assert.strictEqual(playPauseBtn.textContent.trim(), '⏸');
+    assert.ok(playPauseBtn.innerHTML.includes('M8 5v14M16 5v14'));
     assert.strictEqual(playPauseBtn.getAttribute('aria-label'), 'Pause hero playback');
 
     heroSection.destroy();
@@ -540,8 +546,9 @@ describe('Hero Carousel Component & Media Streaming', () => {
     const heroSection = createHero();
     await new Promise(resolve => setTimeout(resolve, 20));
 
-    assert.match(heroSection.innerHTML, /Architectural Cuts/);
-    assert.match(heroSection.innerHTML, /Explore Collection/);
+    assert.match(heroSection.innerHTML, /Find your next/);
+    assert.match(heroSection.innerHTML, /Shop the collection/);
+    assert.doesNotMatch(heroSection.innerHTML, /crafted in Pakistan|zero compromises|heavyweight/i);
     heroSection.destroy();
   });
 });

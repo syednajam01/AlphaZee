@@ -9,6 +9,7 @@
 @import './product-page.css';
 @import './admin.css';
 @import './vendor_portal.css';
+@import './storefront.css';
 
 /* Modal product details */
 .hero-catalog-status { position: relative; z-index: 3; padding: 12px; font-size: .85rem; }

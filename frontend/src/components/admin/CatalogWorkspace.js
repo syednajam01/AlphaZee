@@ -512,8 +512,8 @@ export function mountCatalogSection(section, container, context) {
           <label>Collection banner image<select name="image_media_id">${options(imageChoices().concat(collection.image_media_id && !assets.some(a => a.id === collection.image_media_id) ? [[collection.image_media_id, 'Current saved image']] : []), collection.image_media_id)}</select></label>
           <label><input name="is_active" id="catalog-col-is-active" type="checkbox" ${collection.is_active ? 'checked' : ''}> Active collection</label>
         </div>
-        <div id="catalog-col-deactivation-warning" style="display: ${!collection.is_active && publishedCount > 0 ? 'block' : 'none'}; padding: 10px 14px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; color: #FCA5A5; font-size: 0.85rem; margin-top: 8px;">
-          ⚠️ Warning: Deactivating this collection will hide ${publishedCount} published product(s) from customer catalog listings and checkout, because published products require an active collection.
+        <div id="catalog-col-deactivation-warning" style="display: ${!collection.is_active && publishedCount > 0 ? 'block' : 'none'}; padding: 10px 14px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--admin-radius-sm); color: #f87171; font-size: 0.8125rem; margin-top: 8px;">
+          Warning: Deactivating this collection will hide ${publishedCount} published product(s) from customer catalog listings and checkout, because published products require an active collection.
         </div>
         <div class="catalog-toolbar" style="margin-top: 12px;">
           <button type="submit" class="btn btn-primary" id="catalog-save-collection">Save collection details</button>
@@ -521,10 +521,10 @@ export function mountCatalogSection(section, container, context) {
         </div>
       </form>
       ${collection.id ? `
-        <section style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #344b3c;">
+        <section style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--admin-border-hairline);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h4 style="margin: 0; font-size: 1rem;">Products in this Collection (${memberProducts.length})</h4>
-            ${button('➕ Create product here', 'catalog-col-create-prod', 'class="btn btn-secondary" style="font-size: 0.8125rem; padding: 6px 12px;"')}
+            <h4 style="margin: 0; font-size: 0.9375rem; font-weight: 500; color: var(--admin-text-primary);">Products in this collection (${memberProducts.length})</h4>
+            ${button('Create product here', 'catalog-col-create-prod', 'class="btn btn-secondary" style="font-size: 0.8125rem; padding: 6px 12px;"')}
           </div>
           <p style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.6); margin-bottom: 12px;">
             Every product is assigned to one collection. Moving a product preserves its SKU, variants, inventory, and order history.
@@ -743,34 +743,33 @@ export function mountCatalogSection(section, container, context) {
 
     shell(`
       <div class="catalog-toolbar">
-        ${button('➕ Add new hero slide', 'catalog-new-hero-slide', 'class="btn btn-primary"')}
+        ${button('Add hero slide', 'catalog-new-hero-slide', 'class="btn btn-primary"')}
         ${button('Reload playlist', 'catalog-reload-hero')}
       </div>
 
-      <div class="hero-guidelines-card" style="margin: 16px 0 20px 0; padding: 18px 20px; background: rgba(20, 92, 68, 0.14); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 10px; color: #FFFFFF;">
+      <div class="hero-guidelines-card" style="margin: 16px 0 20px 0; padding: 18px 20px; background: var(--admin-bg-card); border: 1px solid var(--admin-border-hairline); border-radius: var(--admin-radius-card); color: var(--admin-text-primary);">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-          <span style="font-size: 1.25rem;">🎬</span>
-          <strong style="font-size: 1rem; color: #38BDF8; letter-spacing: 0.02em;">Homepage Hero Video & Picture Showcase Specifications</strong>
+          <strong style="font-size: 0.9375rem; font-weight: 500; color: var(--admin-text-primary);">Homepage hero video & picture showcase specifications</strong>
         </div>
-        <p style="margin: 0 0 12px 0; font-size: 0.875rem; line-height: 1.5; color: rgba(255, 255, 255, 0.9);">
+        <p style="margin: 0 0 12px 0; font-size: 0.8125rem; line-height: 1.5; color: var(--admin-text-secondary);">
           The Hero section plays an ambient, atmospheric background video full-bleed behind a subtle blur and vignette, while featured product pictures scroll horizontally in front without text clutter.
         </p>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; font-size: 0.8125rem;">
-          <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
-            <strong style="color: #6EE7B7; display: block; margin-bottom: 4px;">📐 Dimensions & Breadth</strong>
-            <span><strong>1920 × 1080 px</strong> (16:9 Full HD) or <strong>2560 × 1440 px</strong> (2K). Keep central subject in the middle 60% of frame for flawless mobile cropping.</span>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; font-size: 0.8125rem;">
+          <div style="background: var(--admin-bg-raised); padding: 10px 14px; border-radius: var(--admin-radius-control); border: 1px solid var(--admin-border-hairline);">
+            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Dimensions & breadth</strong>
+            <span style="color: var(--admin-text-secondary);"><strong>1920 × 1080 px</strong> (16:9 Full HD) or <strong>2560 × 1440 px</strong> (2K). Keep central subject in the middle 60% of frame for flawless mobile cropping.</span>
           </div>
-          <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
-            <strong style="color: #6EE7B7; display: block; margin-bottom: 4px;">⏱️ Duration & Length</strong>
-            <span><strong>10 to 30 seconds</strong> seamless ambient loop. Avoid jarring camera cuts; prefer slow pans, model motion, or fabric drape.</span>
+          <div style="background: var(--admin-bg-raised); padding: 10px 14px; border-radius: var(--admin-radius-control); border: 1px solid var(--admin-border-hairline);">
+            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Duration & length</strong>
+            <span style="color: var(--admin-text-secondary);"><strong>10 to 30 seconds</strong> seamless ambient loop. Avoid jarring camera cuts; prefer slow pans, model motion, or fabric drape.</span>
           </div>
-          <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
-            <strong style="color: #6EE7B7; display: block; margin-bottom: 4px;">💾 File Size & Codec</strong>
-            <span>Under <strong>15 MB</strong> (max 25 MB). Format: <strong>MP4 (H.264 video, muted / no audio)</strong> for instant autoplay without buffering.</span>
+          <div style="background: var(--admin-bg-raised); padding: 10px 14px; border-radius: var(--admin-radius-control); border: 1px solid var(--admin-border-hairline);">
+            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">File size & codec</strong>
+            <span style="color: var(--admin-text-secondary);">Under <strong>15 MB</strong> (max 25 MB). Format: <strong>MP4 (H.264 video, muted / no audio)</strong> for instant autoplay without buffering.</span>
           </div>
-          <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
-            <strong style="color: #6EE7B7; display: block; margin-bottom: 4px;">🖼️ Featured Pictures Strip</strong>
-            <span>Active slides with images and products marked "Featured in hero" scroll horizontally. Hovering pauses scroll; clicking lands on the product page.</span>
+          <div style="background: var(--admin-bg-raised); padding: 10px 14px; border-radius: var(--admin-radius-control); border: 1px solid var(--admin-border-hairline);">
+            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Featured pictures strip</strong>
+            <span style="color: var(--admin-text-secondary);">Active slides with images and products marked "Featured in hero" scroll horizontally. Hovering pauses scroll; clicking lands on the product page.</span>
           </div>
         </div>
       </div>

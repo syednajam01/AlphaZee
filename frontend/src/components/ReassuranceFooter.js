@@ -26,11 +26,11 @@ export function createReassuranceAndFooter() {
     </section>
 
     <!-- FAQ Section -->
-    <section class="section" id="faq" aria-label="Frequently Asked Questions">
+    <section class="section" id="faq" aria-label="Before you order">
       <div class="container">
-        <div class="section-header" style="text-align: center; max-width: 600px; margin-left: auto; margin-right: auto;">
-          <h2 class="section-title">Frequently Asked Questions</h2>
-          <p class="section-subtitle">Everything you need to know before ordering.</p>
+        <div class="section-header">
+          <h2 class="section-title">Before you order</h2>
+          <p class="section-subtitle">A few useful answers, all in one place.</p>
         </div>
 
         <div class="faq-list">
@@ -58,7 +58,7 @@ export function createReassuranceAndFooter() {
           <div>
             <div id="footer-logo-slot" style="margin-bottom: 16px;"></div>
             <p class="footer-brand-desc">
-              ${storeConfig.tagline}. Purpose-built apparel combining timeless cuts with dependable construction.
+              A considered selection of clothing and accessories. Find your next piece, and make it your own.
             </p>
             <img
               src="/logo/huda-brand-quote.png"
@@ -103,7 +103,7 @@ export function createReassuranceAndFooter() {
         </div>
 
         <div class="footer-bottom">
-          <div>© ${new Date().getFullYear()} AlphaZee. All verified rights reserved.</div>
+          <div>© ${new Date().getFullYear()} AlphaZee. All rights reserved.</div>
           <div style="display: flex; gap: 24px;">
             ${storeConfig.footerLinks.legal.map(l => `
               ${l.href ? `<a href="${l.href}" class="footer-link">${l.label}</a>` : `<span class="footer-link" aria-disabled="true">${l.label} (not yet available)</span>`}

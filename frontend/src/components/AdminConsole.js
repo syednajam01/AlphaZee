@@ -558,7 +558,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
               Return to Storefront
             </a>
-            <p class="admin-login-security-notice">🔒 Cryptographically authenticated session tokens</p>
+            <p class="admin-login-security-notice">Cryptographically authenticated session tokens</p>
           </div>
         </div>
       </div>`;
@@ -1610,7 +1610,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             Finance &amp; Ledger
           </button>
           <button type="button" class="btn btn-manage-stock-users" data-supplier-id="${s.id}" style="background: rgba(59, 130, 246, 0.25); border: 1px solid #3B82F6; color: #93C5FD; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-            🔑 Stock Logins
+            Stock Logins
           </button>
         </td>
       </tr>

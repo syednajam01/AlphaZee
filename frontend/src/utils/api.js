@@ -72,7 +72,7 @@ export async function loginVendor(username, password) {
 }
 
 export async function fetchVendorSession() {
-  const session = await request('/vendor/auth/me', { cache: 'no-store' });
+  const session = await request('/vendor/auth/session', { cache: 'no-store' });
   vendorCsrfToken = session.csrf_token;
   return session;
 }
@@ -1143,8 +1143,9 @@ export function getPeriodReportCsvUrl(params = {}) {
  * @param {Object} params { page, limit, search }
  */
 export async function fetchVendorStock(params = {}) {
+  const { page = 1, limit = 50, ...filters } = params;
   const query = new URLSearchParams();
-  for (const [key, val] of Object.entries(params)) {
+  for (const [key, val] of Object.entries({ ...filters, limit, offset: (page - 1) * limit })) {
     if (val !== undefined && val !== null && val !== '') {
       query.append(key, val);
     }
@@ -1173,7 +1174,7 @@ export async function updateVendorStockCount(variantId, body) {
 export async function reportVendorShortage(variantId, body) {
   return request(`/vendor/stock/${variantId}/shortage`, {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, variant_id: variantId }),
   });
 }
 

@@ -14,7 +14,9 @@ This is the canonical project agent guide. Read it at the start of each task. Ke
 
 ## Current state and scope
 
-**Three-portal UI/UX, performance and browser acceptance are complete and verified.** Read `.context/three_portal_quality_report.md` for authoritative evidence across all 6 gates (82 screenshots captured, 100% PASS), and `.context/three_portal_quality_progress.md` for phase history. Follow the owner's next task; do not infer another phase.
+Design work: `.context/unslop_storefront_report.md`; installed skill `.agent/skills/unslop/SKILL.md`; admin handoff `.context/unslop_admin_implementation_guide.md`; vendor redesign and API repairs: `.context/unslop_vendor_report.md`.
+
+**Three-portal UI/UX, performance and browser acceptance are complete and verified.** Admin Portal unslopping complete (CC BY 4.0 Damir Sokolovsky); see `.context/unslop_admin_report.md` and `.context/unslop_admin_progress.md`. Read `.context/three_portal_quality_report.md` for authoritative evidence across all 6 gates (82 screenshots captured, 100% PASS), and `.context/three_portal_quality_progress.md` for phase history. Follow the owner's next task; do not infer another phase.
 
 Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging, separate checkout lab, vendor agreements and financial ledgers, FIFO payment allocations, vendor stock counting portal with shortage detection, period financial reporting and P&L, configurable admin branding/legal policies and per-owner preferences.
 

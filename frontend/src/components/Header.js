@@ -10,8 +10,8 @@ export function createHeader() {
 
   header.innerHTML = `
     <!-- Store Announcement Bar -->
-    <div class="announcement-bar" role="region" aria-label="Store announcement">
-      <span>AlphaZee Concept Preview • Public ordering is not open yet</span>
+    <div class="announcement-bar" role="region" aria-label="Store announcement" style="display: none;">
+      <span>AlphaZee preview - browse and save your cart. Checkout is temporarily unavailable.</span>
     </div>
 
     <div class="container">
@@ -113,7 +113,7 @@ export function createHeader() {
   function updateAnnouncement(checkoutEnabled, testMode = capabilities.getState().testMode) {
     if (!announcementBar || !announcementSpan) return;
 
-    if (publicSettings && (publicSettings.announcement_banner_enabled === false || !publicSettings.announcement_banner_text)) {
+    if (!publicSettings || publicSettings.announcement_banner_enabled === false || !publicSettings.announcement_banner_text) {
       announcementBar.style.display = 'none';
       return;
     }

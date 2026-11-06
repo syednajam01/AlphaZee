@@ -18,6 +18,7 @@ export function initApp() {
   captureLandingUtmParams();
   const app = document.getElementById('app');
   if (!app) return;
+  app.classList?.add('storefront');
 
   app.innerHTML = '';
 

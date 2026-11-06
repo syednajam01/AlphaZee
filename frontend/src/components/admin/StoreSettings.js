@@ -25,40 +25,40 @@ export function createStoreSettingsComponent() {
     container.innerHTML = `
       <div class="settings-header" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
         <div>
-          <h2 style="font-size: 1.5rem; font-weight: 700; color: #fff; margin: 0 0 6px 0;">⚙️ Store Settings & Admin Preferences</h2>
-          <p style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.6); margin: 0;">
-            Manage storefront appearance, announcement banners, legal policies, operational thresholds, and your personal console preferences.
+          <h2 style="font-size: 1.25rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 6px 0;">Store settings & preferences</h2>
+          <p style="font-size: 0.8125rem; color: var(--admin-text-secondary); margin: 0;">
+            Manage storefront appearance, announcement banners, legal policies, operational thresholds, and personal console preferences.
           </p>
         </div>
         ${currentSettings ? `
-          <div style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.05); padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);">
-            <span style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 0.05em;">Current Revision:</span>
-            <span id="settings-revision-badge" style="font-size: 0.875rem; font-weight: 700; color: #60a5fa;">v${currentSettings.version}</span>
+          <div style="display: flex; align-items: center; gap: 8px; background: var(--admin-bg-raised); padding: 5px 12px; border-radius: var(--admin-radius-sm); border: 1px solid var(--admin-border-hairline);">
+            <span style="font-size: 0.75rem; color: var(--admin-text-secondary);">Current revision:</span>
+            <span id="settings-revision-badge" style="font-size: 0.8125rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--admin-text-primary);">v${currentSettings.version}</span>
           </div>
         ` : ''}
       </div>
 
       <!-- Navigation Tabs -->
-      <div class="settings-tabs" style="display: flex; gap: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 24px; overflow-x: auto; padding-bottom: 2px;">
+      <div class="settings-tabs">
         <button type="button" class="settings-tab-btn ${activeTab === 'storefront' ? 'active' : ''}" data-tab="storefront">
-          🎨 Storefront & Branding
+          Storefront & branding
         </button>
         <button type="button" class="settings-tab-btn ${activeTab === 'shipping' ? 'active' : ''}" data-tab="shipping">
-          🚚 Shipping & Thresholds
+          Shipping & thresholds
         </button>
         <button type="button" class="settings-tab-btn ${activeTab === 'policies' ? 'active' : ''}" data-tab="policies">
-          📜 Legal & Policies
+          Legal & policies
         </button>
         <button type="button" class="settings-tab-btn ${activeTab === 'audit' ? 'active' : ''}" data-tab="audit">
-          ⏱️ Revision History
+          Revision history
         </button>
         <button type="button" class="settings-tab-btn ${activeTab === 'preferences' ? 'active' : ''}" data-tab="preferences">
-          👤 Admin Preferences
+          Admin preferences
         </button>
       </div>
 
       <!-- Status Alert Banner -->
-      <div id="settings-alert" style="display: none; margin-bottom: 20px; padding: 12px 16px; border-radius: 8px; font-size: 0.875rem;"></div>
+      <div id="settings-alert" style="display: none; margin-bottom: 20px; padding: 12px 16px; border-radius: var(--admin-radius-control); font-size: 0.8125rem;"></div>
 
       <!-- Tab Content Area -->
       <div class="settings-tab-body">
@@ -100,29 +100,29 @@ export function createStoreSettingsComponent() {
     return `
       <form id="form-storefront-settings" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
         <!-- Announcement Bar Section -->
-        <div class="settings-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
-          <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 16px 0; display: flex; align-items: center; justify-content: space-between;">
-            <span>📢 Store Announcement Bar</span>
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 400; cursor: pointer;">
+        <div class="settings-card">
+          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0; display: flex; align-items: center; justify-content: space-between;">
+            <span>Store announcement bar</span>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 400; cursor: pointer;">
               <input type="checkbox" id="input-announcement-enabled" ${s.announcement_banner_enabled ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
-              <span>Enabled on Storefront</span>
+              <span>Enabled on storefront</span>
             </label>
           </h3>
           
           <div style="display: flex; flex-direction: column; gap: 14px;">
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Announcement Text</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Announcement text</label>
               <input type="text" id="input-announcement-text" value="${escapeHtml(s.announcement_banner_text || '')}" class="admin-input" style="width: 100%;" required>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Banner Link (optional, e.g. #featured or /track)</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Banner link (optional, e.g. #featured or /track)</label>
               <input type="text" id="input-announcement-link" value="${escapeHtml(s.announcement_banner_link || '')}" class="admin-input" style="width: 100%;" placeholder="#featured">
             </div>
 
             <!-- Live Preview -->
-            <div style="margin-top: 10px; background: rgba(0, 0, 0, 0.4); padding: 12px; border-radius: 8px; border: 1px dashed rgba(255, 255, 255, 0.2);">
-              <span style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.4); display: block; margin-bottom: 6px;">Live Banner Preview:</span>
-              <div id="preview-announcement-bar" style="background: ${s.accent_color || '#111827'}; color: #fff; padding: 8px 14px; text-align: center; border-radius: 6px; font-size: 0.8125rem; font-weight: 500;">
+            <div style="margin-top: 10px; background: var(--admin-bg-deep); padding: 12px; border-radius: var(--admin-radius-sm); border: 1px dashed var(--admin-border-subtle);">
+              <span style="font-size: 0.6875rem; color: var(--admin-text-muted); display: block; margin-bottom: 6px;">Live banner preview</span>
+              <div id="preview-announcement-bar" style="background: ${s.accent_color || '#111827'}; color: #fff; padding: 8px 14px; text-align: center; border-radius: var(--admin-radius-sm); font-size: 0.8125rem; font-weight: 500;">
                 ${escapeHtml(s.announcement_banner_text || 'Store announcement banner')}
               </div>
             </div>
@@ -130,27 +130,27 @@ export function createStoreSettingsComponent() {
         </div>
 
         <!-- Branding & Presentation Tokens -->
-        <div class="settings-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
-          <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 16px 0;">🎨 Brand Identity & Theme Tokens</h3>
+        <div class="settings-card">
+          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0;">Brand identity & theme tokens</h3>
           
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Brand Name</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Brand name</label>
               <input type="text" id="input-brand-name" value="${escapeHtml(s.brand_name || 'AlphaZee')}" class="admin-input" style="width: 100%;" required>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Tagline</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Tagline</label>
               <input type="text" id="input-tagline" value="${escapeHtml(s.tagline || '')}" class="admin-input" style="width: 100%;">
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Primary Accent Color</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Primary accent color</label>
               <div style="display: flex; align-items: center; gap: 10px;">
-                <input type="color" id="input-accent-color-picker" value="${s.accent_color || '#111827'}" style="width: 44px; height: 38px; border: none; border-radius: 6px; cursor: pointer; background: transparent;">
+                <input type="color" id="input-accent-color-picker" value="${s.accent_color || '#111827'}" style="width: 44px; height: 38px; border: none; border-radius: var(--admin-radius-sm); cursor: pointer; background: transparent;">
                 <input type="text" id="input-accent-color" value="${escapeHtml(s.accent_color || '#111827')}" class="admin-input" style="flex: 1; font-family: monospace;" pattern="^#[0-9a-fA-F]{6}$" required>
               </div>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Store Typography</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Store typography</label>
               <select id="select-font-family" class="admin-input" style="width: 100%;">
                 <option value="Inter, sans-serif" ${s.font_family === 'Inter, sans-serif' ? 'selected' : ''}>Inter (Modern Sans)</option>
                 <option value="Outfit, sans-serif" ${s.font_family === 'Outfit, sans-serif' ? 'selected' : ''}>Outfit (Geometric Premium)</option>
@@ -159,7 +159,7 @@ export function createStoreSettingsComponent() {
               </select>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Button Border Radius</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Button border radius</label>
               <select id="select-border-radius" class="admin-input" style="width: 100%;">
                 <option value="none" ${s.border_radius === 'none' ? 'selected' : ''}>Sharp (0px)</option>
                 <option value="sm" ${s.border_radius === 'sm' ? 'selected' : ''}>Slight Curve (4px)</option>
@@ -169,7 +169,7 @@ export function createStoreSettingsComponent() {
               </select>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Layout Spacing Density</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Layout spacing density</label>
               <select id="select-spacing-density" class="admin-input" style="width: 100%;">
                 <option value="compact" ${s.spacing_density === 'compact' ? 'selected' : ''}>Compact (High density)</option>
                 <option value="comfortable" ${s.spacing_density === 'comfortable' ? 'selected' : ''}>Comfortable (Balanced)</option>
@@ -182,8 +182,8 @@ export function createStoreSettingsComponent() {
         <!-- Reason & Submit -->
         <div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end;">
           <input type="text" id="input-change-reason" placeholder="Change reason (e.g. Seasonal Theme Update)" class="admin-input" style="max-width: 320px;">
-          <button type="submit" id="btn-save-storefront" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">
-            💾 Save Storefront Settings
+          <button type="submit" id="btn-save-storefront" class="btn btn-primary" style="padding: 10px 24px; font-weight: 500;">
+            Save storefront settings
           </button>
         </div>
       </form>
@@ -197,54 +197,54 @@ export function createStoreSettingsComponent() {
 
     return `
       <form id="form-shipping-settings" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
-        <div class="settings-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
-          <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 16px 0;">🚚 Shipping Coverage & Rates</h3>
-          <p style="font-size: 0.8125rem; color: rgba(255, 255, 255, 0.6); margin: 0 0 16px 0;">
+        <div class="settings-card">
+          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0;">Shipping coverage & rates</h3>
+          <p style="font-size: 0.8125rem; color: var(--admin-text-secondary); margin: 0 0 16px 0;">
             AlphaZee strictly bears 100% of RTO and return transit expenses. Configure customer-facing delivery coverage and flat standard charges below.
           </p>
           
-          <div style="background: rgba(20, 92, 68, 0.25); border: 1px solid rgba(74, 222, 128, 0.3); border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px;">
+          <div style="background: rgba(20, 92, 68, 0.2); border: 1px solid var(--admin-border-subtle); border-radius: var(--admin-radius-control); padding: 14px 16px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px;">
             <input id="confirm-shipping-rules" type="checkbox" ${s.shipping_rules_configured ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
-            <label for="confirm-shipping-rules" style="font-size: 0.875rem; font-weight: 500; color: #FFFFFF; cursor: pointer; margin: 0;">
+            <label for="confirm-shipping-rules" style="font-size: 0.8125rem; font-weight: 500; color: var(--admin-text-primary); cursor: pointer; margin: 0;">
               I confirm these customer-facing delivery rules are verified and ready for live storefront use.
             </label>
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Coverage: All Pakistan or comma-separated cities/provinces</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Coverage: All Pakistan or comma-separated cities/provinces</label>
               <input type="text" id="input-shipping-coverage" value="${escapeHtml(s.shipping_coverage_area || 'All Pakistan')}" class="admin-input" style="width: 100%;" required>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Standard Delivery Fee (PKR)</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Standard delivery fee (PKR)</label>
               <input type="number" id="input-shipping-fee-pkr" value="${stdPkr}" min="0" step="10" class="admin-input" style="width: 100%;" required>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Free Delivery Threshold (PKR, leave blank if none)</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Free delivery threshold (PKR, leave blank if none)</label>
               <input type="number" id="input-free-shipping-pkr" value="${freePkr}" min="0" step="100" class="admin-input" style="width: 100%;" placeholder="e.g. 5000">
             </div>
           </div>
         </div>
 
-        <div class="settings-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
-          <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 16px 0;">⚠️ Operational Alerts & Stock Thresholds</h3>
+        <div class="settings-card">
+          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0;">Operational alerts & stock thresholds</h3>
           
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Low-Stock Warning (Units)</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Low-stock warning (units)</label>
               <input type="number" id="input-low-stock-threshold" value="${s.low_stock_threshold}" min="0" step="1" class="admin-input" style="width: 100%;" required>
-              <small style="color: rgba(255, 255, 255, 0.4); font-size: 0.75rem;">Variants at or below this count trigger low-stock alerts.</small>
+              <small style="color: var(--admin-text-muted); font-size: 0.75rem;">Variants at or below this count trigger low-stock alerts.</small>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Stock Staleness Warning (Days)</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Stock staleness warning (days)</label>
               <input type="number" id="input-staleness-threshold" value="${s.stock_staleness_threshold_days}" min="1" step="1" class="admin-input" style="width: 100%;" required>
-              <small style="color: rgba(255, 255, 255, 0.4); font-size: 0.75rem;">Unverified vendor stock triggers staleness warning after N days.</small>
+              <small style="color: var(--admin-text-muted); font-size: 0.75rem;">Unverified vendor stock triggers staleness warning after N days.</small>
             </div>
           </div>
         </div>
 
         <div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end;">
-          <button type="submit" id="btn-save-shipping" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">
-            💾 Save Logistics & Thresholds
+          <button type="submit" id="btn-save-shipping" class="btn btn-primary" style="padding: 10px 24px; font-weight: 500;">
+            Save logistics & thresholds
           </button>
         </div>
       </form>
@@ -255,25 +255,25 @@ export function createStoreSettingsComponent() {
     const s = currentSettings;
     const policyMap = {
       delivery: {
-        title: '🚚 Delivery & Shipping Policy',
+        title: 'Delivery & shipping policy',
         content: s.delivery_policy_content || '',
         status: s.delivery_policy_status,
         publishedAt: s.delivery_policy_published_at,
       },
       return: {
-        title: '🔄 Return & Exchange Policy',
+        title: 'Return & exchange policy',
         content: s.return_policy_content || '',
         status: s.return_policy_status,
         publishedAt: s.return_policy_published_at,
       },
       terms: {
-        title: '⚖️ Terms of Service',
+        title: 'Terms of service',
         content: s.terms_policy_content || '',
         status: s.terms_policy_status,
         publishedAt: s.terms_policy_published_at,
       },
       privacy: {
-        title: '🔒 Privacy Policy',
+        title: 'Privacy policy',
         content: s.privacy_policy_content || '',
         status: s.privacy_policy_status,
         publishedAt: s.privacy_policy_published_at,
@@ -292,9 +292,9 @@ export function createStoreSettingsComponent() {
             const active = k === activePolicy;
             return `
               <button type="button" class="btn ${active ? 'btn-primary' : 'btn-secondary'} sub-policy-tab" data-policy="${k}" style="padding: 6px 14px; font-size: 0.8125rem;">
-                ${p.title.split(' ')[0]} ${p.title.split(' ')[1]}
-                <span style="font-size: 0.6875rem; padding: 2px 6px; border-radius: 4px; margin-left: 6px; ${p.status === 'published' ? 'background: rgba(34, 197, 94, 0.2); color: #4ade80;' : 'background: rgba(234, 179, 8, 0.2); color: #facc15;'}">
-                  ${p.status.toUpperCase()}
+                ${escapeHtml(p.title)}
+                <span style="font-size: 0.6875rem; padding: 2px 6px; border-radius: var(--admin-radius-tag); margin-left: 6px; ${p.status === 'published' ? 'background: rgba(74, 222, 128, 0.12); color: #4ade80;' : 'background: rgba(251, 191, 36, 0.12); color: #facc15;'}">
+                  ${p.status}
                 </span>
               </button>
             `;
@@ -302,12 +302,12 @@ export function createStoreSettingsComponent() {
         </div>
 
         <!-- Policy Editor Card -->
-        <div class="settings-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
+        <div class="settings-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
             <div>
-              <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 4px 0;">${pol.title}</h3>
-              <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">
-                Status: <strong style="color: ${isPublished ? '#4ade80' : '#facc15'}; text-transform: uppercase;">${pol.status}</strong>
+              <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 4px 0;">${pol.title}</h3>
+              <div style="font-size: 0.75rem; color: var(--admin-text-muted);">
+                Status: <strong style="color: ${isPublished ? '#4ade80' : '#facc15'}; text-transform: capitalize;">${pol.status}</strong>
                 ${pol.publishedAt ? ` • Last published: ${new Date(pol.publishedAt).toLocaleString()}` : ''}
               </div>
             </div>
@@ -316,24 +316,24 @@ export function createStoreSettingsComponent() {
             <div style="display: flex; gap: 10px;">
               ${isPublished ? `
                 <button type="button" id="btn-unpublish-policy" class="btn btn-secondary" style="font-size: 0.8125rem;">
-                  Revert to Draft
+                  Revert to draft
                 </button>
               ` : `
-                <button type="button" id="btn-publish-policy" class="btn btn-primary" style="background: #16a34a; border-color: #16a34a; font-size: 0.8125rem;">
-                  🚀 Publish to Storefront
+                <button type="button" id="btn-publish-policy" class="btn btn-primary" style="font-size: 0.8125rem;">
+                  Publish to storefront
                 </button>
               `}
             </div>
           </div>
 
           <div>
-            <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Policy Content (Markdown / Plain Text)</label>
+            <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Policy content (Markdown / Plain Text)</label>
             <textarea id="textarea-policy-content" class="admin-input" style="width: 100%; min-height: 240px; font-family: monospace; font-size: 0.875rem; line-height: 1.5;" placeholder="Enter legal terms, delivery commitments, or return rules...">${escapeHtml(pol.content)}</textarea>
           </div>
 
           <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
             <button type="button" id="btn-save-policy-draft" class="btn btn-secondary" style="padding: 8px 18px; font-size: 0.8125rem;">
-              💾 Save Draft
+              Save draft
             </button>
           </div>
         </div>
@@ -343,31 +343,31 @@ export function createStoreSettingsComponent() {
 
   function renderAuditTab() {
     return `
-      <div class="settings-card" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px;">
-        <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 16px 0;">⏱️ Configuration Revision History</h3>
+      <div class="settings-card">
+        <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0;">Configuration revision history</h3>
         
         ${auditLogs.length === 0 ? `
-          <div style="padding: 24px; text-align: center; color: rgba(255, 255, 255, 0.4);">
+          <div style="padding: 24px; text-align: center; color: var(--admin-text-muted);">
             No configuration changes recorded yet. Initial baseline is Revision 1.
           </div>
         ` : `
           <div style="overflow-x: auto;">
-            <table class="admin-table" style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
+            <table class="admin-table">
               <thead>
-                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); text-align: left; color: rgba(255, 255, 255, 0.6);">
-                  <th style="padding: 10px;">Revision</th>
-                  <th style="padding: 10px;">Timestamp</th>
-                  <th style="padding: 10px;">Reason</th>
-                  <th style="padding: 10px;">Modified Fields</th>
+                <tr>
+                  <th>Revision</th>
+                  <th>Timestamp</th>
+                  <th>Reason</th>
+                  <th>Modified fields</th>
                 </tr>
               </thead>
               <tbody>
                 ${auditLogs.map(log => `
-                  <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                    <td style="padding: 10px; font-weight: 700; color: #60a5fa;">v${log.version}</td>
-                    <td style="padding: 10px; color: rgba(255, 255, 255, 0.7);">${new Date(log.created_at).toLocaleString()}</td>
-                    <td style="padding: 10px; color: rgba(255, 255, 255, 0.9);">${escapeHtml(log.change_reason || '—')}</td>
-                    <td style="padding: 10px; font-family: monospace; font-size: 0.75rem; color: #a78bfa;">
+                  <tr>
+                    <td style="font-weight: 500; font-variant-numeric: tabular-nums; color: var(--admin-text-primary);">v${log.version}</td>
+                    <td style="color: var(--admin-text-secondary); font-variant-numeric: tabular-nums;">${new Date(log.created_at).toLocaleString()}</td>
+                    <td style="color: var(--admin-text-primary);">${escapeHtml(log.change_reason || '—')}</td>
+                    <td style="font-family: monospace; font-size: 0.75rem; color: var(--admin-text-secondary);">
                       ${Object.keys(log.changed_fields || {}).join(', ') || '—'}
                     </td>
                   </tr>
@@ -381,26 +381,26 @@ export function createStoreSettingsComponent() {
   }
 
   const NAV_METADATA = {
-    overview: { icon: '📊', name: 'Store Overview', desc: 'Financial KPIs & active orders summary' },
-    products: { icon: '👗', name: 'Products & Catalog', desc: 'Catalog management, pricing & stock' },
-    collections: { icon: '📁', name: 'Collections', desc: 'Grouping and sorting product collections' },
-    hero: { icon: '🖼️', name: 'Homepage Hero', desc: 'Slide sequencing, video & hero playlists' },
-    media: { icon: '🎬', name: 'Media Library', desc: 'Durable image & video asset repository' },
-    inventory: { icon: '📦', name: 'Inventory & Stock', desc: 'Physical balances, holds & adjustments' },
-    suppliers: { icon: '🏭', name: 'Suppliers & Vendors', desc: 'Agreements, costs & vendor credentials' },
-    orders: { icon: '🚚', name: 'Orders & Payments', desc: 'Fulfillment, bank verify & courier dispatch' },
-    returns: { icon: '🔄', name: 'Returns & Refunds', desc: 'Size exchanges, inspections & refunds' },
-    coupons: { icon: '🏷️', name: 'Coupons & Promos', desc: 'Discount vouchers, fixed & percent promos' },
-    expenses: { icon: '💼', name: 'Business Expenses', desc: 'Freight, packaging & overhead ledgers' },
-    analytics: { icon: '📈', name: 'Reports & Analytics', desc: 'P&L statements, COGS, attribution & export' },
-    settings: { icon: '⚙️', name: 'Store Settings', desc: 'Branding, shipping policies & console setup' },
+    overview: { name: 'Store Overview', desc: 'Financial KPIs & active orders summary' },
+    products: { name: 'Products & Catalog', desc: 'Catalog management, pricing & stock' },
+    collections: { name: 'Collections', desc: 'Grouping and sorting product collections' },
+    hero: { name: 'Homepage Hero', desc: 'Slide sequencing, video & hero playlists' },
+    media: { name: 'Media Library', desc: 'Durable image & video asset repository' },
+    inventory: { name: 'Inventory & Stock', desc: 'Physical balances, holds & adjustments' },
+    suppliers: { name: 'Suppliers & Vendors', desc: 'Agreements, costs & vendor credentials' },
+    orders: { name: 'Orders & Payments', desc: 'Fulfillment, bank verify & courier dispatch' },
+    returns: { name: 'Returns & Refunds', desc: 'Size exchanges, inspections & refunds' },
+    coupons: { name: 'Coupons & Promos', desc: 'Discount vouchers, fixed & percent promos' },
+    expenses: { name: 'Business Expenses', desc: 'Freight, packaging & overhead ledgers' },
+    analytics: { name: 'Reports & Analytics', desc: 'P&L statements, COGS, attribution & export' },
+    settings: { name: 'Store Settings', desc: 'Branding, shipping policies & console setup' },
   };
 
   const CARD_METADATA = {
-    sales: { icon: '💰', title: 'Delivered Sales', desc: 'Gross delivered revenue & realized sales' },
-    orders: { icon: '📦', title: 'Total Orders', desc: 'Total order volume and pending action count' },
-    inventory: { icon: '🏷️', title: 'Active Catalog SKUs', desc: 'Total active variants linked to suppliers' },
-    low_stock: { icon: '⚠️', title: 'Low Stock Alerts', desc: 'Variants with ≤ 2 units available to sell' },
+    sales: { title: 'Delivered Sales', desc: 'Gross delivered revenue & realized sales' },
+    orders: { title: 'Total Orders', desc: 'Total order volume and pending action count' },
+    inventory: { title: 'Active Catalog SKUs', desc: 'Total active variants linked to suppliers' },
+    low_stock: { title: 'Low Stock Alerts', desc: 'Variants with ≤ 2 units available to sell' },
   };
 
   function renderPreferencesTab() {
@@ -412,34 +412,34 @@ export function createStoreSettingsComponent() {
       <form id="form-admin-preferences" style="display: flex; flex-direction: column; gap: 24px; max-width: 860px;">
         <!-- Theme & Display Density -->
         <div class="settings-card">
-          <h3 style="font-size: 1.125rem; font-weight: 600; color: #fff; margin: 0 0 8px 0;">👤 Personal Console Preferences</h3>
-          <p style="font-size: 0.8125rem; color: rgba(255, 255, 255, 0.6); margin: 0 0 18px 0;">
+          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 8px 0;">Personal console preferences</h3>
+          <p style="font-size: 0.8125rem; color: var(--admin-text-secondary); margin: 0 0 18px 0;">
             Preferences are isolated to your owner account. Changes here customize your working environment without altering customer-facing storefront settings.
           </p>
 
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Interface Theme</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Interface theme</label>
               <select id="select-pref-theme" class="admin-input" style="width: 100%;">
-                <option value="system" ${p.theme === 'system' ? 'selected' : ''}>System Default</option>
-                <option value="dark" ${p.theme === 'dark' ? 'selected' : ''}>OLED Dark</option>
-                <option value="light" ${p.theme === 'light' ? 'selected' : ''}>Light Theme</option>
+                <option value="system" ${p.theme === 'system' ? 'selected' : ''}>System default</option>
+                <option value="dark" ${p.theme === 'dark' ? 'selected' : ''}>OLED dark</option>
+                <option value="light" ${p.theme === 'light' ? 'selected' : ''}>Light theme</option>
               </select>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Table Display Density</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Table display density</label>
               <select id="select-pref-density" class="admin-input" style="width: 100%;">
                 <option value="comfortable" ${p.table_density === 'comfortable' ? 'selected' : ''}>Comfortable (Standard)</option>
                 <option value="compact" ${p.table_density === 'compact' ? 'selected' : ''}>Compact (Dense)</option>
               </select>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.7); margin-bottom: 6px;">Default Analytics Period</label>
+              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Default analytics period</label>
               <select id="select-pref-date" class="admin-input" style="width: 100%;">
                 <option value="today" ${p.default_date_range === 'today' ? 'selected' : ''}>Today</option>
-                <option value="this_month" ${p.default_date_range === 'this_month' ? 'selected' : ''}>This Month</option>
-                <option value="last_month" ${p.default_date_range === 'last_month' ? 'selected' : ''}>Last Month</option>
-                <option value="all_time" ${p.default_date_range === 'all_time' ? 'selected' : ''}>All Time</option>
+                <option value="this_month" ${p.default_date_range === 'this_month' ? 'selected' : ''}>This month</option>
+                <option value="last_month" ${p.default_date_range === 'last_month' ? 'selected' : ''}>Last month</option>
+                <option value="all_time" ${p.default_date_range === 'all_time' ? 'selected' : ''}>All time</option>
               </select>
             </div>
           </div>
@@ -448,25 +448,24 @@ export function createStoreSettingsComponent() {
         <!-- Sidebar Navigation Order -->
         <fieldset class="settings-card" style="padding: 20px;">
           <legend style="display: flex; align-items: center; gap: 8px;">
-            <span>🧭</span> Sidebar Navigation Order
+            Sidebar navigation order
           </legend>
           <p style="margin: 4px 0 16px 0;">
             Set a unique position number (1–20) for each operational section to arrange the admin sidebar to your workflow preference.
           </p>
           <div class="pref-items-grid">
             ${navItems.map((id, index) => {
-              const meta = NAV_METADATA[id] || { icon: '📌', name: id, desc: `Section ${id}` };
+              const meta = NAV_METADATA[id] || { name: id, desc: `Section ${id}` };
               return `
                 <div class="pref-item-card">
                   <div class="pref-item-info">
-                    <span class="pref-item-icon">${meta.icon}</span>
                     <div class="pref-item-text">
                       <span class="pref-item-name">${escapeHtml(meta.name)}</span>
                       <p class="pref-item-desc">${escapeHtml(meta.desc)}</p>
                     </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                    <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">Pos:</label>
+                    <label style="font-size: 0.75rem; color: var(--admin-text-muted);">Pos:</label>
                     <input class="pref-nav-position pref-number-input" data-id="${escapeHtml(id)}" type="number" min="1" max="20" value="${index + 1}" required aria-label="${escapeHtml(meta.name)} sidebar position">
                   </div>
                 </div>
@@ -478,25 +477,25 @@ export function createStoreSettingsComponent() {
         <!-- Overview KPI Cards -->
         <fieldset class="settings-card" style="padding: 20px;">
           <legend style="display: flex; align-items: center; gap: 8px;">
-            <span>📊</span> Overview Dashboard Cards
+            Overview dashboard cards
           </legend>
           <p style="margin: 4px 0 16px 0;">
             Choose which metric cards appear on your Store Overview screen and specify their display order (1–4).
           </p>
-          <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
             ${dashboardCards.map((card, index) => {
-              const meta = CARD_METADATA[card.id] || { icon: '📈', title: card.id, desc: `KPI card ${card.id}` };
+              const meta = CARD_METADATA[card.id] || { title: card.id, desc: `KPI card ${card.id}` };
               return `
                 <div class="pref-card-row">
                   <div class="pref-card-left">
-                    <input type="checkbox" class="pref-card-visible" data-id="${escapeHtml(card.id)}" id="pref-card-${escapeHtml(card.id)}" ${card.visible ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                    <input type="checkbox" class="pref-card-visible" data-id="${escapeHtml(card.id)}" id="pref-card-${escapeHtml(card.id)}" ${card.visible ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
                     <label for="pref-card-${escapeHtml(card.id)}" class="pref-card-info" style="cursor: pointer;">
-                      <span class="pref-card-title">${meta.icon} ${escapeHtml(meta.title)}</span>
+                      <span class="pref-card-title">${escapeHtml(meta.title)}</span>
                       <p class="pref-card-desc">${escapeHtml(meta.desc)}</p>
                     </label>
                   </div>
                   <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                    <label for="pos-${escapeHtml(card.id)}" style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">Order:</label>
+                    <label for="pos-${escapeHtml(card.id)}" style="font-size: 0.75rem; color: var(--admin-text-muted);">Order:</label>
                     <input id="pos-${escapeHtml(card.id)}" class="pref-card-position pref-number-input" data-id="${escapeHtml(card.id)}" aria-label="${escapeHtml(meta.title)} position" type="number" min="1" max="4" value="${index + 1}" required>
                   </div>
                 </div>
@@ -507,11 +506,11 @@ export function createStoreSettingsComponent() {
 
         <!-- Submit & Reset Actions -->
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-          <button type="button" id="btn-reset-preferences" class="btn btn-secondary" style="color: #F87171 !important; border-color: rgba(239, 68, 68, 0.4) !important;">
-            🔄 Reset to System Defaults
+          <button type="button" id="btn-reset-preferences" class="btn btn-secondary" style="color: #f87171 !important; border-color: rgba(239, 68, 68, 0.3) !important;">
+            Reset to system defaults
           </button>
-          <button type="submit" id="btn-save-preferences" class="btn btn-primary" style="padding: 10px 24px; font-weight: 600;">
-            💾 Save Preferences
+          <button type="submit" id="btn-save-preferences" class="btn btn-primary" style="padding: 10px 24px; font-weight: 500;">
+            Save preferences
           </button>
         </div>
       </form>
@@ -597,7 +596,7 @@ export function createStoreSettingsComponent() {
           payload.expected_version = currentSettings.version;
           const res = await updateAdminStoreSettings(payload);
           currentSettings = res;
-          showAlert(`Storefront settings saved! Revision v${res.version} is now active.`);
+          showAlert(`Storefront settings saved (revision v${res.version})`);
           render();
         } catch (err) {
           showAlert(err.message || 'Failed to update store settings', 'error');
@@ -627,7 +626,7 @@ export function createStoreSettingsComponent() {
           payload.expected_version = currentSettings.version;
           const res = await updateAdminStoreSettings(payload);
           currentSettings = res;
-          showAlert(`Logistics and operational thresholds updated (Revision v${res.version}).`);
+          showAlert(`Logistics and operational thresholds updated (revision v${res.version})`);
           render();
         } catch (err) {
           showAlert(err.message || 'Failed to update shipping settings', 'error');
@@ -655,7 +654,7 @@ export function createStoreSettingsComponent() {
             change_reason: `Update ${activePolicy} policy draft content`,
           });
           currentSettings = res;
-          showAlert(`${activePolicy.toUpperCase()} policy draft saved.`);
+          showAlert(`${activePolicy} policy draft saved`);
           render();
         } catch (err) {
           showAlert(err.message || 'Failed to save policy draft', 'error');
@@ -678,7 +677,7 @@ export function createStoreSettingsComponent() {
           await updateAdminStoreSettings({ [key]: text });
           const res = await publishStorePolicy(activePolicy, true);
           currentSettings = res;
-          showAlert(`🚀 ${activePolicy.toUpperCase()} policy published to public storefront!`);
+          showAlert(`${activePolicy} policy published to storefront`);
           render();
         } catch (err) {
           showAlert(err.message || 'Failed to publish policy', 'error');
@@ -693,7 +692,7 @@ export function createStoreSettingsComponent() {
         try {
           const res = await publishStorePolicy(activePolicy, false);
           currentSettings = res;
-          showAlert(`${activePolicy.toUpperCase()} policy reverted to draft.`);
+          showAlert(`${activePolicy} policy reverted to draft`);
           render();
         } catch (err) {
           showAlert(err.message || 'Failed to revert policy', 'error');

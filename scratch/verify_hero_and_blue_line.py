@@ -29,7 +29,8 @@ with RedesignBrowser(Path(".local/tmp")) as b:
     # Check development port 13000
     print("Navigating to http://localhost:13000/ ...", flush=True)
     b.goto("http://localhost:13000/")
-    time.sleep(2)
+    b.wait_for_selector(".hero-picture-card", timeout=8)
+    time.sleep(1)
 
     # 1.1 Blue line check
     banner_info = b.js("""(() => {
@@ -146,7 +147,8 @@ with RedesignBrowser(Path(".local/tmp")) as b:
 with RedesignBrowser(Path(".local/tmp")) as b:
     b.cdp("Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 2, "mobile": True})
     b.goto("http://localhost:13000/")
-    time.sleep(2)
+    b.wait_for_selector(".hero-picture-card", timeout=8)
+    time.sleep(1)
     b.capture_screenshot(str(OUT / "verify_hero_mobile_dev.png"))
     print("Captured verify_hero_mobile_dev.png", flush=True)
 
@@ -155,7 +157,8 @@ with RedesignBrowser(Path(".local/tmp")) as b:
     b.cdp("Emulation.setDeviceMetricsOverride", {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False})
     print("Navigating to http://127.0.0.1:13001/ ...", flush=True)
     b.goto("http://127.0.0.1:13001/")
-    time.sleep(2)
+    b.wait_for_selector(".hero-picture-card", timeout=8)
+    time.sleep(1)
 
     # Blue line check on lab
     lab_banner_info = b.js("""(() => {

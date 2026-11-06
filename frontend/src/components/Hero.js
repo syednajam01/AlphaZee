@@ -2,6 +2,13 @@ import { fetchHeroProducts, fetchHeroSlides, fetchProducts } from '../utils/api.
 import { formatDisplayPrice } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl } from '../utils/dom.js';
 
+function playbackIcon(paused) {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${paused ? '<path d="m9 5 10 7-10 7z"/>' : '<path d="M8 5v14M16 5v14"/>'}</svg>`;
+}
+function directionIcon(next) {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="${next ? 'm9 5 7 7-7 7' : 'm15 5-7 7 7 7'}"/></svg>`;
+}
+
 export function createHero(onProductClick) {
   const section = document.createElement('section');
   section.className = 'hero-section';
@@ -33,23 +40,23 @@ export function createHero(onProductClick) {
 
     section.innerHTML = `
       <div class="hero-bg-container">
-        <div class="hero-bg-media is-active" style="background: radial-gradient(circle at 70% 30%, #1A2621 0%, #0D1310 100%); width: 100%; height: 100%;"></div>
+        <div class="hero-bg-media is-active" style="background: #eeece6; width: 100%; height: 100%;"></div>
       </div>
       <div class="hero-overlay"></div>
       <div class="hero-motif" aria-hidden="true">AZ</div>
       ${statusHtml}
       <div class="container hero-content-wrapper" style="position: relative; z-index: 2; padding-top: var(--space-6); padding-bottom: var(--space-6);">
         <div style="max-width: 640px;">
-          <span class="badge badge-accent hero-badge" style="margin-bottom: var(--space-2);">Authentic Streetwear</span>
-          <h1 class="hero-title" style="font-size: clamp(1.85rem, 5vw, 2.75rem); font-weight: 800; line-height: 1.15; margin-bottom: var(--space-3); color: #FFFFFF;">
-            Architectural Cuts.<br>Heavyweight Drape.
+          <span class="badge badge-accent hero-badge" style="margin-bottom: var(--space-2);">Selected by AlphaZee</span>
+          <h1 class="hero-title">
+            Find your next<br>everyday piece
           </h1>
-          <p class="hero-desc" style="font-size: clamp(0.95rem, 2.5vw, 1.125rem); color: rgba(255, 255, 255, 0.85); line-height: 1.5; margin-bottom: var(--space-5); max-width: 520px;">
-            Minimalist streetwear crafted in Pakistan. Architectural cuts, structured fits, and zero compromises.
+          <p class="hero-desc">
+            Clothing and accessories selected for the way you dress. Explore the current collection.
           </p>
           <div class="hero-cta-group">
-            <a href="#featured" class="btn btn-hero">Explore Collection</a>
-            <a href="#collections" class="btn btn-secondary hero-secondary-btn">View Collections</a>
+            <a href="#featured" class="btn btn-hero">Shop the collection</a>
+            <a href="#collections" class="btn btn-secondary hero-secondary-btn">Browse collections</a>
           </div>
         </div>
       </div>
@@ -80,7 +87,7 @@ export function createHero(onProductClick) {
         if (posterUrl) video.poster = posterUrl;
         video.muted = true;
         video.playsInline = true;
-        video.preload = 'auto';
+        video.preload = 'none';
         video.setAttribute('aria-hidden', 'true');
         video.dataset.videoSrc = videoUrl;
         video.dataset.slideIndex = String(index);
@@ -120,7 +127,7 @@ export function createHero(onProductClick) {
       } else {
         const fallbackBg = document.createElement('div');
         fallbackBg.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
-        fallbackBg.style.background = 'radial-gradient(circle at 70% 30%, #1A2621 0%, #0D1310 100%)';
+        fallbackBg.style.background = '#eeece6';
         fallbackBg.dataset.slideIndex = String(index);
         bgContainer.appendChild(fallbackBg);
       }
@@ -140,7 +147,7 @@ export function createHero(onProductClick) {
       const img = sanitizeMediaUrl(item.image_url || item.hero_image_url || item.poster_url || item.hero_poster_url, '');
       if (img) {
         pictureCards.push({
-          id: item.id,
+          id: item.collection_id ? null : item.id,
           slug: item.slug || item.target_product_slug || item.target_collection_slug,
           title: item.title,
           image_url: img,
@@ -163,7 +170,7 @@ export function createHero(onProductClick) {
     if (pictureCards.length === 0) {
       heroItems.forEach(item => {
         pictureCards.push({
-          id: item.id,
+          id: item.collection_id ? null : item.id,
           slug: item.slug,
           title: item.title,
           image_url: sanitizeMediaUrl(item.poster_url || item.image_url || '', ''),
@@ -178,11 +185,8 @@ export function createHero(onProductClick) {
     const marqueeTrack = document.createElement('div');
     marqueeTrack.className = `hero-marquee-track ${isUserPaused ? 'is-paused' : ''}`;
 
-    const repeatMultiplier = Math.max(2, Math.ceil(8 / Math.max(1, pictureCards.length)));
-    const repeatedList = [];
-    for (let r = 0; r < repeatMultiplier * 2; r++) {
-      repeatedList.push(...pictureCards);
-    }
+    const repeatedList = pictureCards.filter((card, index, all) =>
+      index === all.findIndex(other => other.image_url === card.image_url)).slice(0, 6);
 
     repeatedList.forEach((card, cIndex) => {
       if (!card.image_url) return;
@@ -226,7 +230,7 @@ export function createHero(onProductClick) {
 
     // 3. Accessible Slide Content Container (Maintains full screen-reader and test accessibility)
     const container = document.createElement('div');
-    container.className = 'container hero-content-wrapper sr-only';
+    container.className = 'container hero-content-wrapper';
 
     const track = document.createElement('div');
     track.className = 'hero-slides-track';
@@ -236,11 +240,13 @@ export function createHero(onProductClick) {
       slide.className = `hero-slide ${index === 0 ? 'is-active' : ''}`;
       slide.dataset.index = String(index);
       slide.setAttribute('role', 'group');
+      slide.setAttribute('aria-hidden', String(index !== 0));
+      slide.inert = index !== 0;
       slide.setAttribute('aria-roledescription', 'slide');
       slide.setAttribute('aria-label', `${index + 1} of ${heroItems.length}: ${item.title || 'Featured'}`);
 
-      const safeTitle = escapeHtml(item.title || 'Architectural Drape');
-      const safeBenefit = escapeHtml(item.benefit || item.hero_benefit || 'Engineered with premium materials and precision fits.');
+      const safeTitle = escapeHtml(item.title || 'Selected by AlphaZee');
+      const safeBenefit = escapeHtml(item.benefit || item.hero_benefit || 'Clothing and accessories for your next look.');
       const priceDisplay = (item.min_price !== undefined || item.min_price_minor !== undefined)
         ? formatDisplayPrice(item.min_price ?? item.min_price_minor)
         : null;
@@ -248,16 +254,16 @@ export function createHero(onProductClick) {
 
       slide.innerHTML = `
         <div class="hero-text-content">
-          <span class="badge badge-accent hero-badge">Featured Piece</span>
-          <h1 class="hero-title">${safeTitle}</h1>
+          <span class="hero-eyebrow">Selected by AlphaZee</span>
+          <${index === 0 ? 'h1' : 'h2'} class="hero-title">${safeTitle}</${index === 0 ? 'h1' : 'h2'}>
           <p class="hero-desc">${safeBenefit}</p>
           ${priceText ? `<div class="hero-price-tag">${priceText}</div>` : ''}
           <div class="hero-cta-group">
             <button class="btn btn-hero hero-cta-btn" data-slug="${escapeHtml(item.slug || '')}" data-id="${escapeHtml(item.id || '')}">
-              ${item.slug || item.id ? 'View Product Details' : 'Explore Pieces'}
+              ${item.slug || item.id ? 'View the piece' : 'Explore Pieces'}
             </button>
             <a href="#collections" class="btn btn-secondary hero-secondary-btn">
-              View Collections
+              Browse collections
             </a>
           </div>
         </div>
@@ -281,12 +287,12 @@ export function createHero(onProductClick) {
     const controls = document.createElement('div');
     controls.className = 'hero-controls';
     controls.innerHTML = `
-      ${!isSingle ? '<button class="hero-ctrl-btn" id="hero-prev" aria-label="Previous Slide">‹</button>' : ''}
+      ${!isSingle ? `<button class="hero-ctrl-btn" id="hero-prev" aria-label="Previous Slide">${directionIcon(false)}</button>` : ''}
       <button class="hero-ctrl-btn" id="hero-play-pause" aria-label="${isUserPaused ? 'Resume hero playback' : 'Pause hero playback'}" title="${isUserPaused ? 'Resume' : 'Pause'}">
-        ${isUserPaused ? '▶' : '⏸'}
+        ${playbackIcon(isUserPaused)}
       </button>
       <span class="hero-slide-indicator" id="hero-indicator">1 / ${heroItems.length}</span>
-      ${!isSingle ? '<button class="hero-ctrl-btn" id="hero-next" aria-label="Next Slide">›</button>' : ''}
+      ${!isSingle ? `<button class="hero-ctrl-btn" id="hero-next" aria-label="Next Slide">${directionIcon(true)}</button>` : ''}
     `;
 
     controls.querySelector('#hero-prev')?.addEventListener('click', () => goToSlide(currentSlide - 1));
@@ -317,7 +323,7 @@ export function createHero(onProductClick) {
   function updatePlayPauseButton() {
     const btn = section.querySelector('#hero-play-pause');
     if (!btn) return;
-    btn.textContent = isUserPaused ? '▶' : '⏸';
+    btn.innerHTML = playbackIcon(isUserPaused);
     btn.setAttribute('aria-label', isUserPaused ? 'Resume hero playback' : 'Pause hero playback');
     btn.title = isUserPaused ? 'Resume' : 'Pause';
 
@@ -396,6 +402,8 @@ export function createHero(onProductClick) {
 
     section.querySelectorAll('.hero-slide').forEach((slide, i) => {
       slide.classList.toggle('is-active', i === currentSlide);
+      slide.setAttribute('aria-hidden', String(i !== currentSlide));
+      slide.inert = i !== currentSlide;
     });
 
     const indicator = section.querySelector('#hero-indicator');
@@ -452,10 +460,11 @@ export function createHero(onProductClick) {
         const slides = Array.isArray(slidesRes) ? slidesRes : (slidesRes?.slides || []);
         if (slides.length > 0) {
           items = slides.map(s => ({
-            id: s.target_product_id || s.id,
+            id: s.target_product_id || null,
+            collection_id: s.target_collection_id || null,
             slug: s.target_product_slug || s.product?.slug || null,
-            title: s.title || s.product?.title || 'Architectural Drape',
-            benefit: s.benefit || s.product?.hero_benefit || 'Structured fits with zero compromises.',
+            title: s.title || s.product?.title || 'Selected by AlphaZee',
+            benefit: s.benefit || s.product?.hero_benefit || 'Clothing and accessories for your next look.',
             video_url: s.video_url,
             poster_url: s.poster_url,
             image_url: s.image_url,

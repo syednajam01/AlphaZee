@@ -30,28 +30,28 @@ export function createVendorUsersModal(supplier, { onClose = () => {} } = {}) {
     <div class="modal-content" style="z-index: 1002; max-width: 900px; width: 95%; max-height: 90vh; overflow-y: auto; background: #141715; color: #FFFFFF; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.15); padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8); position: relative;">
       
       <!-- Header -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 16px; margin-bottom: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--admin-border-hairline); padding-bottom: 16px; margin-bottom: 16px;">
         <div>
           <div style="display: flex; align-items: center; gap: 10px;">
-            <h2 style="font-size: 1.25rem; font-weight: 700; margin: 0;">🔑 ${escapeHtml(supplier.name)} — Stock Portal Access</h2>
-            <span class="badge ${supplier.status === 'active' ? 'badge-accent' : 'badge-neutral'}" style="font-size: 0.7rem;">
+            <h2 style="font-size: 1.15rem; font-weight: 500; margin: 0; color: var(--admin-text-primary);">${escapeHtml(supplier.name)} — Stock portal access</h2>
+            <span class="badge ${supplier.status === 'active' ? 'badge-accent' : 'badge-neutral'}" style="font-size: 0.7rem; font-weight: 500;">
               ${escapeHtml(supplier.status)}
             </span>
           </div>
-          <p style="font-size: 0.8125rem; color: rgba(255, 255, 255, 0.6); margin: 4px 0 0 0;">
-            Supplier Slug: <code>${escapeHtml(supplier.slug)}</code> &bull; Store Staff Stock Management Credentials
+          <p style="font-size: 0.8125rem; color: var(--admin-text-secondary); margin: 4px 0 0 0;">
+            Supplier slug: <code>${escapeHtml(supplier.slug)}</code> &bull; Store staff stock management credentials
           </p>
         </div>
-        <button id="btn-close-vendor-users" class="btn-icon" style="background: none; border: none; color: rgba(255, 255, 255, 0.7); font-size: 1.5rem; cursor: pointer; padding: 4px 8px;" aria-label="Close dialog">&times;</button>
+        <button id="btn-close-vendor-users" class="btn-icon" style="background: none; border: none; color: var(--admin-text-secondary); font-size: 1.5rem; cursor: pointer; padding: 4px 8px;" aria-label="Close dialog">&times;</button>
       </div>
 
       <!-- Navigation tabs -->
-      <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">
+      <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--admin-border-hairline); padding-bottom: 8px;">
         <button type="button" id="tab-logins-btn" class="btn btn-sm btn-primary" style="font-size: 0.8125rem;">
-          👤 Provisioned Logins
+          Provisioned logins
         </button>
         <button type="button" id="tab-shortages-btn" class="btn btn-sm btn-secondary" style="font-size: 0.8125rem;">
-          ⚠️ Stock Shortages <span id="shortages-count-badge" class="badge" style="background: #991B1B; color: #FFF; font-size: 0.68rem; margin-left: 4px; display: none;">0</span>
+          Stock shortages <span id="shortages-count-badge" class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; font-size: 0.68rem; margin-left: 4px; display: none;">0</span>
         </button>
       </div>
 

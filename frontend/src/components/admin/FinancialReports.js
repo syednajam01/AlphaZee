@@ -241,34 +241,34 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
               </div>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <a id="btn-export-pnl-csv" href="${escapeHtml(csvPeriodUrl)}" download class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.78125rem; text-decoration: none; border-radius: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #FFF;">
-                📊 Export P&L Statement (CSV)
+              <a id="btn-export-pnl-csv" href="${escapeHtml(csvPeriodUrl)}" download class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.78125rem; text-decoration: none; border-radius: var(--admin-radius-sm); color: var(--admin-text-primary);">
+                Export P&L statement (CSV)
               </a>
-              <a id="btn-export-orders-csv" href="${escapeHtml(csvOrdersUrl)}" download class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.78125rem; text-decoration: none; border-radius: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #FFF;">
-                📦 Export Orders CSV
+              <a id="btn-export-orders-csv" href="${escapeHtml(csvOrdersUrl)}" download class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.78125rem; text-decoration: none; border-radius: var(--admin-radius-sm); color: var(--admin-text-primary);">
+                Export orders CSV
               </a>
             </div>
           </div>
 
           <!-- Date Filters Row -->
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.06);">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--admin-border-hairline);">
             <div style="display: flex; gap: 6px;">
-              <button type="button" class="btn-preset-date ${selectedPreset === 'all_time' ? 'active' : ''}" data-preset="all_time" style="padding: 5px 10px; font-size: 0.75rem; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); background: ${selectedPreset === 'all_time' ? 'rgba(20, 92, 68, 0.6)' : 'transparent'}; color: #FFF; cursor: pointer;">All Time</button>
-              <button type="button" class="btn-preset-date ${selectedPreset === 'today' ? 'active' : ''}" data-preset="today" style="padding: 5px 10px; font-size: 0.75rem; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); background: ${selectedPreset === 'today' ? 'rgba(20, 92, 68, 0.6)' : 'transparent'}; color: #FFF; cursor: pointer;">Today</button>
-              <button type="button" class="btn-preset-date ${selectedPreset === 'this_month' ? 'active' : ''}" data-preset="this_month" style="padding: 5px 10px; font-size: 0.75rem; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); background: ${selectedPreset === 'this_month' ? 'rgba(20, 92, 68, 0.6)' : 'transparent'}; color: #FFF; cursor: pointer;">This Month</button>
-              <button type="button" class="btn-preset-date ${selectedPreset === 'last_month' ? 'active' : ''}" data-preset="last_month" style="padding: 5px 10px; font-size: 0.75rem; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15); background: ${selectedPreset === 'last_month' ? 'rgba(20, 92, 68, 0.6)' : 'transparent'}; color: #FFF; cursor: pointer;">Last Month</button>
+              <button type="button" class="btn-preset-date ${selectedPreset === 'all_time' ? 'active' : ''}" data-preset="all_time" style="padding: 5px 10px; font-size: 0.75rem; border-radius: var(--admin-radius-tag); border: 1px solid var(--admin-border-hairline); background: ${selectedPreset === 'all_time' ? 'var(--admin-bg-raised)' : 'transparent'}; color: var(--admin-text-primary); cursor: pointer;">All time</button>
+              <button type="button" class="btn-preset-date ${selectedPreset === 'today' ? 'active' : ''}" data-preset="today" style="padding: 5px 10px; font-size: 0.75rem; border-radius: var(--admin-radius-tag); border: 1px solid var(--admin-border-hairline); background: ${selectedPreset === 'today' ? 'var(--admin-bg-raised)' : 'transparent'}; color: var(--admin-text-primary); cursor: pointer;">Today</button>
+              <button type="button" class="btn-preset-date ${selectedPreset === 'this_month' ? 'active' : ''}" data-preset="this_month" style="padding: 5px 10px; font-size: 0.75rem; border-radius: var(--admin-radius-tag); border: 1px solid var(--admin-border-hairline); background: ${selectedPreset === 'this_month' ? 'var(--admin-bg-raised)' : 'transparent'}; color: var(--admin-text-primary); cursor: pointer;">This month</button>
+              <button type="button" class="btn-preset-date ${selectedPreset === 'last_month' ? 'active' : ''}" data-preset="last_month" style="padding: 5px 10px; font-size: 0.75rem; border-radius: var(--admin-radius-tag); border: 1px solid var(--admin-border-hairline); background: ${selectedPreset === 'last_month' ? 'var(--admin-bg-raised)' : 'transparent'}; color: var(--admin-text-primary); cursor: pointer;">Last month</button>
             </div>
 
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">Custom:</span>
-              <input type="date" id="report-start-date" value="${escapeHtml(startDate)}" style="background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 4px; padding: 4px 8px; font-size: 0.75rem;" />
-              <span style="color: rgba(255, 255, 255, 0.4); font-size: 0.75rem;">to</span>
-              <input type="date" id="report-end-date" value="${escapeHtml(endDate)}" style="background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 4px; padding: 4px 8px; font-size: 0.75rem;" />
-              <button type="button" id="btn-apply-period" style="background: #166534; border: 1px solid #22C55E; color: #FFF; border-radius: 4px; padding: 4px 12px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Apply</button>
+              <span style="font-size: 0.75rem; color: var(--admin-text-secondary);">Custom:</span>
+              <input type="date" id="report-start-date" value="${escapeHtml(startDate)}" style="background: var(--admin-bg-raised); border: 1px solid var(--admin-border-hairline); color: var(--admin-text-primary); border-radius: var(--admin-radius-tag); padding: 4px 8px; font-size: 0.75rem;" />
+              <span style="color: var(--admin-text-muted); font-size: 0.75rem;">to</span>
+              <input type="date" id="report-end-date" value="${escapeHtml(endDate)}" style="background: var(--admin-bg-raised); border: 1px solid var(--admin-border-hairline); color: var(--admin-text-primary); border-radius: var(--admin-radius-tag); padding: 4px 8px; font-size: 0.75rem;" />
+              <button type="button" id="btn-apply-period" class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem; font-weight: 500; cursor: pointer;">Apply</button>
             </div>
 
-            <div style="font-size: 0.72rem; color: #38BDF8; margin-left: auto; display: flex; align-items: center; gap: 4px;">
-              <span>🌐</span> Reporting Timezone: <strong>Asia/Karachi (UTC+5)</strong>
+            <div style="font-size: 0.72rem; color: var(--admin-text-secondary); margin-left: auto; display: flex; align-items: center; gap: 4px;">
+              Reporting timezone: <strong style="color: var(--admin-text-primary);">Asia/Karachi (UTC+5)</strong>
             </div>
           </div>
         </div>
@@ -456,8 +456,8 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
                   </div>
                 </div>
               </div>
-              <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); margin-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 6px;">
-                ⚠️ <strong>Disclosure:</strong> Net Operating Result is subject to unrecorded business expenses, tax liabilities, and pending courier settlements. Never treat as final audited net profit.
+              <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 8px; border-top: 1px solid var(--admin-border-hairline); padding-top: 6px;">
+                <strong>Disclosure:</strong> Net Operating Result is subject to unrecorded business expenses, tax liabilities, and pending courier settlements. Never treat as final audited net profit.
               </div>
             </div>
 

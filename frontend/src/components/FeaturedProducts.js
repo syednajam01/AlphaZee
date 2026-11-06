@@ -32,14 +32,14 @@ export function createFeaturedProducts(onOpenProductModal) {
   container.innerHTML = `
     <div class="section-header" style="display: flex; flex-direction: column; gap: 16px;">
       <div>
-        <h2 class="section-title">Featured Pieces</h2>
-        <p class="section-subtitle">Architectural streetwear crafted with heavyweight fabrics in Karachi, Pakistan.</p>
+        <h2 class="section-title">The current edit</h2>
+        <p class="section-subtitle">Find a piece that feels like you. Choose a collection, then explore the details.</p>
       </div>
       
       <!-- Category Filter Tabs & Sorting Controls -->
       <div class="catalog-controls-bar">
         <div class="filter-tabs" id="filter-tabs-container" role="tablist">
-          <button class="option-pill is-selected" data-filter="all" role="tab" aria-selected="true">All Products</button>
+          <button class="option-pill is-selected" data-filter="all" role="tab" aria-selected="true">All pieces</button>
         </div>
         <div class="catalog-sort-group">
           <label for="catalog-sort" class="form-label" style="margin: 0; font-size: 0.85rem; color: var(--color-text-muted);">Sort By</label>
@@ -99,7 +99,7 @@ export function createFeaturedProducts(onOpenProductModal) {
 
   function renderTabs() {
     tabsContainer.innerHTML = `
-      <button class="option-pill ${activeCategory === 'all' ? 'is-selected' : ''}" data-filter="all" role="tab" aria-selected="${activeCategory === 'all'}">All Products</button>
+      <button class="option-pill ${activeCategory === 'all' ? 'is-selected' : ''}" data-filter="all" role="tab" aria-selected="${activeCategory === 'all'}">All pieces</button>
       ${collections.map(col => `
         <button class="option-pill ${activeCategory === col.id ? 'is-selected' : ''}" data-filter="${escapeHtml(col.id)}" role="tab" aria-selected="${activeCategory === col.id}">
           ${escapeHtml(col.name)}
@@ -237,6 +237,7 @@ export function createFeaturedProducts(onOpenProductModal) {
 
         const primaryImg = createSafeImageElement({
           src: product.image_url,
+          fallback: '/images/storefront-empty.svg',
           alt: product.image_alt || product.title || 'Product',
           className: 'product-card-img product-card-img-primary' + (hoverUrl ? ' has-secondary' : ''),
           loading: 'lazy',
@@ -281,7 +282,7 @@ export function createFeaturedProducts(onOpenProductModal) {
       collections = Array.isArray(cols) ? cols : (Array.isArray(cols?.collections) ? cols.collections : []);
       renderTabs();
     } catch {
-      // If collections fail, keep the "All Products" tab
+      // If collections fail, keep the "All pieces" tab
     }
   }
 

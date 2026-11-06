@@ -78,7 +78,7 @@ export function createCartDrawer(onCheckout, onExplore) {
             <path d="M16 10a4 4 0 0 1-8 0"></path>
           </svg>
           <h3 class="drawer-empty-title">Your shopping bag is empty</h3>
-          <p class="drawer-empty-desc">Discover our latest pieces, crafted for everyday comfort and clean silhouettes.</p>
+          <p class="drawer-empty-desc">Browse the collection and find your next piece.</p>
           <button type="button" class="btn btn-secondary" id="btn-cart-explore" style="min-width: 160px;">
             Explore Collection
           </button>

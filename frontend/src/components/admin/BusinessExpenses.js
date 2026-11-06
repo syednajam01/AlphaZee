@@ -103,18 +103,18 @@ export async function renderBusinessExpenses(container, viewGenerationRef) {
           </td>
           <td style="padding: 12px 8px;">
             ${isPaid
-              ? `<span style="display: inline-flex; align-items: center; gap: 4px; color: #34D399; font-size: 0.75rem; font-weight: 600;">
-                  ✓ Paid (${escapeHtml(e.paid_date)})
+              ? `<span style="display: inline-flex; align-items: center; gap: 4px; color: #4ade80; font-size: 0.75rem; font-weight: 500;">
+                  Paid (${escapeHtml(e.paid_date)})
                  </span>`
-              : `<span style="display: inline-flex; align-items: center; gap: 4px; color: #FBBF24; font-size: 0.75rem; font-weight: 600;">
-                  ⏳ Accrued / Unpaid
+              : `<span style="display: inline-flex; align-items: center; gap: 4px; color: #facc15; font-size: 0.75rem; font-weight: 500;">
+                  Accrued / unpaid
                  </span>`
             }
           </td>
-          <td style="padding: 12px 8px; text-align: right; font-weight: 700; color: #FFFFFF; font-size: 0.875rem;">
+          <td style="padding: 12px 8px; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--admin-text-primary); font-size: 0.875rem;">
             ${escapeHtml(formatPkr(e.amount_minor))}
           </td>
-          <td style="padding: 12px 8px; color: rgba(255, 255, 255, 0.6); max-width: 220px; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(e.notes || '')}">
+          <td style="padding: 12px 8px; color: var(--admin-text-secondary); max-width: 220px; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(e.notes || '')}">
             ${escapeHtml(e.notes || '—')}
           </td>
         </tr>
@@ -124,13 +124,12 @@ export async function renderBusinessExpenses(container, viewGenerationRef) {
     container.innerHTML = `
       <div style="display: flex; flex-direction: column; gap: 20px;">
         <!-- Policy Banner -->
-        <div style="background: rgba(20, 92, 68, 0.25); border: 1px solid #145C44; border-radius: 8px; padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
-          <div style="font-size: 1.5rem; flex-shrink: 0;">🛡️</div>
+        <div style="background: var(--admin-bg-card); border: 1px solid var(--admin-border-hairline); border-radius: var(--admin-radius-control); padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
           <div>
-            <div style="font-size: 0.875rem; font-weight: 700; color: #34D399; margin-bottom: 2px;">
-              AlphaZee Transport & Expense Principle
+            <div style="font-size: 0.875rem; font-weight: 500; color: var(--admin-text-primary); margin-bottom: 2px;">
+              AlphaZee transport & expense principle
             </div>
-            <div style="font-size: 0.8125rem; color: rgba(255, 255, 255, 0.85); line-height: 1.4;">
+            <div style="font-size: 0.8125rem; color: var(--admin-text-secondary); line-height: 1.4;">
               AlphaZee strictly bears all RTO (Return to Origin) and customer-return transport expenses. Courier deductions linked to recorded expenses prevent double-counting across settlements.
             </div>
           </div>

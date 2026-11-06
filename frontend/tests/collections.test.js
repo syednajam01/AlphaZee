@@ -231,7 +231,7 @@ describe('Collections Component & API Contract', () => {
     await new Promise((r) => setTimeout(r, 20));
 
     const tabsContainer = featured.element.querySelector('#filter-tabs-container');
-    assert.ok(tabsContainer.innerHTML.includes('All Products'));
+    assert.ok(tabsContainer.innerHTML.includes('All pieces'));
     assert.ok(tabsContainer.innerHTML.includes('Streetwear Core'));
     assert.ok(tabsContainer.innerHTML.includes('data-filter="streetwear"'));
   });

@@ -49,9 +49,9 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
 
       <!-- Agreement Configuration Box -->
       <div style="background: #1B201D; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-        <h3 style="font-size: 0.9375rem; font-weight: 700; margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-          <span>📋 Settlement Agreement Terms</span>
-          <span style="font-size: 0.75rem; font-weight: 400; color: rgba(255, 255, 255, 0.5);">(Applies strictly to future order events)</span>
+        <h3 style="font-size: 0.9375rem; font-weight: 500; margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <span>Settlement agreement terms</span>
+          <span style="font-size: 0.75rem; font-weight: 400; color: var(--admin-text-secondary);">(Applies strictly to future order events)</span>
         </h3>
         <form id="agreement-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end;">
           <div>
@@ -127,13 +127,13 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
           <button id="btn-open-credit-modal" class="btn" style="background: rgba(255, 255, 255, 0.1); color: #FFF; font-size: 0.8125rem; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2);">
             + Credit Note
           </button>
-          <button id="btn-open-opening-balance-modal" class="btn" style="background: rgba(255, 255, 255, 0.1); color: #FFF; font-size: 0.8125rem; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2);">
-            ⚖ Apply Opening Balance
+          <button id="btn-open-opening-balance-modal" class="btn" style="background: var(--admin-bg-raised); color: var(--admin-text-primary); font-size: 0.8125rem; padding: 6px 12px; border-radius: var(--admin-radius-sm); border: 1px solid var(--admin-border-hairline);">
+            Apply opening balance
           </button>
         </div>
         <div style="display: flex; gap: 8px;">
-          <button id="btn-open-statement-modal" class="btn" style="background: #1E293B; color: #38BDF8; font-size: 0.8125rem; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.3);">
-            📜 Period Statement
+          <button id="btn-open-statement-modal" class="btn" style="background: var(--admin-bg-raised); color: var(--admin-text-primary); font-size: 0.8125rem; padding: 6px 12px; border-radius: var(--admin-radius-sm); border: 1px solid var(--admin-border-hairline);">
+            Period statement
           </button>
           <button id="btn-refresh-ledger" class="btn-icon" style="background: none; border: 1px solid rgba(255, 255, 255, 0.15); color: #FFF; padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
             ↻ Refresh
@@ -327,7 +327,7 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
         payment_terms_days: terms,
         notes: notes || undefined,
       });
-      feedback.textContent = '✓ Agreement terms saved successfully';
+      feedback.textContent = 'Agreement terms saved successfully';
       setTimeout(() => { feedback.textContent = ''; }, 3000);
       await loadData();
     } catch (err) {
@@ -404,7 +404,7 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
     subContainer.innerHTML = `
       <div class="drawer-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1010;"></div>
       <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1020; background: #1B201D; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 22px; width: 520px; max-width: 92%; box-shadow: 0 25px 50px rgba(0,0,0,0.85); max-height: 85vh; overflow-y: auto;">
-        <h4 style="margin-top: 0; font-size: 1.05rem; color: #34D399;">💸 Record Supplier Payment</h4>
+        <h4 style="margin-top: 0; font-size: 1rem; font-weight: 500; color: var(--admin-text-primary);">Record supplier payment</h4>
         <p style="font-size: 0.75rem; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
           Records an actual cash/bank disbursement to the vendor. Allocates against charges and reduces payable liability.
         </p>
@@ -513,7 +513,7 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
     subContainer.innerHTML = `
       <div class="drawer-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1010;"></div>
       <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1020; background: #1B201D; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 22px; width: 460px; max-width: 92%; box-shadow: 0 25px 50px rgba(0,0,0,0.85);">
-        <h4 style="margin-top: 0; font-size: 1.05rem; color: #FBBF24;">⚡ Disburse Supplier Advance</h4>
+        <h4 style="margin-top: 0; font-size: 1rem; font-weight: 500; color: var(--admin-text-primary);">Disburse supplier advance</h4>
         <p style="font-size: 0.75rem; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
           Records an unallocated upfront deposit or advance payment to the vendor before charges are incurred.
         </p>
@@ -605,7 +605,7 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
     subContainer.innerHTML = `
       <div class="drawer-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1010;"></div>
       <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1020; background: #1B201D; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 22px; width: 460px; max-width: 92%; box-shadow: 0 25px 50px rgba(0,0,0,0.85);">
-        <h4 style="margin-top: 0; font-size: 1.05rem; color: #60A5FA;">📥 Record Supplier Cash Refund</h4>
+        <h4 style="margin-top: 0; font-size: 1rem; font-weight: 500; color: var(--admin-text-primary);">Record supplier cash refund</h4>
         <p style="font-size: 0.75rem; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
           Records actual funds refunded by the vendor to AlphaZee (e.g. cancelled order or defect cash refund).
         </p>
@@ -704,7 +704,7 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
     subContainer.innerHTML = `
       <div class="drawer-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1010;"></div>
       <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1020; background: #1B201D; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 22px; width: 480px; max-width: 92%; box-shadow: 0 25px 50px rgba(0,0,0,0.85);">
-        <h4 style="margin-top: 0; font-size: 1.05rem; color: #FBBF24;">🔗 Allocate Payment Funds: ${escapeHtml(ref)}</h4>
+        <h4 style="margin-top: 0; font-size: 1rem; font-weight: 500; color: var(--admin-text-primary);">Allocate payment funds: ${escapeHtml(ref)}</h4>
         <p style="font-size: 0.75rem; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
           Available to allocate from this payment: <strong>${formatPkr(availMinor)}</strong>
         </p>
@@ -786,7 +786,7 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
       <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1020; background: #141715; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 10px; padding: 24px; width: 900px; max-width: 95%; box-shadow: 0 30px 60px rgba(0,0,0,0.9); max-height: 90vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 16px;">
           <div>
-            <h3 style="margin: 0; font-size: 1.15rem; color: #38BDF8;">📜 Supplier Period Statement & Reconciliation</h3>
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 500; color: var(--admin-text-primary);">Supplier period statement & reconciliation</h3>
             <p style="margin: 4px 0 0 0; font-size: 0.75rem; color: rgba(255,255,255,0.6);">
               ${escapeHtml(supplier.name)} &bull; Exact Paisa Opening, Movement & Closing Balance Reconciliation
             </p>
@@ -876,8 +876,8 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
             <span>
               <strong>Accounting Proof:</strong> ${formatPkr(openBal)} (Opening) + (${formatPkr(movement)} Movement) = <strong>${formatPkr(closeBal)}</strong> (Closing Balance)
             </span>
-            <span class="badge ${isReconciled ? 'badge-accent' : 'badge-danger'}" style="font-size: 0.65rem;">
-              ${isReconciled ? '✓ RECONCILED' : 'DISCREPANCY'}
+            <span class="badge ${isReconciled ? 'badge-accent' : 'badge-danger'}" style="font-size: 0.65rem; text-transform: none; font-weight: 500;">
+              ${isReconciled ? 'Reconciled' : 'Discrepancy'}
             </span>
           </div>
 
@@ -1100,7 +1100,7 @@ export function createSupplierFinanceView(supplier, { onClose = () => {} } = {})
     subContainer.innerHTML = `
       <div class="drawer-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1010;"></div>
       <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1020; background: #1B201D; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 20px; width: 480px; max-width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.8);">
-        <h4 style="margin-top: 0; font-size: 1rem; color: #FFFFFF;">⚖ Apply Opening Balance</h4>
+        <h4 style="margin-top: 0; font-size: 1rem; font-weight: 500; color: var(--admin-text-primary);">Apply opening balance</h4>
         <p style="font-size: 0.75rem; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
           Set historical pre-launch balance with full audit reference. Previews impact before committing.
         </p>

@@ -11,8 +11,8 @@ export function createCollectionsSection(onSelectCollection) {
 
   container.innerHTML = `
     <div class="section-header">
-      <h2 class="section-title">Shop by Collection</h2>
-      <p class="section-subtitle">Curated categories engineered for fit, fabric, and purpose.</p>
+      <h2 class="section-title">Shop by collection</h2>
+      <p class="section-subtitle">A place for every part of your wardrobe.</p>
     </div>
 
     <div class="collections-grid" id="collections-grid-container">
@@ -48,9 +48,9 @@ export function createCollectionsSection(onSelectCollection) {
           <a href="#featured" class="collection-card" data-collection="${safeId}">
             <div class="collection-card-overlay"></div>
             <div class="collection-card-content">
-              <span class="badge badge-accent" style="margin-bottom: 8px;">Collection</span>
+              <span class="collection-caption">The collection</span>
               <h3 class="collection-card-title">${safeName}</h3>
-              <p style="font-size: 0.8rem; color: rgba(255,255,255,0.8); margin-bottom: 8px;">${safeDesc}</p>
+              <p class="collection-description">${safeDesc}</p>
               <span class="collection-card-cta">
                 Explore collection
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -69,6 +69,7 @@ export function createCollectionsSection(onSelectCollection) {
           card.prepend(
             createSafeImageElement({
               src: col.image_url,
+              fallback: '/images/storefront-empty.svg',
               alt: col.name || 'Collection',
               className: 'collection-img',
               loading: 'lazy',
