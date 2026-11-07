@@ -1,0 +1,18 @@
+# Disposable local CI reproduction. Never combine with production Compose files.
+name: alphazee-ci-verification
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ci
+      POSTGRES_PASSWORD: ci-disposable-only
+      POSTGRES_DB: alphazee_ci_bootstrap
+    ports:
+      - '127.0.0.1:${CI_POSTGRES_PORT:-15439}:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U ci -d alphazee_ci_bootstrap]
+      interval: 3s
+      timeout: 3s
+      retries: 20

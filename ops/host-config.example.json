@@ -1,0 +1,20 @@
+{
+  "project": "alphazee-prod",
+  "domain": "alphazee.tech",
+  "deployment_dir": "/home/azureuser/alphazee",
+  "env_file": "/home/azureuser/alphazee/.env.production",
+  "state_dir": "/var/lib/alphazee-cicd",
+  "compose_files": ["/home/azureuser/alphazee/compose.prod.yml"],
+  "volumes": {
+    "pgdata": "REPLACE_WITH_INSPECTED_EXISTING_VOLUME",
+    "catalog_media": "REPLACE_WITH_INSPECTED_EXISTING_VOLUME",
+    "caddy_data": "REPLACE_WITH_INSPECTED_EXISTING_VOLUME",
+    "caddy_config": "REPLACE_WITH_INSPECTED_EXISTING_VOLUME"
+  },
+  "backup_storage_account": "REPLACE_WITH_PRIVATE_BACKUP_ACCOUNT",
+  "backup_container": "alphazee-backups",
+  "restore_proof": "/etc/alphazee-restore-proof.json",
+  "expected_checkout_enabled": true,
+  "product_slug": "REPLACE_WITH_AN_ACTIVE_PRODUCT_SLUG",
+  "minimum_free_bytes": 3221225472
+}

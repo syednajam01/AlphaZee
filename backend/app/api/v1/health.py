@@ -9,14 +9,21 @@ Design rules:
 """
 
 from __future__ import annotations
+import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import check_db_connection, get_db
 
 router = APIRouter(tags=["diagnostics"])
+
+
+@router.get('/release', summary='Public non-secret deployment revision')
+def release_revision(response: Response) -> dict[str, str]:
+    response.headers['Cache-Control'] = 'no-store'
+    return {'sha': os.environ.get('RELEASE_SHA', 'development')}
 
 
 # ── Response schemas ──────────────────────────────────────────────────────────

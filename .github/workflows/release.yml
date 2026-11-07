@@ -1,0 +1,83 @@
+name: Production release
+on:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: alphazee-production
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api: ${{ steps.images.outputs.api }}
+      web: ${{ steps.images.outputs.web }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build release images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_USER: ${{ github.actor }}
+          PLATFORM: ${{ vars.PRODUCTION_PLATFORM }}
+        run: |
+          set -euo pipefail
+          test "$PLATFORM" = linux/amd64
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_USER" --password-stdin
+          docker buildx create --use
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          for component in api web; do
+            context=backend; extra=()
+            if [ "$component" = web ]; then context=frontend; extra=(--target production); fi
+            docker buildx build --platform "$PLATFORM" "${extra[@]}" --build-arg RELEASE_SHA="$GITHUB_SHA" --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$repo-$component:$GITHUB_SHA" --tag "alphazee-ci-$component" --load "$context"
+          done
+      - name: Validate the actual images that will be published
+        run: |
+          python3 ops/ci_packaging.py
+          docker run -d --name release-check-web -p 8080:80 -e SITE_DOMAIN=:80 alphazee-ci-web
+          npm install --prefix /tmp/browser-release --no-package-lock playwright@1.58.2
+          /tmp/browser-release/node_modules/.bin/playwright install --with-deps chromium
+          NODE_PATH=/tmp/browser-release/node_modules node ops/browser_smoke.cjs
+      - name: Push the tested images and record digests
+        id: images
+        run: |
+          set -euo pipefail
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          for component in api web; do
+            docker push "$repo-$component:$GITHUB_SHA"
+            image=$(docker image inspect --format '{{json .RepoDigests}}' "$repo-$component:$GITHUB_SHA" | python3 -c 'import json,sys; prefix=sys.argv[1]+"@"; print(next(x for x in json.load(sys.stdin) if x.startswith(prefix)))' "$repo-$component")
+            echo "$component=$image" >> "$GITHUB_OUTPUT"
+          done
+  deploy:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment:
+      name: production
+      url: https://alphazee.tech
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Package and deploy exact checked commit
+        env:
+          API_IMAGE: ${{ needs.publish.outputs.api }}
+          WEB_IMAGE: ${{ needs.publish.outputs.web }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ops/remote.py deploy

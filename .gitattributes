@@ -1,0 +1,3 @@
+ops/*.py text eol=lf
+ops/*.sh text eol=lf
+.github/**/*.yml text eol=lf

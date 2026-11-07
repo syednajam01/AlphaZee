@@ -1,7 +1,7 @@
 # AlphaZee: agent operating guide
 
-Owner: Syed Najam. Updated: 2026-11-06, through Three-Portal UI/UX & Performance Acceptance.
-This is the canonical project agent guide. Read it at the start of each task. Keep it under 1,200 words; put detailed plans, verification and operating instructions in `.context/`.
+Owner: Syed Najam. Updated: 2026-11-08, through CI/CD repository implementation.
+Canonical project guide. Read before each task. Keep under 1,200 words; put detailed plans, verification and runbooks in `.context/`.
 
 ## Authority and working rules
 
@@ -20,7 +20,7 @@ Design work: `.context/unslop_storefront_report.md`; installed skill `.agent/ski
 
 Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging, separate checkout lab, vendor agreements and financial ledgers, FIFO payment allocations, vendor stock counting portal with shortage detection, period financial reporting and P&L, configurable admin branding/legal policies and per-owner preferences.
 
-Verification: full backend suite 321 passed, final reporting/vendor regressions 63 passed, frontend 137 passed, frontend and all container packaging builds passed. Real browser acceptance: all 8 scenarios (41 screenshots) 100% PASS under migration head `a81f92c6d430`. Production is not deployed; normal checkout stays closed (503), lab isolated on 13001.
+Historical verification: backend 321 passed, reporting/vendor regressions 63 passed, frontend 139 passed; packaging builds passed. Recorded browser acceptance: 8 scenarios, 41 screenshots under migration head `a81f92c6d430`. Local checkout remains closed; lab isolated on 13001. Owner confirms Azure production is live at alphazee.tech; cloud configuration is not independently verified.
 
 ## Environments and checkout decision
 
@@ -64,7 +64,7 @@ Storefront design: `.context/frontend_design_implementation_guide.md`; progress:
 
 Historical browser evidence limitations: `.context/browser_acceptance_v2_review.md`. Preserve reports and distinguish recorded claims from independently verified outcomes; local acceptance is not production certification.
 
-Azure preparation: Students subscription, approximately $100 credit. Read `.context/azure_system_and_budget_guide.md` and `.context/azure_ai_setup_context.md`. Proposed staging: one Linux VM/Compose. Confirm commercial subscription eligibility. Release switch implemented; no cloud deployment verified.
+Azure: alphazee.tech uses Linux VM/Compose. CI/CD code verified; activation pending. Read `.context/cicd_implementation_report.md`, `cicd_runbook.md` and `cicd_live_inventory.md` in `.context/`. Target: `alphazee-staging/alphazee-vm`, project `alphazee-prod`. Inspect actual storage/config before enabling CD; preserve production data.
 
 `.context/next_priorities_and_browser_testing.md` covers acceptance planning; it is not fresh evidence.
 

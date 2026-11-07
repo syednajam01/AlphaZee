@@ -11,6 +11,8 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 FROM dependencies AS build
 COPY . .
 RUN npm run build
+ARG RELEASE_SHA=development
+RUN printf '{"sha":"%s"}\n' "$RELEASE_SHA" > /app/dist/release.json
 
 FROM caddy:2-alpine AS production
 COPY --from=build /app/dist /srv
