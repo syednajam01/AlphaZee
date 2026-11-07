@@ -96,6 +96,7 @@ jobs:
           npm install --prefix /tmp/browser-ci --no-package-lock playwright@1.58.2
           /tmp/browser-ci/node_modules/.bin/playwright install --with-deps chromium
           NODE_PATH=/tmp/browser-ci/node_modules node ops/browser_smoke.cjs
+          NODE_PATH=/tmp/browser-ci/node_modules node ops/admin_mobile_smoke.cjs
   ci-required:
     if: always()
     needs: [frontend, backend, operations, packaging]

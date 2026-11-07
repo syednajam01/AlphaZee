@@ -1,6 +1,6 @@
 # AlphaZee: agent operating guide
 
-Owner: Syed Najam. Updated: 2026-11-08, through CI/CD repository implementation.
+Owner: Syed Najam. Updated: 2026-11-08, through admin mobile layout repair.
 Canonical project guide. Read before each task. Keep under 1,200 words; put detailed plans, verification and runbooks in `.context/`.
 
 ## Authority and working rules
@@ -14,7 +14,7 @@ Canonical project guide. Read before each task. Keep under 1,200 words; put deta
 
 ## Current state and scope
 
-Design work: `.context/unslop_storefront_report.md`; installed skill `.agent/skills/unslop/SKILL.md`; admin handoff `.context/unslop_admin_implementation_guide.md`; vendor redesign and API repairs: `.context/unslop_vendor_report.md`.
+Design: `.context/unslop_storefront_report.md`; skill `.agent/skills/unslop/SKILL.md`; admin `.context/unslop_admin_implementation_guide.md`; vendor `.context/unslop_vendor_report.md`; mobile layout/scroll repair `.context/admin_mobile_layout_fix.md`.
 
 **Three-portal UI/UX, performance and browser acceptance are complete and verified.** Admin Portal unslopping complete (CC BY 4.0 Damir Sokolovsky); see `.context/unslop_admin_report.md` and `.context/unslop_admin_progress.md`. Read `.context/three_portal_quality_report.md` for authoritative evidence across all 6 gates (82 screenshots captured, 100% PASS), and `.context/three_portal_quality_progress.md` for phase history. Follow the owner's next task; do not infer another phase.
 

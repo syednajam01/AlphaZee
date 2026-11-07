@@ -29,10 +29,12 @@ export function collectVariant(row) {
   if (price !== '' && price_minor === null) throw new Error('Variant price must be a nonnegative PKR amount with at most two decimal places.');
   const sku = value('sku');
   if (!sku) throw new Error('Every saved variant needs a unique SKU. Remove an unfinished new row to save a draft without it.');
+  const color = value('color');
+  if (!color) throw new Error('Color is required for each variant. Please enter a color name.');
   const is_active = row.querySelector('[name="variant_active"]').checked;
   if (is_active && price_minor === null) throw new Error('Enter a price before activating this variant.');
   return { ...(row.dataset.variantId ? { id: Number(row.dataset.variantId) } : {}), sku,
-    size: value('size') || null, color: value('color') || null, price_minor, is_active, availability: value('availability') };
+    size: value('size') || null, color: color || null, price_minor, is_active, availability: value('availability') };
 }
 
 export function mountCatalogSection(section, container, context) {
@@ -128,16 +130,217 @@ export function mountCatalogSection(section, container, context) {
     bind('#catalog-products-next', () => { productsPage++; action(products); });
   }
 
-  function variantMarkup(v, index) {
+  const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'One Size'];
+
+  function generateSkuSuggestion(colorName, size) {
+    const slugInput = query('#catalog-product-form [name="slug"]')?.value?.trim();
+    const titleInput = query('#catalog-product-form [name="title"]')?.value?.trim();
+    const rawBase = slugInput || titleInput || currentProduct?.slug || currentProduct?.title || 'PROD';
+    const basePart = String(rawBase)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 14) || 'PROD';
+    const colPart = String(colorName || 'COL')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 8) || 'COL';
+    const sizePart = String(size || 'SZ')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 8) || 'SZ';
+    return `${basePart}-${colPart}-${sizePart}`;
+  }
+
+  function variantRowMarkup(v, colorName) {
     const price = v.price_minor === null || v.price_minor === undefined ? '' : `${Math.floor(v.price_minor / 100)}.${String(v.price_minor % 100).padStart(2, '0')}`;
-    return `<fieldset class="catalog-variant" ${v.id ? `data-variant-id="${v.id}"` : ''}>
-      <legend>Variant ${index + 1}${v.id ? ` · #${v.id}` : ' · new'}</legend><div class="catalog-fields">
-      ${field('sku', 'SKU (required to save this row)', v.sku, { max: 100 })}${field('size', 'Size (optional)', v.size, { max: 50 })}${field('color', 'Color (optional)', v.color, { max: 100 })}
-      ${field('price', 'Retail price PKR', price, { max: 20 })}
-      <label>Owner availability<select name="availability">${options([['unknown', 'Unknown'], ['available', 'Available'], ['unavailable', 'Unavailable']], v.availability || 'unknown')}</select></label>
-      <label><input name="variant_active" type="checkbox" ${v.is_active ? 'checked' : ''}> Active variant</label></div>
-      ${v.id ? '<p>Deactivate to stop future sales. Existing stock and order history are retained.</p>' : button('Remove unfinished row', '', 'data-remove-variant')}
-      ${v.id ? `<div data-variant-stock="${v.id}"></div>` : ''}</fieldset>`;
+    const size = v.size || '';
+    return `<fieldset class="catalog-variant variant-size-card" ${v.id ? `data-variant-id="${v.id}"` : ''} data-size="${esc(size)}">
+      <legend class="variant-size-legend">Size: <strong>${esc(size || 'Standard')}</strong>${v.id ? ` · Variant #${v.id}` : ' · new'}</legend>
+      <input type="hidden" name="color" value="${esc(colorName || v.color || '')}">
+      <input type="hidden" name="size" value="${esc(size)}">
+      <div class="catalog-fields variant-fields-row">
+        ${field('sku', 'SKU (required)', v.sku || '', { max: 100 })}
+        ${field('price', 'Retail price PKR', price, { max: 20 })}
+        <label>Availability
+          <select name="availability">${options([['available', 'Available'], ['unavailable', 'Unavailable'], ['unknown', 'Unknown']], v.availability || 'available')}</select>
+        </label>
+        <label class="variant-active-label">
+          <input name="variant_active" type="checkbox" ${v.is_active ? 'checked' : ''}>
+          <span>Active variant</span>
+        </label>
+        <div class="variant-action-wrap">
+          ${v.id
+            ? '<span class="variant-db-note">Saved in DB</span>'
+            : '<button type="button" class="btn btn-secondary btn-remove-size" data-remove-variant style="color: #f87171; font-size: 0.75rem; padding: 4px 8px;">Remove size</button>'}
+        </div>
+      </div>
+      ${v.id ? `<div data-variant-stock="${v.id}"></div>` : ''}
+    </fieldset>`;
+  }
+
+  function colorCardMarkup(colorName, variants, index) {
+    const activeSizes = new Set(variants.map(v => v.size || '').filter(Boolean));
+    const allPillSizes = [...new Set([...STANDARD_SIZES, ...activeSizes])];
+    return `<div class="color-group-card" data-color-index="${index}">
+      <div class="color-group-header">
+        <div class="color-group-title-wrap">
+          <label class="color-name-label">
+            <span class="color-label-text">Color Name <strong style="color: #f87171;">*</strong></span>
+            <input type="text" class="color-group-name" value="${esc(colorName)}" placeholder="e.g. Jet Black, Chalk White, Forest Green" maxlength="100" required>
+          </label>
+        </div>
+        <div class="color-group-batch-wrap">
+          <div class="batch-price-box">
+            <input type="text" class="color-batch-price" placeholder="Price for all sizes (PKR)" maxlength="20">
+            <button type="button" class="btn btn-secondary btn-apply-batch-price" style="font-size: 0.8rem; padding: 6px 10px;">Apply to Sizes</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-remove-color-group" style="font-size: 0.8rem; padding: 6px 10px; color: #f87171;">Remove Color</button>
+        </div>
+      </div>
+      <div class="color-sizes-selector-section">
+        <div class="color-sizes-label">Available Sizes for this Color (click to enable/disable):</div>
+        <div class="color-sizes-pills-bar">
+          ${allPillSizes.map(sz => {
+            const isActive = activeSizes.has(sz);
+            return `<button type="button" class="size-pill ${isActive ? 'is-active' : 'is-inactive'}" data-size="${esc(sz)}">${isActive ? '✓' : '+'} ${esc(sz)}</button>`;
+          }).join('')}
+          <div class="custom-size-adder">
+            <input type="text" class="custom-size-input" placeholder="Custom size" maxlength="50">
+            <button type="button" class="btn btn-secondary btn-add-custom-size" style="font-size: 0.75rem; padding: 4px 8px;">+ Add Size</button>
+          </div>
+        </div>
+      </div>
+      <div class="color-variants-list">
+        ${variants.map(v => variantRowMarkup(v, colorName)).join('')}
+      </div>
+    </div>`;
+  }
+
+  function variantMarkup(v, index) {
+    return variantRowMarkup(v, v.color || '');
+  }
+
+  function wireColorGroup(card) {
+    const nameInput = card.querySelector('.color-group-name');
+    nameInput?.addEventListener('input', () => {
+      const newColor = nameInput.value.trim();
+      card.querySelectorAll('.catalog-variant input[name="color"]').forEach(inp => {
+        inp.value = newColor;
+      });
+      markDirty();
+    });
+
+    const pillsBar = card.querySelector('.color-sizes-pills-bar');
+    const variantsList = card.querySelector('.color-variants-list');
+
+    function wirePill(pill) {
+      pill.addEventListener('click', () => {
+        const sz = pill.dataset.size;
+        const isCurrentlyActive = pill.classList.contains('is-active');
+        if (isCurrentlyActive) {
+          const row = [...variantsList.querySelectorAll('.catalog-variant')].find(r => r.dataset.size === sz);
+          if (row) {
+            if (row.dataset.variantId) {
+              if (!window.confirm(`Variant #${row.dataset.variantId} (Size ${sz}) is saved in catalog. Remove this variant?`)) return;
+            }
+            row.remove();
+            pill.classList.remove('is-active');
+            pill.classList.add('is-inactive');
+            pill.textContent = `+ ${sz}`;
+            markDirty();
+          }
+        } else {
+          const cName = nameInput ? nameInput.value.trim() : '';
+          const batchPrice = card.querySelector('.color-batch-price')?.value?.trim();
+          const pMinor = batchPrice ? parseCatalogPkr(batchPrice) : null;
+          const suggestedSku = generateSkuSuggestion(cName, sz);
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = variantRowMarkup({
+            sku: suggestedSku,
+            size: sz,
+            color: cName,
+            price_minor: pMinor,
+            is_active: false,
+            availability: 'available',
+          }, cName);
+          const newRow = wrapper.firstElementChild || wrapper;
+          variantsList.appendChild(newRow);
+          wireRemoveVariants();
+          pill.classList.remove('is-inactive');
+          pill.classList.add('is-active');
+          pill.textContent = `✓ ${sz}`;
+          markDirty();
+        }
+      });
+    }
+
+    card.querySelectorAll('.size-pill').forEach(wirePill);
+
+    const customInput = card.querySelector('.custom-size-input');
+    const addCustomBtn = card.querySelector('.btn-add-custom-size');
+    const handleAddCustom = () => {
+      const rawSz = customInput.value.trim();
+      if (!rawSz) { customInput.focus(); return; }
+      let pill = [...card.querySelectorAll('.size-pill')].find(p => p.dataset.size?.toUpperCase() === rawSz.toUpperCase());
+      if (!pill) {
+        pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'size-pill is-inactive';
+        pill.setAttribute('data-size', rawSz);
+        pill.textContent = `+ ${rawSz}`;
+        const adder = card.querySelector('.custom-size-adder');
+        if (adder) {
+          pillsBar.insertBefore(pill, adder);
+        } else {
+          pillsBar.appendChild(pill);
+        }
+        wirePill(pill);
+      }
+      if (pill.classList.contains('is-inactive')) {
+        pill.click();
+      }
+      customInput.value = '';
+    };
+    addCustomBtn?.addEventListener('click', handleAddCustom);
+    customInput?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleAddCustom();
+      }
+    });
+
+    const batchPriceBtn = card.querySelector('.btn-apply-batch-price');
+    batchPriceBtn?.addEventListener('click', () => {
+      const batchInput = card.querySelector('.color-batch-price');
+      const batchVal = batchInput.value.trim();
+      if (!batchVal) {
+        status('Enter a price amount in PKR first.', true);
+        return;
+      }
+      const pMinor = parseCatalogPkr(batchVal);
+      if (pMinor === null) {
+        status('Variant price must be a nonnegative PKR amount with at most two decimal places.', true);
+        return;
+      }
+      const formatted = `${Math.floor(pMinor / 100)}.${String(pMinor % 100).padStart(2, '0')}`;
+      variantsList.querySelectorAll('.catalog-variant input[name="price"]').forEach(inp => {
+        inp.value = formatted;
+      });
+      markDirty();
+      status(`Applied PKR ${formatted} to sizes in this color.`);
+    });
+
+    const removeColorBtn = card.querySelector('.btn-remove-color-group');
+    removeColorBtn?.addEventListener('click', () => {
+      const savedVariants = card.querySelectorAll('.catalog-variant[data-variant-id]');
+      if (savedVariants.length > 0) {
+        if (!window.confirm('This color has variants already saved in the catalog. Removing it will delete these variants when saved. Continue?')) return;
+      }
+      card.remove();
+      markDirty();
+    });
   }
 
   async function editProduct(product) {
@@ -153,6 +356,23 @@ export function mountCatalogSection(section, container, context) {
     currentProduct = product; links = (product.media || []).map(link => ({ ...link, asset_id: link.asset.id }));
     context.setDirty(false);
     const archived = product.status === 'archived';
+
+    const colorMap = new Map();
+    for (const v of product.variants || []) {
+      const col = v.color ? v.color.trim() : '';
+      if (!colorMap.has(col)) colorMap.set(col, []);
+      colorMap.get(col).push(v);
+    }
+    let initialColorGroupsHtml = '';
+    if (colorMap.size === 0) {
+      initialColorGroupsHtml = colorCardMarkup('', [], 0);
+    } else {
+      let idx = 0;
+      for (const [cName, vars] of colorMap.entries()) {
+        initialColorGroupsHtml += colorCardMarkup(cName, vars, idx++);
+      }
+    }
+
     shell(`<div class="catalog-toolbar">${button('Back to products', 'catalog-back-products')}${button('Reload saved product', 'catalog-reload-product')}
       <strong id="catalog-product-state">${esc(product.status)} · version ${product.edit_version}</strong></div>
       <form id="catalog-product-form"><fieldset ${archived ? 'disabled' : ''}><legend>Product details</legend><div class="catalog-fields">
@@ -187,8 +407,16 @@ export function mountCatalogSection(section, container, context) {
       ${field('material', 'Material', product.material, { textarea: true })}${field('care', 'Care instructions', product.care, { textarea: true })}${field('sizing', 'Sizing details', product.sizing, { textarea: true })}
       <label><input name="is_hero" type="checkbox" ${product.is_hero ? 'checked' : ''}> Featured in hero</label>
       ${field('hero_order', 'Hero order', product.hero_order, { type: 'number' })}${field('hero_benefit', 'Hero benefit', product.hero_benefit, { textarea: true, max: 2000 })}</div>
-      <h3>Variants</h3><p>A product without size/color options uses one default variant. Blank prices remain unset.</p>
-      <div id="catalog-variants">${(product.variants || []).map(variantMarkup).join('')}</div>${button('Add variant', 'catalog-add-variant')}
+      <div class="catalog-variants-section">
+        <div class="catalog-variants-header">
+          <div>
+            <h3>Colors & Available Sizes</h3>
+            <p>Define each color available for this piece, and select the sizes offered for that color. Each size creates an inventory-tracked variant.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" id="catalog-add-color">+ Add Color</button>
+        </div>
+        <div id="catalog-variants">${initialColorGroupsHtml}</div>
+      </div>
 
       <h3>Storefront Card Images</h3>
       <p>Explicitly select the Card Front image and Card Hover/Back image shown in listings and grids. These selections are independent of gallery order.</p>
@@ -246,11 +474,19 @@ export function mountCatalogSection(section, container, context) {
     sourceVendor?.addEventListener('change', updateVendorVisibility);
     bind('#catalog-back-products', () => { if (context.canLeave()) action(products); });
     bind('#catalog-reload-product', () => { if (context.canLeave()) action(() => api.fetchOwnerProduct(product.id), p => editProduct(p)); });
-    bind('#catalog-add-variant', () => {
-      const node = document.createElement('div'); node.innerHTML = variantMarkup({}, query('#catalog-variants').children.length);
-      query('#catalog-variants').appendChild(node.firstElementChild || node); wireRemoveVariants(); markDirty();
-    });
+
+    container.querySelectorAll('.color-group-card').forEach(wireColorGroup);
     wireRemoveVariants();
+
+    bind('#catalog-add-color', () => {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = colorCardMarkup('', [], query('#catalog-variants').children.length);
+      const newCard = wrapper.firstElementChild || wrapper;
+      query('#catalog-variants').appendChild(newCard);
+      wireColorGroup(newCard);
+      newCard.querySelector('.color-group-name')?.focus();
+      markDirty();
+    });
     let supplierRequest;
     const suppliers = () => {
       // Refresh after creation, and share concurrent initial reads between variants.
@@ -280,6 +516,18 @@ export function mountCatalogSection(section, container, context) {
       event.preventDefault();
       action(async () => {
         if (dirtyStock.size) throw new Error('Save or reload the unsaved supplier/stock inputs before saving product details.');
+
+        const colorCards = query('#catalog-variants')?.querySelectorAll('.color-group-card') || [];
+        for (const card of colorCards) {
+          const varRows = card.querySelectorAll('.catalog-variant');
+          const nameInput = card.querySelector('.color-group-name');
+          const cName = nameInput?.value?.trim();
+          if (varRows.length > 0 && !cName) {
+            nameInput?.focus();
+            throw new Error('Color name is required for each color section with sizes.');
+          }
+        }
+
         const fields = Object.fromEntries(['title', 'slug', 'collection_id', 'badge', 'description', 'short_description', 'material', 'care', 'sizing', 'hero_benefit'].map(name => [name, value(form, name).trim() || null]));
         fields.is_hero = form.querySelector('[name="is_hero"]').checked;
         const order = value(form, 'hero_order'); fields.hero_order = order === '' ? null : Number(order);
@@ -398,7 +646,25 @@ export function mountCatalogSection(section, container, context) {
 
   function wireRemoveVariants() {
     query('#catalog-variants')?.querySelectorAll('[data-remove-variant]').forEach(node => {
-      node.onclick = () => { node.closest('.catalog-variant')?.remove(); markDirty(); };
+      node.onclick = () => {
+        const row = node.closest('.catalog-variant');
+        if (!row) return;
+        if (row.dataset.variantId) {
+          if (!window.confirm(`Variant #${row.dataset.variantId} is saved in catalog. Remove this variant?`)) return;
+        }
+        const size = row.dataset.size;
+        const colorCard = row.closest('.color-group-card');
+        row.remove();
+        if (colorCard && size) {
+          const pill = [...colorCard.querySelectorAll('.size-pill')].find(p => p.dataset.size === size);
+          if (pill) {
+            pill.classList.remove('is-active');
+            pill.classList.add('is-inactive');
+            pill.textContent = `+ ${size}`;
+          }
+        }
+        markDirty();
+      };
     });
   }
   function updateAssetChoices() {

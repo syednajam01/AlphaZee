@@ -25,12 +25,16 @@
 
 /* Admin Page Layout & Viewport Lock */
 .admin-page {
-  height: 100dvh !important;
-  max-height: 100dvh !important;
+  --admin-viewport-height: calc(100vh - var(--lab-notice-height, 0px));
+  height: var(--admin-viewport-height) !important;
+  max-height: var(--admin-viewport-height) !important;
   overflow: hidden !important;
   background: var(--admin-bg-base);
   color: var(--admin-text-primary);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+@supports (height: 100dvh) {
+  .admin-page { --admin-viewport-height: calc(100dvh - var(--lab-notice-height, 0px)); }
 }
 .admin-page [hidden] { display: none !important; }
 .admin-page > .modal-content {
@@ -39,9 +43,9 @@
   margin: 0 !important;
   width: 100% !important;
   max-width: none !important;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
-  min-height: 100dvh !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -54,8 +58,9 @@
 #admin-modal main {
   flex: 1;
   min-width: 0;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
@@ -80,6 +85,7 @@
 #admin-modal #admin-tab-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto !important;
   overflow-x: hidden !important;
   overscroll-behavior: contain !important;
@@ -93,8 +99,8 @@
   #admin-modal #admin-sidebar {
     width: 68px !important;
     min-width: 68px !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
+    height: 100% !important;
+    max-height: 100% !important;
     overflow: hidden !important;
     overflow-x: hidden !important;
     display: flex !important;
@@ -619,11 +625,24 @@
   max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow-y: auto;
 }
 @media (max-width: 760px) {
-  .admin-page > .modal-content { flex-direction: column; }
-  .admin-page #admin-sidebar { width: 100% !important; min-width: 100%; min-height: auto; }
+  /* Match the shell's explicit desktop priority; otherwise the sidebar fills the phone. */
+  .admin-page > .modal-content { flex-direction: column !important; }
+  .admin-page #admin-sidebar {
+    width: 100% !important; min-width: 0; min-height: 0;
+    height: auto; max-height: none; flex: 0 0 auto;
+    overflow: hidden; border-right: 0; border-bottom: 1px solid var(--admin-border-hairline);
+  }
+  .admin-page #admin-sidebar-header { height: 56px !important; flex: 0 0 56px; }
+  .admin-page #admin-collapsed-logo-slot { display: none !important; }
+  .admin-page #admin-expanded-logo-slot { display: block !important; }
+  .admin-page #admin-expanded-logo-slot img { max-height: 40px; max-width: 180px; object-fit: contain; }
   .admin-page #admin-sidebar nav {
+    flex: 0 0 auto !important;
+    align-items: center;
     flex-direction: row !important;
+    min-height: 0; padding: 8px;
     overflow-x: auto !important;
+    overflow-y: hidden !important;
     scrollbar-width: none !important;
     -ms-overflow-style: none;
   }
@@ -631,10 +650,13 @@
     display: none !important;
     height: 0 !important;
   }
-  .admin-page .admin-tab-btn { width: auto !important; white-space: nowrap; flex-shrink: 0; }
+  .admin-page .admin-tab-btn { width: auto !important; min-height: 44px; white-space: nowrap; flex-shrink: 0; }
   .admin-page .admin-nav-label { display: inline !important; }
   .admin-page #btn-toggle-admin-sidebar { display: none; }
-  .admin-page #admin-tab-content { padding: 16px !important; }
+  .admin-page #admin-sidebar > div:last-child { padding: 4px 16px !important; min-height: 44px; }
+  .admin-page #btn-admin-logout { min-height: 44px; padding: 8px !important; }
+  .admin-page main { flex: 1 1 0% !important; height: auto !important; }
+  .admin-page #admin-tab-content { padding: 16px !important; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important; }
   .admin-page header { padding: 12px 16px !important; }
 }
 .admin-financial-overview { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 12px; margin-bottom: 16px; }
@@ -974,3 +996,205 @@
   color: var(--admin-text-muted);
   text-align: center;
 }
+
+/* Color-First Product Variants and Size Options */
+.catalog-variants-section {
+  display: grid;
+  gap: 16px;
+  margin: 12px 0 24px 0;
+}
+.catalog-variants-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.catalog-variants-header h3 {
+  margin: 0 0 4px 0;
+}
+.catalog-variants-header p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--admin-text-secondary);
+}
+
+.color-group-card {
+  background: var(--admin-bg-card);
+  border: 1px solid var(--admin-border-hairline);
+  border-radius: var(--admin-radius-card);
+  padding: 18px 20px;
+  display: grid;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.color-group-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--admin-border-hairline);
+}
+
+.color-group-title-wrap {
+  flex: 1;
+  min-width: 260px;
+}
+
+.color-name-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin: 0 !important;
+}
+
+.color-label-text {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--admin-text-primary);
+  white-space: nowrap;
+}
+
+.color-group-name {
+  max-width: 320px;
+  font-weight: 500;
+}
+
+.color-group-batch-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.batch-price-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.color-batch-price {
+  width: 160px !important;
+}
+
+.color-sizes-selector-section {
+  display: grid;
+  gap: 8px;
+}
+
+.color-sizes-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+}
+
+.color-sizes-pills-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.size-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: var(--admin-radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 140ms ease;
+  user-select: none;
+}
+
+.size-pill.is-active {
+  background: var(--admin-accent-bright);
+  color: #FFFFFF;
+  border: 1px solid var(--admin-accent-bright);
+  font-weight: 600;
+}
+
+.size-pill.is-inactive {
+  background: var(--admin-bg-raised);
+  color: var(--admin-text-secondary);
+  border: 1px solid var(--admin-border-hairline);
+}
+
+.size-pill.is-inactive:hover {
+  border-color: var(--admin-text-primary);
+  color: var(--admin-text-primary);
+}
+
+.custom-size-adder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.custom-size-input {
+  width: 120px !important;
+  min-height: 32px !important;
+  padding: 4px 8px !important;
+  font-size: 0.8125rem !important;
+}
+
+.btn-add-custom-size {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.8125rem;
+}
+
+.color-variants-list {
+  display: grid;
+  gap: 12px;
+}
+
+.variant-size-card {
+  padding: 12px 16px !important;
+  background: var(--admin-bg-raised) !important;
+  border: 1px solid var(--admin-border-hairline) !important;
+  border-radius: var(--admin-radius-control) !important;
+  display: grid !important;
+  gap: 10px !important;
+}
+
+.variant-size-legend {
+  padding: 0 6px;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  color: var(--admin-text-primary);
+}
+
+.variant-fields-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 1fr) minmax(130px, 1fr) auto auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.variant-active-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  cursor: pointer;
+  padding-bottom: 8px;
+  white-space: nowrap;
+}
+
+.variant-action-wrap {
+  padding-bottom: 8px;
+}
+
+.variant-db-note {
+  font-size: 0.75rem;
+  color: var(--admin-text-muted);
+}
+

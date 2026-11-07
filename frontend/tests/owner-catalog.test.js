@@ -18,6 +18,10 @@ test('variant inputs preserve exact paisas and reject missing active prices/exce
   fill(row, 'sku', ' SAMPLE-SKU '); fill(row, 'size', ' M '); fill(row, 'color', ' Blue '); fill(row, 'availability', 'available'); fill(row, 'price', '123.45');
   assert.equal(collectVariant(row).price_minor, 12345);
   assert.equal(collectVariant(row).sku, 'SAMPLE-SKU');
+  assert.equal(collectVariant(row).color, 'Blue');
+  fill(row, 'color', '   ');
+  assert.throws(() => collectVariant(row), /Color is required/);
+  fill(row, 'color', 'Blue');
   fill(row, 'price', '1.001'); assert.throws(() => collectVariant(row), /two decimal/);
   fill(row, 'price', ''); row.querySelector('[name="variant_active"]').checked = true;
   assert.throws(() => collectVariant(row), /price before activating/);
@@ -95,4 +99,73 @@ test('upload progress represents transport and resolves only on server acceptanc
   assert.equal((await promise).id, 'sample-media');
   const canceled = uploadOwnerMedia(new Blob(['SAMPLE']), { onProgress() {}, signal: controller.signal });
   controller.abort(); await assert.rejects(canceled, { name: 'AbortError' });
+});
+
+test('color-first variant builder groups variants by color and generates size variants with batch pricing', async () => {
+  const container = install(), calls = [];
+  const existingProduct = {
+    id: 'sample-tee',
+    title: 'Boxy Heavyweight Tee',
+    slug: 'boxy-heavyweight-tee',
+    status: 'draft',
+    edit_version: 1,
+    collection_id: null,
+    variants: [
+      { id: 101, sku: 'TEE-BLK-S', size: 'S', color: 'Black', price_minor: 350000, is_active: true, availability: 'available' },
+      { id: 102, sku: 'TEE-BLK-M', size: 'M', color: 'Black', price_minor: 350000, is_active: true, availability: 'available' },
+    ],
+    media: [],
+    publication_requirements: [],
+  };
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null;
+    calls.push({ url, payload });
+    let data = {}, status = 200;
+    if (url.includes('/admin/products?')) data = { products: [existingProduct], total: 1 };
+    else if (url === '/api/v1/admin/collections') data = { collections: [] };
+    else if (url.includes('/admin/media?')) data = { assets: [], total: 0 };
+    else if (url === '/api/v1/admin/products/sample-tee') {
+      if (options.method === 'POST') {
+        data = { ...existingProduct, ...payload, edit_version: 2 };
+      } else {
+        data = existingProduct;
+      }
+    }
+    return { ok: status < 400, status, json: async () => data };
+  };
+
+  const view = mountCatalogSection('products', container, { isCurrent: () => true, setDirty() {}, canLeave: () => true });
+  await view.ready;
+  container.querySelector('[data-edit-product]').click();
+  await flush();
+
+  const colorCards = container.querySelectorAll('.color-group-card');
+  assert.equal(colorCards.length, 1);
+  assert.equal(colorCards[0].querySelector('.color-group-name').value, 'Black');
+
+  // Verify existing variants S and M are loaded
+  const existingVariants = colorCards[0].querySelectorAll('.catalog-variant');
+  assert.equal(existingVariants.length, 2);
+  assert.equal(existingVariants[0].dataset.size, 'S');
+  assert.equal(existingVariants[1].dataset.size, 'M');
+
+  // Click size L pill to add size L
+  const pillL = [...colorCards[0].querySelectorAll('.size-pill')].find(p => p.dataset.size === 'L');
+  assert.ok(pillL);
+  assert.ok(pillL.classList.contains('is-inactive'));
+  pillL.click();
+
+  const updatedVariants = colorCards[0].querySelectorAll('.catalog-variant');
+  assert.equal(updatedVariants.length, 3);
+  assert.ok(pillL.classList.contains('is-active'));
+
+  // Apply batch price to all sizes in Black
+  const batchPriceInput = colorCards[0].querySelector('.color-batch-price');
+  batchPriceInput.value = '3950';
+  colorCards[0].querySelector('.btn-apply-batch-price').click();
+
+  const priceInputs = colorCards[0].querySelectorAll('.catalog-variant input[name="price"]');
+  priceInputs.forEach(inp => assert.equal(inp.value, '3950.00'));
+
+  view.destroy();
 });
