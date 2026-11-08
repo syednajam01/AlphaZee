@@ -117,7 +117,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         </div>
 
         <!-- Sidebar Navigation -->
-        <nav aria-label="Owner sections" style="flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto;">
+        <nav aria-label="Owner sections">
           <button type="button" class="admin-tab-btn" data-tab="overview" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 6px; background: rgba(20, 92, 68, 0.4); color: #FFFFFF; border: none; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-align: left;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
