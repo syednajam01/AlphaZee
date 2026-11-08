@@ -62,7 +62,10 @@ export function createOrderTrackingModal(onClose) {
   // Mount logo
   const logoSlot = modal.querySelector('#tracking-logo-slot');
   if (logoSlot) {
-    const wordmark = createBrandLogo({ variant: 'wordmark', surface: 'light', width: 110, ariaLabel: 'AlphaZee' });
+    const wordmark = createBrandLogo({ variant: 'wordmark', surface: 'light', width: 110, href: '/', ariaLabel: 'AlphaZee home' });
+    wordmark.addEventListener('click', () => {
+      overlay.close();
+    });
     logoSlot.appendChild(wordmark);
   }
 

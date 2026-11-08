@@ -66,6 +66,7 @@ export function createHeader() {
     const logo = createBrandLogo({
       variant: 'responsive-header',
       surface: 'auto',
+      href: '/',
       ariaLabel: 'AlphaZee home',
     });
     logoSlot.appendChild(logo);

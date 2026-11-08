@@ -121,6 +121,7 @@ export function createReassuranceAndFooter() {
       variant: 'combined',
       surface: 'dark',
       width: 185, // 170–200px wide
+      href: '/',
       ariaLabel: 'AlphaZee home',
     });
     footerLogoSlot.appendChild(footerLogo);

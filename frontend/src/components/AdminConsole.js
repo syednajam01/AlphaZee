@@ -385,13 +385,23 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   const expandedLogoSlot = modal.querySelector('#admin-expanded-logo-slot');
   const collapsedLogoSlot = modal.querySelector('#admin-collapsed-logo-slot');
   if (expandedLogoSlot) {
-    const fullLogo = createBrandLogo({ variant: 'combined', height: '24px' });
+    const fullLogo = createBrandLogo({ variant: 'combined', height: '24px', href: '/', ariaLabel: 'AlphaZee main store' });
     fullLogo.style.filter = 'brightness(0) invert(1)';
+    fullLogo.addEventListener('click', event => {
+      if (!canLeave()) {
+        event.preventDefault();
+      }
+    });
     expandedLogoSlot.appendChild(fullLogo);
   }
   if (collapsedLogoSlot) {
-    const markLogo = createBrandLogo({ variant: 'mark', height: '24px' });
+    const markLogo = createBrandLogo({ variant: 'mark', height: '24px', href: '/', ariaLabel: 'AlphaZee main store' });
     markLogo.style.filter = 'brightness(0) invert(1)';
+    markLogo.addEventListener('click', event => {
+      if (!canLeave()) {
+        event.preventDefault();
+      }
+    });
     collapsedLogoSlot.appendChild(markLogo);
   }
 

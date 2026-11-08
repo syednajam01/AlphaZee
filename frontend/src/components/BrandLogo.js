@@ -19,7 +19,7 @@ export function createBrandLogo({
   surface = 'auto',
   width = null,
   asLink = true,
-  href = '#',
+  href = '/',
   className = '',
   ariaLabel = 'AlphaZee home',
 } = {}) {
@@ -29,6 +29,10 @@ export function createBrandLogo({
   if (asLink) {
     container.href = href;
     container.setAttribute('aria-label', ariaLabel);
+    container.setAttribute('title', ariaLabel);
+    if (href === '/') {
+      container.setAttribute('data-nav', '/');
+    }
   }
 
   // Surface class
@@ -61,7 +65,7 @@ export function createBrandLogo({
 
     container.appendChild(imgWordmark);
     container.appendChild(imgCombined);
-  } else if (variant === 'symbol') {
+  } else if (variant === 'symbol' || variant === 'mark') {
     const symbolWrapper = document.createElement('div');
     symbolWrapper.className = 'logo-symbol-wrapper';
     

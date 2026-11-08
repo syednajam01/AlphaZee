@@ -71,7 +71,11 @@ export function createMobileNavDrawer() {
       variant: 'combined',
       surface: 'light',
       width: 140,
+      href: '/',
       ariaLabel: 'AlphaZee home',
+    });
+    drawerLogo.addEventListener('click', () => {
+      close();
     });
     drawerLogoSlot.appendChild(drawerLogo);
   }

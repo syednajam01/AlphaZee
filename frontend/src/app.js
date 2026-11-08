@@ -265,6 +265,7 @@ export function initApp() {
       if (canonical && typeof window !== 'undefined') {
         canonical.setAttribute('href', `${window.location.origin}/`);
       }
+      scrollToTop();
     }
   }
 
@@ -298,6 +299,9 @@ export function initApp() {
       event.preventDefault();
       mobileNav.close();
       navigate('/');
+      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      }
     } else if (href === '#featured' || href === '#collections' || href === '#reassurance' || href === '#faq') {
       const isSubpage = typeof window !== 'undefined' && window.location?.pathname !== '/';
       if (isSubpage) {

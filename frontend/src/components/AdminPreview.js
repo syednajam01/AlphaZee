@@ -112,6 +112,7 @@ export function createAdminPreviewModal() {
       variant: 'combined',
       surface: 'dark',
       width: 150,
+      href: '/',
       ariaLabel: 'AlphaZee admin home',
     });
     expandedSlot.appendChild(combinedLogo);
@@ -124,6 +125,7 @@ export function createAdminPreviewModal() {
       variant: 'symbol',
       surface: 'dark',
       width: 36,
+      href: '/',
       ariaLabel: 'AlphaZee admin home',
     });
     collapsedSlot.appendChild(symbolLogo);

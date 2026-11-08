@@ -184,7 +184,11 @@ export function createCheckoutView(onClose) {
       variant: 'wordmark',
       surface: 'light',
       width: 120,
+      href: '/',
       ariaLabel: 'AlphaZee home',
+    });
+    wordmarkLogo.addEventListener('click', () => {
+      close();
     });
     logoSlot.appendChild(wordmarkLogo);
   }

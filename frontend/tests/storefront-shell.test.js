@@ -118,3 +118,23 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
   assert.ok(requests.length >= beforeRefresh + 3, 'accepted owner changes refetch hero, collections and products');
   application.destroy();
 });
+
+test('clicking brand logo sends user to main page /', async () => {
+  installDom();
+  let scrolledToTop = false;
+  globalThis.window.scrollTo = (optionsOrX) => {
+    scrolledToTop = true;
+  };
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  const application = initApp();
+  await new Promise(resolve => setTimeout(resolve, 10));
+
+  const logo = document.querySelector('#header-logo-slot .brand-logo-link');
+  assert.ok(logo, 'Header brand logo must be mounted');
+  assert.equal(logo.getAttribute('href'), '/', 'Brand logo must link to /');
+  assert.equal(logo.getAttribute('data-nav'), '/', 'Brand logo must have data-nav="/"');
+
+  logo.click();
+  assert.ok(scrolledToTop, 'Clicking brand logo must scroll to top');
+  application.destroy();
+});
