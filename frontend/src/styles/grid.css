@@ -536,3 +536,21 @@
     transition: none !important;
   }
 }
+
+/* Subpage Catalog & Collections Containers */
+.collections-page-container,
+.collection-products-page-container,
+.catalog-page-container {
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-12);
+  min-height: 60vh;
+}
+
+.collections-more-container,
+.catalog-more-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: var(--space-8);
+}
+

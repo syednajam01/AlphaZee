@@ -2,7 +2,7 @@ import { fetchProducts, fetchCollections } from '../utils/api.js';
 import { formatDisplayPrice, extractPriceMinor } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
 
-export function createFeaturedProducts(onOpenProductModal) {
+export function createFeaturedProducts(onOpenProductModal, { preview = false, pageSize: customPageSize = null, onNavigate } = {}) {
   const section = document.createElement('section');
   section.className = 'section';
   section.id = 'featured';
@@ -11,13 +11,13 @@ export function createFeaturedProducts(onOpenProductModal) {
   let activeSort = 'featured';
   try {
     const savedFilter = window?.sessionStorage?.getItem('alphazee_catalog_filter');
-    if (savedFilter) activeCategory = savedFilter;
+    if (savedFilter && !preview) activeCategory = savedFilter;
     const savedSort = window?.sessionStorage?.getItem('alphazee_catalog_sort');
-    if (savedSort) activeSort = savedSort;
+    if (savedSort && !preview) activeSort = savedSort;
   } catch {}
 
   let currentPage = 1;
-  const pageSize = 12;
+  const pageSize = customPageSize || (preview ? 6 : 12);
   let totalProducts = 0;
   let isLoading = false;
   let isLoadingMore = false;
@@ -33,11 +33,11 @@ export function createFeaturedProducts(onOpenProductModal) {
     <div class="section-header" style="display: flex; flex-direction: column; gap: 16px;">
       <div>
         <h2 class="section-title">The current edit</h2>
-        <p class="section-subtitle">Find a piece that feels like you. Choose a collection, then explore the details.</p>
+        <p class="section-subtitle">${preview ? 'A curated selection of our latest pieces.' : 'Find a piece that feels like you. Choose a collection, then explore the details.'}</p>
       </div>
       
       <!-- Category Filter Tabs & Sorting Controls -->
-      <div class="catalog-controls-bar">
+      <div class="catalog-controls-bar" ${preview ? 'style="display: none;"' : ''}>
         <div class="filter-tabs" id="filter-tabs-container" role="tablist">
           <button class="option-pill is-selected" data-filter="all" role="tab" aria-selected="true">All pieces</button>
         </div>
@@ -124,6 +124,22 @@ export function createFeaturedProducts(onOpenProductModal) {
 
     if (isLoading || errorState || !products || products.length === 0) {
       paginationContainer.innerHTML = '';
+      return;
+    }
+
+    if (preview) {
+      paginationContainer.innerHTML = `
+        <a href="/products" class="btn btn-secondary btn-more-products" id="btn-more-products" style="min-width: 220px;">
+          Explore all pieces →
+        </a>
+      `;
+      paginationContainer.querySelector('#btn-more-products')?.addEventListener('click', (e) => {
+        if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return;
+        e.preventDefault();
+        if (onNavigate) {
+          onNavigate('/products');
+        }
+      });
       return;
     }
 

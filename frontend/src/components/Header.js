@@ -160,13 +160,17 @@ export function createHeader() {
   function setActiveNav(targetHref) {
     const navLinks = header.querySelectorAll('.nav-desktop .nav-link');
     navLinks.forEach(link => {
-      const href = link.getAttribute('href');
+      const href = link.getAttribute?.('href');
       if (targetHref && href === targetHref) {
-        link.classList.add('is-active');
-        link.setAttribute('aria-current', 'page');
+        link.classList?.add?.('is-active');
+        link.setAttribute?.('aria-current', 'page');
       } else {
-        link.classList.remove('is-active');
-        link.removeAttribute('aria-current');
+        link.classList?.remove?.('is-active');
+        if (typeof link.removeAttribute === 'function') {
+          link.removeAttribute('aria-current');
+        } else {
+          link.setAttribute?.('aria-current', 'false');
+        }
       }
     });
   }

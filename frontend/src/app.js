@@ -4,6 +4,9 @@ import { captureLandingUtmParams } from './utils/utm.js';
 import { createHeader } from './components/Header.js';
 import { createHero } from './components/Hero.js';
 import { createCollectionsSection } from './components/Collections.js';
+import { createCollectionsPage } from './components/CollectionsPage.js';
+import { createCollectionProductsPage } from './components/CollectionProductsPage.js';
+import { createCatalogPage } from './components/CatalogPage.js';
 import { createFeaturedProducts } from './components/FeaturedProducts.js';
 import { createProductPage } from './components/ProductPage.js';
 import { createReassuranceAndFooter } from './components/ReassuranceFooter.js';
@@ -30,7 +33,7 @@ export function initApp() {
       checkoutView.open();
     },
     () => {
-      if (typeof window !== 'undefined' && window.location?.pathname?.startsWith('/products/')) {
+      if (typeof window !== 'undefined' && window.location?.pathname !== '/') {
         navigate('/');
         setTimeout(() => {
           document.getElementById('featured')?.scrollIntoView({ behavior: 'smooth' });
@@ -50,24 +53,58 @@ export function initApp() {
     if (typeof window === 'undefined' || !window.location || typeof window.location.pathname !== 'string') {
       return { type: 'home' };
     }
-    const path = window.location.pathname;
+    const path = window.location.pathname.replace(/\/+$/, '') || '/';
+    const search = window.location.search || '';
+    const params = new URLSearchParams(search);
+
+    // Single product: /products/:slug
     if (path.startsWith('/products/')) {
-      const rawSlug = path.slice('/products/'.length).replace(/\/$/, '');
+      const rawSlug = path.slice('/products/'.length);
       const slug = decodeURIComponent(rawSlug);
-      const search = window.location.search || '';
-      const params = new URLSearchParams(search);
-      const variantId = params.get('variant');
-      return { type: 'product', slug, variantId };
+      if (slug) {
+        const variantId = params.get('variant');
+        return { type: 'product', slug, variantId };
+      }
+      return { type: 'all_products' };
     }
+
+    // All products catalog: /products
+    if (path === '/products') {
+      const collectionId = params.get('collection') || null;
+      return { type: 'all_products', collectionId };
+    }
+
+    // Collection products: /collections/:slugOrId
+    if (path.startsWith('/collections/')) {
+      const rawSlug = path.slice('/collections/'.length);
+      const slugOrId = decodeURIComponent(rawSlug);
+      if (slugOrId) {
+        return { type: 'collection_products', slugOrId };
+      }
+      return { type: 'collections' };
+    }
+
+    // All collections: /collections
+    if (path === '/collections') {
+      return { type: 'collections' };
+    }
+
     return { type: 'home' };
   }
 
   function navigate(url, { replace = false } = {}) {
     if (typeof window === 'undefined') return;
+    try {
+      if (typeof window.location === 'object' && window.location !== null) {
+        const u = new URL(url, 'http://localhost');
+        window.location.pathname = u.pathname;
+        window.location.search = u.search;
+      }
+    } catch (_) {}
     if (replace) {
-      window.history.replaceState(null, '', url);
+      window.history?.replaceState?.(null, '', url);
     } else {
-      window.history.pushState(null, '', url);
+      window.history?.pushState?.(null, '', url);
     }
     renderRoute();
   }
@@ -80,23 +117,40 @@ export function initApp() {
     onNavigate: (url) => navigate(url),
   });
 
+  const collectionsPage = createCollectionsPage({
+    onSelectCollection: (slugOrId) => navigate(`/collections/${encodeURIComponent(slugOrId)}`),
+    onNavigate: (url) => navigate(url),
+  });
+
+  const collectionProductsPage = createCollectionProductsPage({
+    onOpenProductModal: (prodOrSlug) => productModal.open(prodOrSlug),
+    onNavigate: (url) => navigate(url),
+  });
+
+  const catalogPage = createCatalogPage({
+    onOpenProductModal: (prodOrSlug) => productModal.open(prodOrSlug),
+    onNavigate: (url) => navigate(url),
+  });
+
+  // Homepage preview of products: 6 products, no filter tabs, no sort, with "Explore all pieces" button
   const featuredProducts = createFeaturedProducts((productOrSlug) => {
     productModal.open(productOrSlug);
+  }, {
+    preview: true,
+    pageSize: 6,
+    onNavigate: (url) => navigate(url),
   });
 
   const hero = createHero((slugOrId) => {
     productModal.open(slugOrId);
   });
 
-  const collections = createCollectionsSection((collectionId) => {
-    if (typeof window !== 'undefined' && window.location?.pathname?.startsWith('/products/')) {
-      navigate('/');
-    }
-    featuredProducts.setFilter(collectionId);
-    const featuredEl = document.getElementById('featured');
-    if (featuredEl) {
-      featuredEl.scrollIntoView({ behavior: 'smooth' });
-    }
+  // Homepage collections: max 3 collections, with "View all collections" button if > 3
+  const collections = createCollectionsSection((slugOrId) => {
+    navigate(`/collections/${encodeURIComponent(slugOrId)}`);
+  }, {
+    limit: 3,
+    onNavigate: (url) => navigate(url),
   });
 
   const footer = createReassuranceAndFooter();
@@ -111,7 +165,7 @@ export function initApp() {
   });
 
   header.querySelector('#btn-browse-catalog')?.addEventListener('click', () => {
-    if (typeof window !== 'undefined' && window.location?.pathname?.startsWith('/products/')) {
+    if (typeof window !== 'undefined' && window.location?.pathname && window.location.pathname !== '/') {
       navigate('/');
       setTimeout(() => {
         document.getElementById('featured')?.scrollIntoView({ behavior: 'smooth' });
@@ -142,13 +196,51 @@ export function initApp() {
   function renderRoute() {
     const route = parseRoute();
     main.innerHTML = '';
+    header.setActiveNav?.(null);
+
+    const scrollToTop = () => {
+      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo(0, 0);
+      }
+    };
+
     if (route.type === 'product') {
-      header.setActiveNav?.(null);
+      productPage.destroy();
+      collectionsPage.destroy();
+      collectionProductsPage.destroy();
+      catalogPage.destroy();
       main.appendChild(productPage.element);
       productPage.load(route.slug, route.variantId);
-      window.scrollTo(0, 0);
+      scrollToTop();
+    } else if (route.type === 'collections') {
+      productPage.destroy();
+      collectionsPage.destroy();
+      collectionProductsPage.destroy();
+      catalogPage.destroy();
+      main.appendChild(collectionsPage.element);
+      collectionsPage.load();
+      scrollToTop();
+    } else if (route.type === 'collection_products') {
+      productPage.destroy();
+      collectionsPage.destroy();
+      collectionProductsPage.destroy();
+      catalogPage.destroy();
+      main.appendChild(collectionProductsPage.element);
+      collectionProductsPage.load(route.slugOrId);
+      scrollToTop();
+    } else if (route.type === 'all_products') {
+      productPage.destroy();
+      collectionsPage.destroy();
+      collectionProductsPage.destroy();
+      catalogPage.destroy();
+      main.appendChild(catalogPage.element);
+      catalogPage.load({ collectionId: route.collectionId });
+      scrollToTop();
     } else {
       productPage.destroy();
+      collectionsPage.destroy();
+      collectionProductsPage.destroy();
+      catalogPage.destroy();
       main.appendChild(hero);
       main.appendChild(collections);
       main.appendChild(featuredProducts.element);
@@ -180,7 +272,7 @@ export function initApp() {
   };
   window.addEventListener?.('popstate', handlePopState);
 
-  // Delegated internal link navigation (handles brand logo, Shop link, /products links)
+  // Delegated internal link navigation (handles brand logo, Shop link, /products links, /collections links)
   const handleDelegatedLinks = (event) => {
     if (event.defaultPrevented || (event.button !== undefined && event.button !== 0) || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
       return;
@@ -190,7 +282,7 @@ export function initApp() {
     const href = anchor.getAttribute('href');
     if (!href) return;
 
-    if (href.startsWith('/products/')) {
+    if (href === '/products' || href === '/collections' || href.startsWith('/collections/') || href.startsWith('/products/')) {
       if (anchor.classList.contains('product-card-btn')) {
         return;
       }
@@ -202,7 +294,8 @@ export function initApp() {
       mobileNav.close();
       navigate('/');
     } else if (href === '#featured' || href === '#collections' || href === '#reassurance' || href === '#faq') {
-      if (typeof window !== 'undefined' && window.location?.pathname?.startsWith('/products/')) {
+      const isSubpage = typeof window !== 'undefined' && window.location?.pathname !== '/';
+      if (isSubpage) {
         event.preventDefault();
         mobileNav.close();
         navigate('/');
@@ -235,6 +328,12 @@ export function initApp() {
       const route = parseRoute();
       if (route.type === 'product') {
         productPage.load(route.slug, route.variantId);
+      } else if (route.type === 'collections') {
+        collectionsPage.load();
+      } else if (route.type === 'collection_products') {
+        collectionProductsPage.load(route.slugOrId);
+      } else if (route.type === 'all_products') {
+        catalogPage.load({ collectionId: route.collectionId });
       }
       productModal.refresh(); cart.reconcileWithApi();
     }, 100);
@@ -253,6 +352,9 @@ export function initApp() {
       hero.destroy();
       productModal.close();
       productPage.destroy();
+      collectionsPage.destroy();
+      collectionProductsPage.destroy();
+      catalogPage.destroy();
       window.removeEventListener?.('popstate', handlePopState);
       app.removeEventListener?.('click', handleDelegatedLinks);
       window.removeEventListener?.('storage', storage);
