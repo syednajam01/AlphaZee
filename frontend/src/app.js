@@ -94,17 +94,22 @@ export function initApp() {
 
   function navigate(url, { replace = false } = {}) {
     if (typeof window === 'undefined') return;
-    try {
-      if (typeof window.location === 'object' && window.location !== null) {
+    if (replace) {
+      if (typeof window.history?.replaceState === 'function') {
+        window.history.replaceState(null, '', url);
+      }
+    } else {
+      if (typeof window.history?.pushState === 'function') {
+        window.history.pushState(null, '', url);
+      }
+    }
+    // Only in mock Node test environments lacking native pushState synchronization, update mock location
+    if (!window.history?.pushState && typeof window.location === 'object' && window.location !== null) {
+      try {
         const u = new URL(url, 'http://localhost');
         window.location.pathname = u.pathname;
         window.location.search = u.search;
-      }
-    } catch (_) {}
-    if (replace) {
-      window.history?.replaceState?.(null, '', url);
-    } else {
-      window.history?.pushState?.(null, '', url);
+      } catch (_) {}
     }
     renderRoute();
   }
