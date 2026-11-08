@@ -47,9 +47,18 @@ def list_products(db: Session = Depends(get_db), search: str = Query(default='',
                                Product.variants.any(Variant.sku.icontains(term, autoescape=True))))
     if status: query = query.where(Product.status == status)
     if collection_id == 'unassigned': query = query.where(Product.collection_id.is_(None))
-    elif collection_id: query = query.where(Product.collection_id == collection_id)
+    elif collection_id:
+        from app.models.catalog import ProductCollection
+        query = query.where(
+            or_(
+                Product.collection_id == collection_id,
+                Product.id.in_(
+                    select(ProductCollection.product_id).where(ProductCollection.collection_id == collection_id)
+                )
+            )
+        )
     total = db.scalar(select(func.count()).select_from(query.subquery()))
-    products = db.scalars(query.options(selectinload(Product.variants), selectinload(Product.collection), selectinload(Product.media_links))
+    products = db.scalars(query.options(selectinload(Product.variants), selectinload(Product.collection), selectinload(Product.collection_links), selectinload(Product.media_links))
                          .order_by(Product.created_at.desc(), Product.id).offset((page-1)*page_size).limit(page_size)).all()
     return {'products': [service.product_response(p) for p in products], 'total': total, 'page': page, 'page_size': page_size}
 

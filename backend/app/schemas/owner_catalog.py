@@ -31,6 +31,7 @@ class ProductFields(Command):
     title: str | None = Field(default=None, max_length=300)
     slug: str | None = Field(default=None, max_length=100)
     collection_id: str | None = Field(default=None, max_length=100)
+    collection_ids: list[str] | None = Field(default=None)
     description: str | None = Field(default=None, max_length=20000)
     short_description: str | None = Field(default=None, max_length=2000)
     material: str | None = Field(default=None, max_length=5000)

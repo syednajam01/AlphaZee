@@ -129,6 +129,7 @@ class ProductSummarySchema(BaseModel):
     title: str
     description: Optional[str] = None
     collection_id: str
+    collection_ids: list[str] = Field(default_factory=list)
     image_url: Optional[str] = None
     hover_image_url: Optional[str] = None
     badge: Optional[str] = None
@@ -237,6 +238,7 @@ class ProductDetailSchema(BaseModel):
     care: Optional[str] = None
     sizing: Optional[str] = None
     collection_id: str
+    collection_ids: list[str] = Field(default_factory=list)
     image_url: Optional[str] = None
     hover_image_url: Optional[str] = None
     badge: Optional[str] = None

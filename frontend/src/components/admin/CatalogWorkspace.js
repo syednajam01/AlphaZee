@@ -396,11 +396,27 @@ export function mountCatalogSection(section, container, context) {
       }
     }
 
+    const activeColIds = new Set(product.collection_ids || (product.collection_id ? [product.collection_id] : []));
+
     shell(`<div class="catalog-toolbar">${button('Back to products', 'catalog-back-products')}${button('Reload saved product', 'catalog-reload-product')}
       <strong id="catalog-product-state">${esc(product.status)} · version ${product.edit_version}</strong></div>
       <form id="catalog-product-form"><fieldset ${archived ? 'disabled' : ''}><legend>Product details</legend><div class="catalog-fields">
       ${field('title', 'Title', product.title, { max: 300 })}${field('slug', 'URL slug', product.slug, { max: 100 })}
-      <label>Collection<select name="collection_id">${options([['', 'Choose later'], ...collections.map(c => [c.id, c.name + (c.is_active ? '' : ' (inactive)')])], product.collection_id)}</select></label>
+      <div class="product-collections-box" style="grid-column: 1 / -1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin: 8px 0;">
+        <label style="font-weight: 600; display: block; margin-bottom: 8px; color: #f8fafc;">Collections (one product can belong to multiple collections)</label>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;" id="product-collections-checkboxes">
+          ${collections.map(c => `
+            <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: #cbd5e1; background: #1e293b; padding: 6px 12px; border-radius: 6px; border: 1px solid ${activeColIds.has(c.id) ? '#3b82f6' : '#475569'};">
+              <input type="checkbox" name="collection_ids" value="${esc(c.id)}" ${activeColIds.has(c.id) ? 'checked' : ''} class="col-checkbox">
+              <span>${esc(c.name)}${c.is_active ? '' : ' <em style="color: #94a3b8; font-size: 0.75rem;">(inactive)</em>'}</span>
+            </label>
+          `).join('') || '<p style="color: #94a3b8; font-size: 0.85rem; margin: 0;">No collections created yet.</p>'}
+        </div>
+        <select name="collection_id" style="display: none;">
+          ${options([['', 'Choose later'], ...collections.map(c => [c.id, c.name])], product.collection_id)}
+        </select>
+        <p style="font-size: 0.85rem; color: #94a3b8; margin: 8px 0 0 0;">Check all collections where this product should be listed.</p>
+      </div>
       <div class="stock-responsibility-box" style="grid-column: 1 / -1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin: 8px 0;">
         <label style="font-weight: 600; display: block; margin-bottom: 8px; color: #f8fafc;">Who manages this product's stock?</label>
         <div style="display: flex; gap: 24px; margin-bottom: 12px; flex-wrap: wrap;">
@@ -552,7 +568,10 @@ export function mountCatalogSection(section, container, context) {
           }
         }
 
-        const fields = Object.fromEntries(['title', 'slug', 'collection_id', 'badge', 'description', 'short_description', 'material', 'care', 'sizing', 'hero_benefit'].map(name => [name, value(form, name).trim() || null]));
+        const selectedColIds = [...form.querySelectorAll('input[name="collection_ids"]:checked')].map(cb => cb.value);
+        const fields = Object.fromEntries(['title', 'slug', 'badge', 'description', 'short_description', 'material', 'care', 'sizing', 'hero_benefit'].map(name => [name, value(form, name).trim() || null]));
+        fields.collection_ids = selectedColIds;
+        fields.collection_id = selectedColIds[0] || null;
         fields.is_hero = form.querySelector('[name="is_hero"]').checked;
         const order = value(form, 'hero_order'); fields.hero_order = order === '' ? null : Number(order);
         if (fields.hero_order !== null && (!Number.isSafeInteger(fields.hero_order) || fields.hero_order < 0)) throw new Error('Hero order must be a nonnegative whole number.');
@@ -834,7 +853,7 @@ export function mountCatalogSection(section, container, context) {
             ${button('Create product here', 'catalog-col-create-prod', 'class="btn btn-secondary" style="font-size: 0.8125rem; padding: 6px 12px;"')}
           </div>
           <p style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.6); margin-bottom: 12px;">
-            Every product is assigned to one collection. Moving a product preserves its SKU, variants, inventory, and order history.
+            Products can belong to multiple collections simultaneously. Adding or removing a collection preserves its SKU, variants, inventory, and order history.
           </p>
 
           <div class="catalog-toolbar" style="margin-bottom: 16px; padding: 12px; background: #101713; border: 1px solid #2d3e33; border-radius: 6px;">
@@ -891,9 +910,12 @@ export function mountCatalogSection(section, container, context) {
       const prodId = query('#catalog-col-add-prod-select')?.value;
       const targetProd = unassignedProducts.find(p => p.id === prodId);
       if (!targetProd) return;
+      const existingCols = targetProd.collection_ids || (targetProd.collection_id ? [targetProd.collection_id] : []);
+      const nextCols = [...new Set([...existingCols, collection.id])];
       action(() => api.updateOwnerProduct(targetProd.id, {
         expected_version: targetProd.edit_version,
-        collection_id: collection.id,
+        collection_ids: nextCols,
+        collection_id: nextCols[0] || null,
       }), async () => {
         await collectionEditor(collection);
         status(`Product "${targetProd.title || 'Untitled'}" added to collection.`);
@@ -915,13 +937,20 @@ export function mountCatalogSection(section, container, context) {
       }
       const prod = memberProducts.find(p => p.id === prodId);
       if (!prod) return;
-      const newColId = targetColId === '__unassign__' ? null : targetColId;
+      const existingCols = prod.collection_ids || (prod.collection_id ? [prod.collection_id] : []);
+      let nextCols;
+      if (targetColId === '__unassign__') {
+        nextCols = existingCols.filter(id => id !== collection.id);
+      } else {
+        nextCols = [...new Set([...existingCols.filter(id => id !== collection.id), targetColId])];
+      }
       action(() => api.updateOwnerProduct(prod.id, {
         expected_version: prod.edit_version,
-        collection_id: newColId,
+        collection_ids: nextCols,
+        collection_id: nextCols[0] || null,
       }), async () => {
         await collectionEditor(collection);
-        status(`Product moved successfully.`);
+        status(`Product collection updated.`);
       });
     }));
 

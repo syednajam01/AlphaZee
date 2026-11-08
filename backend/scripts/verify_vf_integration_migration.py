@@ -37,9 +37,9 @@ def main():
             db.execute(text('INSERT INTO inventory_balances(supplier_variant_id,on_hand) VALUES (:mapping,3)'), {'mapping': mapping})
             db.execute(text("INSERT INTO stock_events(supplier_variant_id,previous_on_hand,new_on_hand,delta,reason) VALUES (:mapping,0,3,3,'customer_return')"), {'mapping': mapping})
         legacy_engine.dispose()
-        alembic('upgrade', 'head')
+        alembic('upgrade', 'a81f92c6d430')
         alembic('downgrade', '6e4a2b8d0c1f')
-        alembic('upgrade', 'head')
+        alembic('upgrade', 'a81f92c6d430')
         engine = create_engine(target, hide_parameters=True)
         with engine.connect() as db:
             assert db.scalar(text('SELECT version_num FROM alembic_version')) == 'a81f92c6d430'

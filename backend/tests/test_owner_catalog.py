@@ -212,3 +212,41 @@ def test_simultaneous_catalog_edits_allow_one_version(test_engine):
     finally:
         with Session(test_engine) as db:
             db.delete(db.get(Product, identifier)); db.commit()
+
+
+def test_product_multiple_collections_assignment_and_queries(admin_client):
+    col1 = admin_client.post('/api/v1/admin/collections', json={'name': 'Multi Col 1', 'slug': 'multi-col-1'}).json()
+    col2 = admin_client.post('/api/v1/admin/collections', json={'name': 'Multi Col 2', 'slug': 'multi-col-2'}).json()
+
+    # Create draft with multiple collection assignments
+    prod = create_draft(
+        admin_client,
+        title='Multi Collection Piece',
+        slug='multi-collection-piece',
+        collection_ids=[col1['id'], col2['id']],
+        variants=[{'sku': 'MULTI-1', 'size': 'M', 'color': 'Black', 'price_minor': 250000, 'is_active': True}]
+    )
+    assert prod['collection_id'] == col1['id']
+    assert set(prod['collection_ids']) == {col1['id'], col2['id']}
+
+    # Both collections list this product in owner query
+    list1 = admin_client.get(f"/api/v1/admin/products?collection_id={col1['id']}").json()
+    assert any(p['id'] == prod['id'] for p in list1['products'])
+
+    list2 = admin_client.get(f"/api/v1/admin/products?collection_id={col2['id']}").json()
+    assert any(p['id'] == prod['id'] for p in list2['products'])
+
+    # Update collection assignments to only col2
+    updated = admin_client.post(
+        f"/api/v1/admin/products/{prod['id']}",
+        json={'expected_version': prod['edit_version'], 'collection_ids': [col2['id']]}
+    ).json()
+    assert updated['collection_id'] == col2['id']
+    assert updated['collection_ids'] == [col2['id']]
+
+    # col1 no longer lists it, col2 still lists it
+    list1_after = admin_client.get(f"/api/v1/admin/products?collection_id={col1['id']}").json()
+    assert not any(p['id'] == prod['id'] for p in list1_after['products'])
+    list2_after = admin_client.get(f"/api/v1/admin/products?collection_id={col2['id']}").json()
+    assert any(p['id'] == prod['id'] for p in list2_after['products'])
+

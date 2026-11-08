@@ -190,16 +190,8 @@ export function createCollectionProductsPage({ onOpenProductModal, onNavigate })
     renderSkeleton();
 
     try {
-      // 1. Fetch collections and products in parallel for maximum speed
-      const [colsRes, prodRes] = await Promise.all([
-        fetchCollections().catch(() => ({ collections: [] })),
-        fetchProducts({
-          collectionId: slugOrId,
-          page: currentPage,
-          pageSize,
-        }),
-      ]);
-
+      // 1. Fetch collections to resolve canonical collection ID and metadata
+      const colsRes = await fetchCollections().catch(() => ({ collections: [] }));
       if (thisReqId !== activeRequestId) return;
 
       const colList = Array.isArray(colsRes) ? colsRes : (Array.isArray(colsRes?.collections) ? colsRes.collections : []);
@@ -209,6 +201,12 @@ export function createCollectionProductsPage({ onOpenProductModal, onNavigate })
         name: slugOrId.charAt(0).toUpperCase() + slugOrId.slice(1).replace(/[-_]/g, ' '),
         description: ''
       };
+
+      const prodRes = await fetchProducts({
+        collectionId: currentCollection.id || slugOrId,
+        page: currentPage,
+        pageSize,
+      });
 
       if (typeof document !== 'undefined') {
         document.title = `${currentCollection.name} — Collections — AlphaZee`;

@@ -62,6 +62,7 @@ def product_response(product):
         'is_hero', 'hero_order', 'hero_benefit', 'image_url', 'hover_image_url', 'hero_image_url',
         'hero_video_url', 'hero_poster_url', 'stock_management_source', 'vendor_id',
         'created_at', 'updated_at')} | {
+        'collection_ids': product.collection_ids,
         'publication_requirements': publication_requirements(product),
         'media': links_response(product),
         'vendor_name': product.vendor.name if getattr(product, 'vendor', None) else None,
@@ -129,12 +130,45 @@ def apply_product(db: Session, product, data):
                 raise CatalogError('reassignment_blocked',
                                    'Cannot reassign product stock responsibility while open holds exist. Fulfill or cancel open reservations first.', 409)
 
-    if 'collection_id' in data and data['collection_id'] is not None:
+    if 'collection_ids' in data:
+        raw_col_ids = data.pop('collection_ids') or []
+        valid_cols = []
+        if raw_col_ids:
+            valid_cols = db.scalars(select(Collection).where(Collection.id.in_(raw_col_ids))).all()
+            if len(valid_cols) != len(set(raw_col_ids)):
+                raise CatalogError('invalid_collection', 'One or more selected collections do not exist')
+
+        from app.models.catalog import ProductCollection
+        target_ids = set(raw_col_ids)
+        product.collection_links = [
+            link for link in (product.collection_links or []) if link.collection_id in target_ids
+        ]
+        existing_cids = {link.collection_id for link in product.collection_links}
+        for cid in raw_col_ids:
+            if cid not in existing_cids:
+                product.collection_links.append(ProductCollection(product_id=product.id, collection_id=cid))
+
+        if raw_col_ids:
+            primary_id = product.collection_id if product.collection_id in target_ids else raw_col_ids[0]
+            product.collection_id = primary_id
+            product.collection = next((c for c in valid_cols if c.id == primary_id), valid_cols[0])
+        else:
+            product.collection_id = None
+            product.collection = None
+        data.pop('collection_id', None)
+    elif 'collection_id' in data and data['collection_id'] is not None:
         collection = db.scalar(select(Collection).where(Collection.id == data['collection_id']).with_for_update(read=True))
         if collection is None: raise CatalogError('invalid_collection', 'Collection does not exist')
         product.collection = collection
+        product.collection_id = collection.id
+        from app.models.catalog import ProductCollection
+        existing_cids = {link.collection_id for link in (product.collection_links or [])}
+        if collection.id not in existing_cids:
+            product.collection_links.append(ProductCollection(product_id=product.id, collection_id=collection.id))
     elif 'collection_id' in data:
         product.collection = None
+        product.collection_id = None
+        product.collection_links = []
     for key, value in data.items(): setattr(product, key, value)
     seen_ids = set()
     for item in variants or []:

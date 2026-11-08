@@ -106,6 +106,12 @@ class Collection(Base):
         cascade="save-update, merge",
         passive_deletes='all',
     )
+    product_links: Mapped[list['ProductCollection']] = relationship(
+        "ProductCollection",
+        back_populates="collection",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def __repr__(self) -> str:
         return f"<Collection id={self.id!r} slug={self.slug!r}>"
@@ -196,11 +202,21 @@ class Product(Base):
 
     # Relationships
     collection: Mapped[Collection | None] = relationship("Collection", back_populates="products")
+    collection_links: Mapped[list['ProductCollection']] = relationship(
+        "ProductCollection", back_populates="product", cascade="all, delete-orphan", passive_deletes=True
+    )
     vendor = relationship("Supplier", foreign_keys=[vendor_id])
     media_links: Mapped[list['ProductMedia']] = relationship('ProductMedia', back_populates='product', cascade='save-update, merge', passive_deletes='all', order_by='ProductMedia.display_order')
     variants: Mapped[list[Variant]] = relationship(
         "Variant", back_populates="product", cascade="save-update, merge", passive_deletes='all'
     )
+
+    @property
+    def collection_ids(self) -> list[str]:
+        ids = [link.collection_id for link in (self.collection_links or [])]
+        if self.collection_id and self.collection_id not in ids:
+            ids.insert(0, self.collection_id)
+        return ids
 
     def __repr__(self) -> str:
         return f"<Product id={self.id!r} slug={self.slug!r}>"
@@ -323,3 +339,22 @@ def synchronize_product_lifecycle(mapper, connection, product):
         if product.status != 'archived':
             product.status = 'published' if product.is_active else 'draft'
     product.is_active = product.status == 'published'
+
+
+class ProductCollection(Base):
+    """
+    Many-to-many association linking products to multiple collections.
+    """
+    __tablename__ = "product_collections"
+    __table_args__ = (
+        Index("ix_product_collections_collection_id", "collection_id"),
+        Index("ix_product_collections_product_id", "product_id"),
+    )
+
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), primary_key=True)
+    collection_id: Mapped[str] = mapped_column(ForeignKey("collections.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, server_default=text("now()"))
+
+    product: Mapped["Product"] = relationship("Product", back_populates="collection_links")
+    collection: Mapped["Collection"] = relationship("Collection", back_populates="product_links")
+

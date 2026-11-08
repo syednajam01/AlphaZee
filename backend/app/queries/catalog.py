@@ -15,15 +15,16 @@ Rules:
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.catalog import Collection, Product, Variant
-from app.models.media import ProductMedia, MediaAsset
+from app.models.catalog import Collection, Product, ProductCollection, Variant
+from app.models.media import MediaAsset, ProductMedia
 
 
 def public_loads():
     return (selectinload(Product.variants.and_(Variant.is_active.is_(True))),
+            selectinload(Product.collection_links),
             selectinload(Product.media_links).selectinload(ProductMedia.asset).selectinload(MediaAsset.poster))
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -73,7 +74,22 @@ def get_active_products(
         .where(Product.is_active.is_(True), Product.status == 'published', Collection.is_active.is_(True))
     )
     if collection_id:
-        base_stmt = base_stmt.where(Product.collection_id == collection_id)
+        target_col_ids = select(Collection.id).where(
+            Collection.is_active.is_(True),
+            or_(Collection.id == collection_id, Collection.slug == collection_id)
+        )
+        base_stmt = base_stmt.where(
+            or_(
+                Product.collection_id == collection_id,
+                Collection.id == collection_id,
+                Collection.slug == collection_id,
+                Product.id.in_(
+                    select(ProductCollection.product_id).where(
+                        ProductCollection.collection_id.in_(target_col_ids)
+                    )
+                ),
+            )
+        )
 
     # Count query (matches exact same base filters)
     count_stmt = select(func.count()).select_from(base_stmt.subquery())
