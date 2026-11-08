@@ -108,6 +108,15 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           <div id="admin-expanded-logo-slot"></div>
           <div id="admin-collapsed-logo-slot"></div>
           
+          <div class="admin-mobile-nav-arrows" id="admin-mobile-nav-arrows" style="display: none; align-items: center; gap: 4px;">
+            <button type="button" id="btn-nav-scroll-left" class="btn-icon admin-nav-scroll-btn" aria-label="Scroll tabs left" title="Scroll tabs left">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <button type="button" id="btn-nav-scroll-right" class="btn-icon admin-nav-scroll-btn" aria-label="Scroll tabs right" title="Scroll tabs right">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+          </div>
+
           <button id="btn-toggle-admin-sidebar" class="btn-icon" style="color: rgba(255, 255, 255, 0.7); padding: 4px;" aria-label="Toggle sidebar pin" title="Pin sidebar open">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -401,6 +410,63 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   const tabBtns = modal.querySelectorAll('.admin-tab-btn');
   const contentArea = modal.querySelector('#admin-tab-content');
   const viewTitle = modal.querySelector('#admin-view-title');
+  const nav = sidebar.querySelector('nav');
+  const btnScrollLeft = modal.querySelector('#btn-nav-scroll-left');
+  const btnScrollRight = modal.querySelector('#btn-nav-scroll-right');
+
+  btnScrollLeft?.addEventListener('click', () => {
+    nav?.scrollBy({ left: -160, behavior: 'smooth' });
+  });
+  btnScrollRight?.addEventListener('click', () => {
+    nav?.scrollBy({ left: 160, behavior: 'smooth' });
+  });
+
+  if (nav?.addEventListener) {
+    nav.addEventListener('wheel', event => {
+      if (nav.scrollWidth > nav.clientWidth && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+        nav.scrollLeft += event.deltaY;
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    let isDown = false;
+    let startX = 0;
+    let scrollLeft = 0;
+    let dragged = false;
+
+    nav.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      isDown = true;
+      startX = (e.pageX || 0) - (nav.offsetLeft || 0);
+      scrollLeft = nav.scrollLeft || 0;
+      dragged = false;
+    });
+
+    const stopDrag = () => { isDown = false; };
+    nav.addEventListener('mouseup', stopDrag);
+    nav.addEventListener('mouseleave', stopDrag);
+    if (typeof globalThis.window?.addEventListener === 'function') {
+      globalThis.window.addEventListener('mouseup', stopDrag);
+    }
+
+    nav.addEventListener('mousemove', e => {
+      if (!isDown) return;
+      const x = (e.pageX || 0) - (nav.offsetLeft || 0);
+      const walk = x - startX;
+      if (Math.abs(walk) > 4) {
+        dragged = true;
+        nav.scrollLeft = scrollLeft - walk;
+      }
+    });
+
+    nav.addEventListener('click', e => {
+      if (dragged) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        dragged = false;
+      }
+    }, true);
+  }
 
   function updateNavigation() {
     const titles = {
@@ -417,6 +483,11 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       button.setAttribute('title', titles[button.getAttribute('data-tab')] || '');
       button.style.background = selected ? 'rgba(20, 92, 68, 0.4)' : 'transparent';
       button.style.color = selected ? '#FFFFFF' : 'rgba(255, 255, 255, 0.7)';
+      if (selected && typeof button.scrollIntoView === 'function') {
+        try {
+          button.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        } catch (_) {}
+      }
     });
   }
 

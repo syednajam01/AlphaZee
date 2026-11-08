@@ -193,6 +193,10 @@
     pointer-events: auto;
   }
 
+  #admin-mobile-nav-arrows {
+    display: none !important;
+  }
+
   .admin-page #admin-sidebar nav,
   #admin-modal #admin-sidebar nav {
     flex: 1;
@@ -676,6 +680,31 @@
     max-width: 180px !important;
     object-fit: contain !important;
   }
+  #admin-mobile-nav-arrows {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  .admin-nav-scroll-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 28px !important;
+    height: 28px !important;
+    padding: 0 !important;
+    border-radius: var(--admin-radius-sm) !important;
+    background: var(--admin-bg-raised) !important;
+    color: var(--admin-text-secondary) !important;
+    border: 1px solid var(--admin-border-hairline) !important;
+    cursor: pointer;
+    transition: all 120ms ease;
+  }
+  .admin-nav-scroll-btn:hover {
+    color: var(--admin-text-primary) !important;
+    border-color: var(--admin-border-subtle) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+  }
+
   .admin-page #admin-sidebar nav,
   #admin-modal #admin-sidebar nav {
     display: flex !important;
@@ -694,14 +723,27 @@
     -webkit-overflow-scrolling: touch !important;
     touch-action: pan-x !important;
     overscroll-behavior-x: contain !important;
-    scrollbar-width: none !important;
-    -ms-overflow-style: none;
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent !important;
+    -ms-overflow-style: auto;
   }
   .admin-page #admin-sidebar nav::-webkit-scrollbar,
   #admin-modal #admin-sidebar nav::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
+    display: block !important;
+    height: 4px !important;
+  }
+  .admin-page #admin-sidebar nav::-webkit-scrollbar-track,
+  #admin-modal #admin-sidebar nav::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  .admin-page #admin-sidebar nav::-webkit-scrollbar-thumb,
+  #admin-modal #admin-sidebar nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25) !important;
+    border-radius: 4px !important;
+  }
+  .admin-page #admin-sidebar nav::-webkit-scrollbar-thumb:hover,
+  #admin-modal #admin-sidebar nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5) !important;
   }
   .admin-page .admin-tab-btn,
   #admin-modal .admin-tab-btn {
