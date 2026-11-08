@@ -159,6 +159,7 @@ export function fetchOwnerProducts(params = {}) {
 export function fetchOwnerProduct(id) { return request(`/admin/products/${encodeURIComponent(id)}`); }
 export function createOwnerProduct(payload = {}) { return ownerCatalogWrite('/admin/products', payload); }
 export function updateOwnerProduct(id, payload) { return ownerCatalogWrite(`/admin/products/${encodeURIComponent(id)}`, payload); }
+export function deleteOwnerProduct(id) { return request(`/admin/products/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
 export function transitionOwnerProduct(id, action, version) {
   if (!['publish', 'unpublish', 'archive', 'restore'].includes(action)) throw new Error('Unknown product action');
   return ownerCatalogWrite(`/admin/products/${encodeURIComponent(id)}/${action}`, { expected_version: version });

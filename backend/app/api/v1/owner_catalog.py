@@ -77,6 +77,11 @@ def product_transition(product_id: str, action: Literal['publish', 'unpublish', 
     return persist(db, lambda: service.transition(db, product_id, payload, action), service.product_response)
 
 
+@router.delete('/products/{product_id}', status_code=200)
+def delete_product(product_id: str, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.delete_product(db, product_id), lambda p: {'deleted': True, 'id': product_id})
+
+
 @router.get('/collections')
 def collections(db: Session = Depends(get_db)):
     rows = db.scalars(select(Collection).order_by(Collection.display_order, Collection.id)).all()

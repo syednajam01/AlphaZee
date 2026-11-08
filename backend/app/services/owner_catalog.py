@@ -1,7 +1,7 @@
 """Transactional owner editing without stock writes or historical snapshot edits."""
 from datetime import datetime, timezone
 import uuid
-from sqlalchemy import select
+from sqlalchemy import select, func, delete, update
 from sqlalchemy.orm import Session
 from app.models.catalog import Collection, Product, Variant, AvailabilityStatus
 
@@ -253,6 +253,52 @@ def transition(db, identifier, command, action):
     product.is_active = product.status == 'published'
     product.archived_at = datetime.now(timezone.utc) if product.status == 'archived' else None
     product.edit_version += 1
+    return product
+
+
+def delete_product(db, identifier):
+    from app.services.media import reference_lock
+    reference_lock(db)
+    product = db.get(Product, identifier)
+    if product is None:
+        raise CatalogError('not_found', 'Product not found', 404)
+    if product.status == 'published':
+        raise CatalogError('published_cannot_delete', 'Make it unpublished first then delete', 422)
+
+    variant_ids = [v.id for v in product.variants]
+    if variant_ids:
+        from app.models.orders import OrderLine
+        from app.models.inventory import SupplierVariant, InventoryBalance, StockEvent, StockReservation
+        from app.models.owned_stock import OwnedStockLot
+
+        has_orders = db.scalar(select(func.count()).select_from(OrderLine).where(OrderLine.variant_id.in_(variant_ids)))
+        if has_orders:
+            raise CatalogError('cannot_delete_has_orders', 'Cannot delete a product with existing customer orders. Archive it instead.', 409)
+
+        supplier_variant_ids = db.scalars(select(SupplierVariant.id).where(SupplierVariant.variant_id.in_(variant_ids))).all()
+        if supplier_variant_ids:
+            has_res = db.scalar(select(func.count()).select_from(StockReservation).where(StockReservation.supplier_variant_id.in_(supplier_variant_ids)))
+            if has_res:
+                raise CatalogError('cannot_delete_has_reservations', 'Cannot delete a product with active stock reservations. Archive it instead.', 409)
+
+            has_events = db.scalar(select(func.count()).select_from(StockEvent).where(StockEvent.supplier_variant_id.in_(supplier_variant_ids)))
+            if has_events:
+                raise CatalogError('cannot_delete_has_inventory_history', 'Cannot delete a product with stock movement history. Archive it instead.', 409)
+
+            has_owned = db.scalar(select(func.count()).select_from(OwnedStockLot).where(OwnedStockLot.supplier_variant_id.in_(supplier_variant_ids)))
+            if has_owned:
+                raise CatalogError('cannot_delete_has_owned_stock', 'Cannot delete a product with owned stock units. Archive it instead.', 409)
+
+            db.execute(delete(InventoryBalance).where(InventoryBalance.supplier_variant_id.in_(supplier_variant_ids)))
+            db.execute(delete(SupplierVariant).where(SupplierVariant.id.in_(supplier_variant_ids)))
+
+        db.execute(delete(Variant).where(Variant.product_id == identifier))
+
+    from app.models.media import ProductMedia
+    db.execute(delete(ProductMedia).where(ProductMedia.product_id == identifier))
+
+    db.delete(product)
+    db.flush()
     return product
 
 

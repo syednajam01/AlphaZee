@@ -119,12 +119,35 @@ export function mountCatalogSection(section, container, context) {
         <button class="btn btn-secondary" type="submit">Apply filters</button></form>
       <p>${data.total || 0} products. Drafts are private in catalog listings; uploaded asset URLs are public.</p>
       ${(data.products || []).length ? `<div class="catalog-grid">${data.products.map(p => `<article class="catalog-card"><h3>${esc(p.title || 'Untitled draft')}</h3>
-        <p>${esc(p.status)} · ${esc(p.slug || 'No slug')} · ${p.variants?.length || 0} variants</p>${button('Edit product', '', `data-edit-product="${esc(p.id)}"`)}</article>`).join('')}</div>`
+        <p>${esc(p.status)} · ${esc(p.slug || 'No slug')} · ${p.variants?.length || 0} variants</p>
+        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+          ${button('Edit product', '', `data-edit-product="${esc(p.id)}"`)}
+          ${button('Delete', '', `data-delete-product="${esc(p.id)}" data-status="${esc(p.status)}" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);"`)}
+        </div>
+      </article>`).join('')}</div>`
         : '<p>No products match. Create your first draft to begin.</p>'}
       <div class="catalog-toolbar">${button('Previous', 'catalog-products-prev', productsPage === 1 ? 'disabled' : '')}<span>Page ${productsPage}</span>
         ${button('Next', 'catalog-products-next', productsPage * 20 >= (data.total || 0) ? 'disabled' : '')}</div>`);
     bind('#catalog-new-product', () => action(() => api.createOwnerProduct(), product => editProduct(product)));
     container.querySelectorAll('[data-edit-product]').forEach(node => node.addEventListener('click', () => action(() => api.fetchOwnerProduct(node.dataset.editProduct), p => editProduct(p))));
+    container.querySelectorAll('[data-delete-product]').forEach(node => node.addEventListener('click', () => {
+      const id = node.dataset.deleteProduct;
+      const prodStatus = node.dataset.status;
+      if (prodStatus === 'published') {
+        status('Make it unpublished first then delete', true);
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+          window.alert('Make it unpublished first then delete');
+        }
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        if (!window.confirm('Delete this product permanently? This action cannot be undone.')) return;
+      }
+      action(() => api.deleteOwnerProduct(id), async () => {
+        await products();
+        status('Product deleted.');
+      });
+    }));
     query('#catalog-search').addEventListener('submit', event => { event.preventDefault(); productFilter = Object.fromEntries(['search', 'status', 'collection_id'].map(n => [n, value(event.target, n)])); productsPage = 1; action(products); });
     bind('#catalog-products-prev', () => { productsPage--; action(products); });
     bind('#catalog-products-next', () => { productsPage++; action(products); });
@@ -452,7 +475,8 @@ export function mountCatalogSection(section, container, context) {
         ${button('Previous library page', 'catalog-library-prev', mediaPage === 1 ? 'disabled' : '')}${button('Next library page', 'catalog-library-next', mediaPage * 100 >= assetTotal ? 'disabled' : '')}</div>
       <div id="catalog-upload-box"></div><button type="submit" class="btn btn-primary" id="catalog-save-product">Save product and media</button></fieldset></form>
       <section><h3>Publication requirements</h3><ul id="catalog-requirements"></ul><div class="catalog-toolbar">
-        ${!archived ? button(product.status === 'published' ? 'Unpublish' : 'Publish', 'catalog-publish') + button('Archive', 'catalog-archive') : button('Restore to draft', 'catalog-restore')}</div></section>`);
+        ${!archived ? button(product.status === 'published' ? 'Unpublish' : 'Publish', 'catalog-publish') + button('Archive', 'catalog-archive') : button('Restore to draft', 'catalog-restore')}
+        ${button('Delete product', 'catalog-delete-product', 'style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3); margin-left: auto;"')}</div></section>`);
     requirements(product); renderLinks(); wireRoleSelectors(); updateRoleSelectors();
     if (!archived) mountUploadBox(() => loadAssets().then(updateAssetChoices));
     const form = query('#catalog-product-form'); wireDirty(form);
@@ -555,6 +579,23 @@ export function mountCatalogSection(section, container, context) {
         action(() => api.transitionOwnerProduct(currentProduct.id, transition, currentProduct.edit_version), async saved => { await editProduct(saved); status(`Product ${saved.status}.`); });
       });
     }
+    bind('#catalog-delete-product', () => {
+      if (currentProduct.status === 'published') {
+        status('Make it unpublished first then delete', true);
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+          window.alert('Make it unpublished first then delete');
+        }
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        if (!window.confirm('Delete this product permanently? This action cannot be undone.')) return;
+      }
+      action(() => api.deleteOwnerProduct(currentProduct.id), async () => {
+        context.setDirty(false);
+        await products();
+        status('Product deleted.');
+      });
+    });
   }
 
   function requirements(product) {

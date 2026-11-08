@@ -169,3 +169,50 @@ test('color-first variant builder groups variants by color and generates size va
 
   view.destroy();
 });
+
+test('delete draft deletes draft normally but blocks published products with unpublish warning', async () => {
+  const container = install(), calls = [];
+  let alerts = [];
+  globalThis.window.alert = msg => alerts.push(msg);
+  globalThis.window.confirm = () => true;
+
+  const draftProduct = { id: 'draft-p1', title: 'Empty Draft', slug: null, status: 'draft', variants: [] };
+  const pubProduct = { id: 'pub-p2', title: 'Published Hoodie', slug: 'pub-hoodie', status: 'published', variants: [] };
+  let productList = [draftProduct, pubProduct];
+
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET' });
+    let data = {}, status = 200;
+    if (url.includes('/admin/products?')) {
+      data = { products: productList, total: productList.length };
+    } else if (url === '/api/v1/admin/collections') {
+      data = { collections: [] };
+    } else if (url === '/api/v1/admin/products/draft-p1' && options.method === 'DELETE') {
+      productList = productList.filter(p => p.id !== 'draft-p1');
+      data = { deleted: true, id: 'draft-p1' };
+    }
+    return { ok: status < 400, status, json: async () => data };
+  };
+
+  const view = mountCatalogSection('products', container, { isCurrent: () => true, setDirty() {}, canLeave: () => true });
+  await view.ready;
+
+  // 1. Attempt to delete published product
+  const pubDeleteBtn = container.querySelector('[data-delete-product="pub-p2"]');
+  assert.ok(pubDeleteBtn);
+  pubDeleteBtn.click();
+  await flush();
+  assert.equal(calls.filter(c => c.method === 'DELETE').length, 0);
+  assert.ok(alerts.some(a => a.includes('Make it unpublished first then delete')));
+  assert.match(container.querySelector('#catalog-status').textContent, /Make it unpublished first then delete/);
+
+  // 2. Delete empty draft product
+  const draftDeleteBtn = container.querySelector('[data-delete-product="draft-p1"]');
+  assert.ok(draftDeleteBtn);
+  draftDeleteBtn.click();
+  await flush();
+  assert.equal(calls.filter(c => c.method === 'DELETE' && c.url.includes('draft-p1')).length, 1);
+  assert.match(container.querySelector('#catalog-status').textContent, /Product deleted/);
+
+  view.destroy();
+});

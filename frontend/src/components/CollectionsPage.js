@@ -128,3 +128,4 @@ export function createCollectionsPage({ onSelectCollection, onNavigate }) {
     destroy() {}
   };
 }
+

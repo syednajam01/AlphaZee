@@ -139,6 +139,48 @@ def test_owner_search_filters_and_no_private_public_fields(admin_client, client)
     assert p['id'] not in {row['id'] for row in client.get('/api/v1/products', params={'page_size': 100}).json()['products']}
 
 
+def test_delete_product_draft_and_published_guard(admin_client, db_session):
+    # 1. Empty draft can be deleted normally
+    empty_draft = create_draft(admin_client)
+    res = admin_client.delete(f"/api/v1/admin/products/{empty_draft['id']}")
+    assert res.status_code == 200, res.text
+    assert res.json() == {'deleted': True, 'id': empty_draft['id']}
+    assert admin_client.get(f"/api/v1/admin/products/{empty_draft['id']}").status_code == 404
+
+    # 2. Deleting nonexistent product returns 404
+    assert admin_client.delete("/api/v1/admin/products/non-existent-id").status_code == 404
+
+    # 3. Draft with variants (no orders) can be deleted
+    draft_with_vars = create_draft(admin_client, title='SAMPLE Draft With Vars', variants=[{'sku': 'SAMPLE-DEL-1', 'size': 'M', 'price_minor': 10000}])
+    res = admin_client.delete(f"/api/v1/admin/products/{draft_with_vars['id']}")
+    assert res.status_code == 200
+    assert admin_client.get(f"/api/v1/admin/products/{draft_with_vars['id']}").status_code == 404
+
+    # 4. Published product cannot be deleted; must be unpublished first
+    col = Collection(id='del-test-col', name='Delete Test Col', slug='del-test-col')
+    db_session.add(col)
+    pub = Product(id='pub-del-test', title='Published Tee', slug='pub-del-test', collection_id=col.id,
+                  description='Sample description', image_url='/sample-img.png', status='published', is_active=True, edit_version=1)
+    db_session.add(pub)
+    db_session.commit()
+
+    # Attempt delete on published product
+    fail_del = admin_client.delete(f"/api/v1/admin/products/{pub.id}")
+    assert fail_del.status_code == 422
+    assert fail_del.json()['detail']['code'] == 'published_cannot_delete'
+    assert 'Make it unpublished first then delete' in fail_del.json()['detail']['message']
+
+    # Unpublish it first
+    unpub_res = admin_client.post(f"/api/v1/admin/products/{pub.id}/unpublish", json={'expected_version': 1})
+    assert unpub_res.status_code == 200
+    assert unpub_res.json()['status'] == 'draft'
+
+    # Now deletion succeeds
+    succ_del = admin_client.delete(f"/api/v1/admin/products/{pub.id}")
+    assert succ_del.status_code == 200
+    assert admin_client.get(f"/api/v1/admin/products/{pub.id}").status_code == 404
+
+
 def test_simultaneous_catalog_edits_allow_one_version(test_engine):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
