@@ -23,9 +23,19 @@ class DeploymentError(RuntimeError):
     pass
 
 
+def migration_args():
+    # compose run has no --no-build flag. No --build plus a pre-pulled digest avoids builds.
+    return ['run', '--rm', '--no-deps', '--pull', 'never', 'migrate']
+
+
 def run(args, *, output=None, stdin=None):
-    result = subprocess.run([str(arg) for arg in args], stdout=output or subprocess.PIPE,
-                            stderr=subprocess.PIPE, stdin=stdin)
+    try:
+        result = subprocess.run([str(arg) for arg in args], stdout=output or subprocess.PIPE,
+                                stderr=subprocess.PIPE, stdin=stdin)
+    except FileNotFoundError:
+        name = Path(str(args[0])).name
+        hint = ' Run sudo bash ops/install_vm_prerequisites.sh on the VM.' if name == 'az' else ''
+        raise DeploymentError(f'Required executable is missing: {name}.{hint}') from None
     if result.returncode:
         # Commands can contain environment configuration; never echo arguments/stderr.
         raise DeploymentError(f'External command failed ({Path(str(args[0])).name}, exit {result.returncode})')
@@ -87,11 +97,19 @@ def rollback_allowed(current_head, target_head, compatible):
 
 
 def recent_restore_proof(path):
-    info = Path(path).stat()
+    try:
+        info = Path(path).stat()
+    except FileNotFoundError:
+        raise DeploymentError(f'Restore proof is missing: {path}. Complete a real isolated DB/media restore with ops/verify_restore.py; do not fabricate proof.') from None
     if os.name == 'posix' and os.geteuid() == 0 and (info.st_uid != 0 or info.st_mode & 0o077):
         raise DeploymentError('Restore proof must be root-owned mode 600')
-    proof = read_json(path)
-    date = datetime.fromisoformat(proof['verified_at'].replace('Z', '+00:00'))
+    try:
+        proof = read_json(path)
+        date = datetime.fromisoformat(proof['verified_at'].replace('Z', '+00:00'))
+        if date.tzinfo is None or proof.get('restored_database_and_media') is not True or not isinstance(proof.get('backup_reference'), str) or not proof['backup_reference'].strip():
+            raise ValueError('Invalid proof fields')
+    except (ValueError, KeyError, TypeError, AttributeError):
+        raise DeploymentError('Restore proof is malformed; generate it with a successful ops/verify_restore.py run.') from None
     age = (datetime.now(timezone.utc) - date).total_seconds()
     if not proof.get('restored_database_and_media') or not proof.get('backup_reference') or not 0 <= age <= 30 * 86400:
         raise DeploymentError('A demonstrated DB/media restore within 30 days is required')
@@ -102,6 +120,22 @@ class Deployer:
         self.config = config
         self.state = Path(config['state_dir'])
         self.environment = Path(config['env_file'])
+
+    def check_prerequisites(self, require_proof=True):
+        issues = []
+        for name in ('docker', 'az', 'tar', 'du'):
+            if not shutil.which(name):
+                issues.append(f'missing executable: {name}')
+        for path in [self.environment, *self.config['compose_files']]:
+            if not Path(path).is_file():
+                issues.append(f'missing host configuration file: {path}')
+        if require_proof:
+            try:
+                recent_restore_proof(self.config['restore_proof'])
+            except DeploymentError as error:
+                issues.append(str(error))
+        if issues:
+            raise DeploymentError('VM prerequisites incomplete: ' + '; '.join(issues))
 
     def compose(self, files, *args, env_file=None, **kwargs):
         command = ['docker', 'compose', '--project-name', self.config['project'], '--env-file', env_file or self.environment,
@@ -216,6 +250,7 @@ class Deployer:
         reference = f'{account}/{container}/{prefix}'
         receipt = directory / 'receipt.json'
         atomic_json(receipt, {'sha': sha, 'reference': reference, 'schema_head': self.database_head(),
+                    'database_bytes': database_bytes, 'media_bytes': media_bytes,
                     'created_at': datetime.now(timezone.utc).isoformat(), 'database_and_media_quiesced': True})
         # Completion manifest is uploaded last. A partial upload never counts as a matched recovery set.
         run(['az', 'storage', 'blob', 'upload', '--auth-mode', 'login', '--account-name', account,
@@ -279,6 +314,7 @@ class Deployer:
         directory = Path(directory).resolve()
         manifest = read_json(directory / 'manifest.json')
         validate_manifest(manifest)
+        self.check_prerequisites()
         self.inventory()
         head = self.database_head()
         previous = self.bootstrap(head)
@@ -300,7 +336,7 @@ class Deployer:
         self.compose(files, 'config', '--quiet', env_file=environment['env_file'])
         backup = self.backup(manifest['sha'])
         # run always creates a new container; never reuse a stale completed migrate job.
-        self.compose(files, 'run', '--rm', '--no-deps', '--no-build', 'migrate', env_file=environment['env_file'])
+        self.compose(files, *migration_args(), env_file=environment['env_file'])
         release = dict(manifest, head=target_head, files=files, backup=backup, **environment)
         try:
             self.activate(release)
@@ -315,7 +351,7 @@ class Deployer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('operation', choices=['deploy', 'rollback', 'inventory', 'backup'])
+    parser.add_argument('operation', choices=['deploy', 'rollback', 'inventory', 'backup', 'preflight'])
     parser.add_argument('--release', type=Path)
     parser.add_argument('--config', type=Path, default=Path('/etc/alphazee-cicd.json'))
     args = parser.parse_args()
@@ -336,10 +372,20 @@ def main():
     with (state / 'deploy.lock').open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         deployer = Deployer(config)
-        if args.operation == 'inventory':
+        if args.operation == 'preflight':
+            deployer.check_prerequisites()
+            deployer.inventory()
+            deployer.database_head()
+            run(['az', 'login', '--identity', '--output', 'none'])
+            access = run(['az', 'storage', 'container', 'show', '--auth-mode', 'login', '--account-name', config['backup_storage_account'], '--name', config['backup_container'], '--query', 'properties.publicAccess', '-o', 'tsv'])
+            if access.lower() not in {'', 'none', 'off'}:
+                raise DeploymentError('Backup container must be private')
+            print('PASS: VM prerequisites, restore proof, storage access, inventory and schema')
+        elif args.operation == 'inventory':
             deployer.inventory()
             print('PASS: existing production volume identities verified')
         elif args.operation == 'backup':
+            deployer.check_prerequisites(require_proof=False)
             deployer.inventory()
             print('Backup saved privately: ' + deployer.backup('manual'))
         elif args.operation == 'deploy':
@@ -357,5 +403,7 @@ if __name__ == '__main__':
         main()
     except Exception as error:
         # No subprocess stderr, URL credentials or private environment values in CI logs.
-        print('Deployment stopped: ' + str(error) if isinstance(error, DeploymentError) else 'Deployment stopped: inspect private VM state/logs', file=sys.stderr)
+        message = str(error) if isinstance(error, DeploymentError) else f'Unexpected {type(error).__name__}; inspect the VM privately'
+        print('Deployment stopped: ' + message, file=sys.stderr)
+        print('ALPHAZEE_DEPLOY_ERROR:' + json.dumps({'message': message}), file=sys.stderr)
         sys.exit(1)

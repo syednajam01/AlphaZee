@@ -89,6 +89,14 @@ def main():
         # Azure may report a successful control-plane invocation despite a failed guest script.
         messages = '\n'.join(value.get('message', '') for value in json.loads(result.stdout).get('value', []))
         if marker not in messages:
+            # Only forward explicitly sanitized deployment errors; never arbitrary guest stderr.
+            for line in messages.splitlines():
+                if line.startswith('ALPHAZEE_DEPLOY_ERROR:'):
+                    try:
+                        detail = json.loads(line.split(':', 1)[1])['message']
+                    except (ValueError, KeyError, TypeError):
+                        continue
+                    raise RuntimeError('Guest deployment failed: ' + str(detail)[:1800])
             raise RuntimeError('Guest deployment did not confirm success; inspect the VM privately')
         print(marker)
         summary = os.environ.get('GITHUB_STEP_SUMMARY')

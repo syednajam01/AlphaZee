@@ -27,17 +27,17 @@ The VM validates existing storage identities, pulls images, takes a matched DB/m
 
 3. **Configure GitHub protection and the production environment.** In a trusted terminal run `python ops/configure_github.py` after the first CI check exists. It prompts secretly for a temporary fine-grained setup token with repository Administration, Environments and Variables write permissions. Alternatively enter the same settings manually in GitHub. It requires PRs and `ci-required`, prevents admin bypass/force push/deletion, allows production deployments from `main` only, sets the VM/group variables, and keeps CD **false**. Zero additional approving reviewers supports the solo owner. Revoke the setup token afterward. Do not reuse it as the runtime registry token.
 
-4. **Configure Azure federation.** In authenticated Azure Cloud Shell, on the right subscription, with this code available, run `bash ops/setup_azure.sh`. It creates/reuses the `alphazee-github-deploy` user-assigned identity, trusts `repo:syednajam01/AlphaZee:environment:production`, and grants a narrowly scoped VM Run Command role on `alphazee-vm`. The script prints three identifiers. Add them under GitHub Settings → Environments → production → Secrets:
+4. **Configure Azure federation.** In authenticated Azure Cloud Shell, on the right subscription, with this code available, run `bash ops/setup_azure.sh`. It creates/reuses the `alphazee-github-deploy` user-assigned identity, trusts the confirmed immutable subject `repo:syednajam01@195332109/AlphaZee@1407763091:environment:production`, and grants a narrowly scoped VM Run Command role on `alphazee-vm`. Preserve the existing corrected federation. The script prints three identifiers. Add them under GitHub Settings → Environments → production → Secrets:
 
    - `AZURE_CLIENT_ID`
    - `AZURE_TENANT_ID`
    - `AZURE_SUBSCRIPTION_ID`
 
-   These identifiers are not passwords. The deployment identity can execute root commands on this VM, so protect changes to workflows/ops. Keep SSH limited to the owner's IP. The VM agent needs outbound HTTPS connectivity; no new public CI SSH rule is required.
+   These identifiers are not passwords. The deployment identity can execute root commands on this VM, so protect changes to workflows/ops. Keep SSH limited to the owner's IP. The VM agent needs outbound HTTPS connectivity; no new public CI SSH rule is required. The VM's own managed identity is separate and must also be enabled for Blob access.
 
 5. **Configure private off-host backups.** Select an existing private Azure Blob container, or create one deliberately after checking storage cost/retention. In Cloud Shell set `BACKUP_STORAGE_ACCOUNT`, `BACKUP_RESOURCE_GROUP`, `BACKUP_CONTAINER`, then run `bash ops/setup_backup_access.sh`. This grants the **VM's system-assigned identity** access to that container. It is separate from the GitHub deployment identity. The invoking owner must be able to read the container and assign roles. On the VM install Azure CLI if missing; `sudo az login --identity` should work after RBAC propagates. No storage account keys are needed. Never make the container public.
 
-6. **Install host configuration.** Copy `ops/host-config.example.json` to `/etc/alphazee-cicd.json`, fill the exact inspected Compose/env paths, four existing volume names, private storage account/container, current checkout-enabled boolean and one active product slug. Preserve existing bank credentials and flags in `.env.production`. Then:
+6. **Install host prerequisites and configuration.** Run `sudo bash ops/install_vm_prerequisites.sh` on the VM to install Azure CLI if absent, without restarting app containers. Copy `ops/host-config.example.json` to `/etc/alphazee-cicd.json`, fill the exact inspected Compose/env paths, four existing volume names, private storage account/container, current checkout-enabled boolean and one active product slug. Preserve existing bank credentials and flags in `.env.production`. Then:
 
    ```sh
    sudo chown root:root /etc/alphazee-cicd.json
@@ -52,13 +52,13 @@ The VM validates existing storage identities, pulls images, takes a matched DB/m
 
 8. **Prove restore before enabling deployment.** First run `sudo python3 ops/deploy.py backup` during a suitable short maintenance window. This stops API writers for dump/archive capture, restarts the existing API, uploads both files with content validation, verifies sizes, and uploads `receipt.json` last. Temporary local dump/archive copies are removed only after successful upload; source volumes are untouched. Incomplete uploads are not valid recovery sets. Failed copies remain private for inspection.
 
-   Download a completed DB/media set and restore it to a separate disposable stack following `.context/m3_media_runbook.md`. Verify rows, media files, credentials/session behavior and migration revision; never restore over the live database. After an actual successful exercise, create root-owned mode-600 `/etc/alphazee-restore-proof.json`:
+   For small databases on a sufficiently sized VM, run `sudo python3 ops/verify_restore.py --backup-reference ACCOUNT/CONTAINER/ACTUAL_COMPLETED_PREFIX --write-proof`. It restores the backup to a resource-bounded scratch PostgreSQL with no network/ports, checks its schema revision and every ready asset's size/SHA-256, then writes proof only on success. Larger databases require a separately sized host; follow `.context/m3_media_runbook.md`. Never restore over live data. Proof has this shape:
 
    ```json
    {"verified_at":"ACTUAL_UTC_ISO_TIMESTAMP", "restored_database_and_media":true, "backup_reference":"ACTUAL_PRIVATE_COMPLETED_SET_REFERENCE"}
    ```
 
-   Replace both placeholders with real evidence; never fabricate proof to bypass the gate. Proof expires after 30 days. Backup sizing checks reserve DB/media capture space plus a safety margin. Set Blob retention/lifecycle and budget monitoring deliberately; no automatic off-host deletion is implemented. Protect the private environment file separately in your secret recovery process.
+   Do not manually fill placeholders and mark a restore successful without performing it. Proof expires after 30 days. Run `sudo python3 ops/deploy.py preflight` to check prerequisites, storage access, schema and inventory without stopping the API. Backup sizing checks reserve DB/media capture space plus a safety margin. Set Blob retention/lifecycle and budget monitoring deliberately; no automatic off-host deletion is implemented. Protect the private environment file separately in your secret recovery process.
 
 9. **Enable only after rehearsal.** Run the failure/rollback tests on GitHub and verify host inventory, registry access, completed off-host backup and restore proof. Set repository variables:
 
