@@ -1,5 +1,7 @@
 # Production checkout release — 2026-11-06
 
+**Live update, 2026-11-08:** checkout is now enabled at alphazee.tech in production mode, with COD and owner-confirmed temporary All Pakistan shipping of PKR 200. Runtime/CI expectations and the active environment snapshot were updated together. See `.context/live_checkout_activation.md` for verified behavior and current operating instructions. The initial implementation evidence below is historical.
+
 The owner authorized implementing public checkout. The application now has a separate `PRODUCTION_CHECKOUT_ENABLED` switch. This supersedes older documentation saying a production release mechanism does not exist. No Azure deployment or live customer transaction has occurred.
 
 ## Deploy and enable

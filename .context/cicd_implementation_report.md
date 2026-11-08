@@ -1,6 +1,6 @@
 # CI/CD implementation report
 
-Updated 2026-11-08. **Repository automation implemented and locally verified; not installed/enabled on GitHub/Azure.** Follow [the setup runbook](cicd_runbook.md). No live website, production data, accounts or runtime flags were changed.
+Initial implementation report, 2026-11-08. **Subsequent activation and live rollout are complete:** see [deployment repair and evidence](cicd_deployment_repair.md). The original local verification and initial handoff below are historical. Follow [the runbook](cicd_runbook.md) for operation.
 
 ## Delivered
 
