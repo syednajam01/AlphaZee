@@ -1,6 +1,6 @@
 # AlphaZee CI/CD implementation plan
 
-Status: repository implementation complete; Azure/GitHub activation pending. Updated 2026-11-08. See `.context/cicd_implementation_report.md` for executed checks and `.context/cicd_runbook.md` for setup. The phases below retain the original design rationale; the report describes actual delivery and limitations.
+Status: implemented and live deployment verified on 2026-11-08. See `.context/cicd_deployment_repair.md` for the real backup/restore and successful rollout of `d39e86c`, `.context/cicd_implementation_report.md` for original implementation checks, and `.context/cicd_runbook.md` for operation. The phases below retain the original design rationale.
 
 Owner confirms **alphazee.tech is live on an Azure Linux VM using Docker Compose**. Git remote: `syednajam01/AlphaZee`, branch `main`. No `.github/workflows/` directory currently exists. Existing production setup in source: `compose.prod.yml`, Python 3.13/FastAPI, PostgreSQL 16, Node 22/Vite, Caddy HTTPS. Live VM configuration has not been inspected; attempts to fetch public readiness/capabilities through the research tool were unsuccessful and do not establish an outage.
 

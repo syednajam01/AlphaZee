@@ -1,7 +1,7 @@
 # AlphaZee: agent operating guide
 
-Owner: Syed Najam. Updated: 2026-11-08, through admin mobile layout repair.
-Canonical project guide. Read before each task. Keep under 1,200 words; put detailed plans, verification and runbooks in `.context/`.
+Owner: Syed Najam. Updated: 2026-11-08.
+Canonical guide. Read before each task. Keep under 1,200 words; put details in `.context/`.
 
 ## Authority and working rules
 
@@ -20,11 +20,11 @@ Design: `.context/unslop_storefront_report.md`; skill `.agent/skills/unslop/SKIL
 
 Implemented: direct owner dashboard, product/collection lifecycle, durable image/video uploads, supplier/cost mappings, audited inventory and holds, storefront galleries, stable-ID cart recovery, orders, bank handoff/review, COD reconciliation, returns/exchanges/refunds, private order access, operational reports, Docker packaging, separate checkout lab, vendor agreements and financial ledgers, FIFO payment allocations, vendor stock counting portal with shortage detection, period financial reporting and P&L, configurable admin branding/legal policies and per-owner preferences.
 
-Historical verification: backend 321 passed, reporting/vendor regressions 63 passed, frontend 139 passed; packaging builds passed. Recorded browser acceptance: 8 scenarios, 41 screenshots under migration head `a81f92c6d430`. Local checkout remains closed; lab isolated on 13001. Owner confirms Azure production is live at alphazee.tech; cloud configuration is not independently verified.
+Historical verification: backend 321 passed, reporting/vendor regressions 63 passed, frontend 139 passed; packaging builds passed. Recorded browser acceptance: 8 scenarios, 41 screenshots under migration head `a81f92c6d430`. Local checkout remains closed; lab isolated on 13001. Azure runtime, backups, restore and CI/CD are now independently verified; see repair report.
 
 ## Environments and checkout decision
 
-Owner authorized production checkout code on 2026-11-06. Use `PRODUCTION_CHECKOUT_ENABLED` with production Compose; see `.context/production_checkout_release.md`. Defaults stay closed; lab remains isolated.
+Production checkout enabled 2026-11-08; see `.context/live_checkout_activation.md`. Use `PRODUCTION_CHECKOUT_ENABLED`; update CI expectations and the active runtime snapshot together. New-host defaults stay closed; lab remains isolated.
 
 - Normal: http://localhost:13000, admin `/admin`, API 18000, PostgreSQL 5433. Start with `docker compose --env-file .env.docker.local up --build --wait -d`.
 - Lab: http://127.0.0.1:13001, admin `/admin`, API 18001, PostgreSQL 5434. Start with `docker compose -f compose.checkout-lab.yml up --build --wait -d`.
@@ -64,7 +64,7 @@ Storefront design: `.context/frontend_design_implementation_guide.md`; progress:
 
 Historical browser evidence limitations: `.context/browser_acceptance_v2_review.md`. Preserve reports and distinguish recorded claims from independently verified outcomes; local acceptance is not production certification.
 
-Azure: alphazee.tech uses Linux VM/Compose. CI/CD code verified; activation pending. Read `.context/cicd_implementation_report.md`, `cicd_runbook.md` and `cicd_live_inventory.md` in `.context/`. Target: `alphazee-staging/alphazee-vm`, project `alphazee-prod`. Inspect actual storage/config before enabling CD; preserve production data.
+Azure: live CI/CD verified at alphazee.tech, revision `d39e86c`. See `.context/cicd_deployment_repair.md`. Genuine Blob restore verified 42 tables/4 assets. Target `alphazee-staging/alphazee-vm`, project `alphazee-prod`; probe `ttt`. Checkout on, COD; temporary All Pakistan shipping PKR 200, no free threshold. Preserve data/volume identities.
 
 `.context/next_priorities_and_browser_testing.md` covers acceptance planning; it is not fresh evidence.
 
