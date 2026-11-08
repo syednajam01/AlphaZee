@@ -13,7 +13,7 @@ tenant=$(az account show --query tenantId -o tsv)
 if ! az identity federated-credential show -g "$group" --identity-name "$identity" --name github-production -o none 2>/dev/null; then
   az identity federated-credential create -g "$group" --identity-name "$identity" --name github-production \
     --issuer https://token.actions.githubusercontent.com \
-    --subject repo:syednajam01/AlphaZee:environment:production \
+    --subject repo:syednajam01@195332109/AlphaZee@1407763091:environment:production \
     --audiences api://AzureADTokenExchange -o none
 fi
 role_file=$(mktemp)

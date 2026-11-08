@@ -2,6 +2,11 @@
 import json
 import os
 import subprocess
+from pathlib import Path
+import secrets
+import tempfile
+
+from deploy import migration_args
 
 
 def main():
@@ -31,6 +36,21 @@ def main():
         'assert any(r.path == "/api/v1/release" for r in app.routes); '
         'assert len(ScriptDirectory.from_config(Config("alembic.ini")).get_heads()) == 1; print("PASS: production API imports and migration discovery")'],
         env=env, check=True)
+    # Exercise the actual production migration CLI against a fresh, private Docker DB.
+    # This catches invalid Compose options that mocked orchestration tests cannot detect.
+    with tempfile.TemporaryDirectory() as temporary:
+        override = Path(temporary) / 'images.json'
+        override.write_text(json.dumps({'services': {'api': {'image': 'alphazee-ci-api'},
+            'migrate': {'image': 'alphazee-ci-api'}, 'web': {'image': 'alphazee-ci-web'}}}))
+        project = 'alphazee-package-test-' + secrets.token_hex(6)
+        command = ['docker', 'compose', '--project-name', project, '-f', 'compose.prod.yml', '-f', str(override)]
+        try:
+            subprocess.run(command + ['up', '-d', '--wait', 'db'], env=env, check=True)
+            subprocess.run(command + migration_args(), env=env, check=True)
+            print('PASS: real production migration container completed on a disposable Compose database')
+        finally:
+            # Only this randomly created packaging-test project, never the live project.
+            subprocess.run(command + ['down', '--volumes'], env=env, check=True)
     print('PASS: production image preflight and unsafe configuration rejection')
 
 if __name__ == '__main__':

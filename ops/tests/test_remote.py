@@ -41,6 +41,16 @@ class AzureTransport(unittest.TestCase):
                 remote.main()
             command.assert_not_called()
 
+    def test_sanitized_guest_error_is_visible_without_forwarding_raw_stderr(self):
+        environment={'GITHUB_REF':'refs/heads/main','GITHUB_SHA':SHA,'AZURE_RESOURCE_GROUP':'alphazee-staging','AZURE_VM_NAME':'alphazee-vm'}
+        message='Restore proof is missing. Run the actual verification.'
+        with patch.dict(os.environ,environment),patch.object(sys,'argv',['remote.py','rollback']),patch.object(remote.subprocess,'run') as command:
+            command.return_value.returncode=0
+            command.return_value.stdout=json.dumps({'value':[{'message':'PRIVATE-RAW-STDERR\nALPHAZEE_DEPLOY_ERROR:'+json.dumps({'message':message})}]})
+            with self.assertRaisesRegex(RuntimeError,'Restore proof is missing') as error:
+                remote.main()
+            self.assertNotIn('PRIVATE-RAW-STDERR',str(error.exception))
+
     def test_superseded_main_commit_is_skipped_before_credentials_or_vm_use(self):
         with patch.dict(os.environ, {'GITHUB_REF':'refs/heads/main','GITHUB_SHA':SHA}), \
              patch.object(sys, 'argv', ['remote.py','deploy']), patch.object(remote, 'latest_main', return_value='b'*40), \

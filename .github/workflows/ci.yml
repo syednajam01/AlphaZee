@@ -77,6 +77,8 @@ jobs:
           persist-credentials: false
       - run: python3 -m unittest discover -s ops/tests -v
       - run: python3 ops/check_workflows.py
+      - name: Verify a real isolated PostgreSQL and media restore
+        run: python3 ops/tests/integration_restore.py
       - name: Validate workflow schema and shell expressions
         run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
   packaging:

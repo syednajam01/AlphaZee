@@ -38,6 +38,7 @@ class ReleaseTransaction(unittest.TestCase):
         deploy.atomic_json(self.root / 'current.json', self.previous)
         deploy.atomic_json(self.release / 'manifest.json', manifest())
         self.deployer.inventory = Mock()
+        self.deployer.check_prerequisites = Mock()
         self.deployer.database_head = Mock(return_value=HEAD)
         self.deployer.compose = Mock()
         self.deployer.backup = Mock(return_value='private-backup-ref')
@@ -58,6 +59,8 @@ class ReleaseTransaction(unittest.TestCase):
         migration = self.deployer.compose.call_args_list[-1].args
         self.assertIn('--rm', migration)
         self.assertIn('--no-deps', migration)
+        self.assertNotIn('--no-build', migration)
+        self.assertIn('--pull', migration)
 
     def test_stale_workflow_never_pulls_or_backs_up(self):
         deploy.atomic_json(self.root / 'current.json', dict(self.previous, sequence=3))
