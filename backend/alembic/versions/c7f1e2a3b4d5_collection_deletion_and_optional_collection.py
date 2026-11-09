@@ -25,20 +25,8 @@ def upgrade():
         "status != 'published' OR (title IS NOT NULL AND slug IS NOT NULL)"
     )
 
-    # 2. Update foreign key products_collection_id_fkey on products to ON DELETE SET NULL
-    op.drop_constraint('products_collection_id_fkey', 'products', type_='foreignkey')
-    op.create_foreign_key(
-        'products_collection_id_fkey',
-        'products',
-        'collections',
-        ['collection_id'],
-        ['id'],
-        ondelete='SET NULL'
-    )
-
-
-def downgrade():
-    # 1. Revert foreign key products_collection_id_fkey to ON DELETE RESTRICT
+    # 2. Ensure foreign key products_collection_id_fkey on products is ON DELETE RESTRICT
+    # preserving DB-level invariant that raw deletes without unlinking are rejected.
     op.drop_constraint('products_collection_id_fkey', 'products', type_='foreignkey')
     op.create_foreign_key(
         'products_collection_id_fkey',
@@ -49,10 +37,14 @@ def downgrade():
         ondelete='RESTRICT'
     )
 
-    # 2. Revert check constraint back to requiring collection_id IS NOT NULL for published products
+
+def downgrade():
+    # 1. Revert check constraint back to requiring collection_id IS NOT NULL for published products
     op.drop_constraint('ck_product_published_identity', 'products', type_='check')
     op.create_check_constraint(
         'ck_product_published_identity',
         'products',
         "status != 'published' OR (title IS NOT NULL AND slug IS NOT NULL AND collection_id IS NOT NULL)"
     )
+
+

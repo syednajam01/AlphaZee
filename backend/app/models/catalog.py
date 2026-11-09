@@ -157,7 +157,7 @@ class Product(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     collection_id: Mapped[str | None] = mapped_column(
-        String(100), ForeignKey("collections.id", ondelete="SET NULL"), nullable=True
+        String(100), ForeignKey("collections.id", ondelete="RESTRICT"), nullable=True
     )
     """Foreign key to the owning collection. Prevents accidental orphan products."""
 
