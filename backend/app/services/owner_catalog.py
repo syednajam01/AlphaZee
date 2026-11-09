@@ -55,7 +55,41 @@ def publication_requirements(product):
 
 
 def product_response(product):
+    from sqlalchemy.orm import object_session
     from app.services.media import links_response
+    sess = object_session(product)
+    stock_by_variant = {}
+    if sess and product.variants:
+        from app.models.inventory import SupplierVariant, InventoryBalance, StockReservation
+        from app.queries.stock_rules import holding_predicate
+        from sqlalchemy import select, func
+        vids = [v.id for v in product.variants if v.id]
+        if vids:
+            sv_rows = sess.execute(
+                select(SupplierVariant.variant_id, SupplierVariant.id, InventoryBalance.on_hand, InventoryBalance.version)
+                .outerjoin(InventoryBalance, InventoryBalance.supplier_variant_id == SupplierVariant.id)
+                .where(SupplierVariant.variant_id.in_(vids), SupplierVariant.active.is_(True))
+            ).all()
+            sv_ids = [r[1] for r in sv_rows if r[1]]
+            held_by_sv = {}
+            if sv_ids:
+                held_res = sess.execute(
+                    select(StockReservation.supplier_variant_id, func.sum(StockReservation.quantity))
+                    .where(StockReservation.supplier_variant_id.in_(sv_ids), holding_predicate())
+                    .group_by(StockReservation.supplier_variant_id)
+                ).all()
+                held_by_sv = {row[0]: (row[1] or 0) for row in held_res}
+            for vid, sv_id, on_hand, ver in sv_rows:
+                physical = on_hand or 0
+                held = held_by_sv.get(sv_id, 0)
+                stock_by_variant[vid] = {
+                    'stock_on_hand': physical,
+                    'held_reservations': held,
+                    'available_to_sell': max(0, physical - held),
+                    'supplier_variant_id': str(sv_id) if sv_id else None,
+                    'inventory_version': ver,
+                }
+
     return {field: getattr(product, field) for field in (
         'id', 'title', 'slug', 'collection_id', 'status', 'edit_version', 'archived_at',
         'description', 'short_description', 'material', 'care', 'sizing', 'badge',
@@ -66,9 +100,20 @@ def product_response(product):
         'publication_requirements': publication_requirements(product),
         'media': links_response(product),
         'vendor_name': product.vendor.name if getattr(product, 'vendor', None) else None,
-        'variants': [{'id': v.id, 'sku': v.sku, 'size': v.size, 'color': v.color,
-                      'price_minor': v.price_minor, 'is_active': v.is_active,
-                      'availability': v.availability.value} for v in sorted(product.variants, key=lambda v: v.id)],
+        'variants': [{
+            'id': v.id,
+            'sku': v.sku,
+            'size': v.size,
+            'color': v.color,
+            'price_minor': v.price_minor,
+            'is_active': v.is_active,
+            'availability': v.availability.value,
+            'stock_on_hand': stock_by_variant.get(v.id, {}).get('stock_on_hand', 0),
+            'held_reservations': stock_by_variant.get(v.id, {}).get('held_reservations', 0),
+            'available_to_sell': stock_by_variant.get(v.id, {}).get('available_to_sell', 0),
+            'supplier_variant_id': stock_by_variant.get(v.id, {}).get('supplier_variant_id'),
+            'inventory_version': stock_by_variant.get(v.id, {}).get('inventory_version'),
+        } for v in sorted(product.variants, key=lambda v: v.id)],
     }
 
 
@@ -171,9 +216,11 @@ def apply_product(db: Session, product, data):
         product.collection_links = []
     for key, value in data.items(): setattr(product, key, value)
     seen_ids = set()
+    initial_stock_by_variant = {}
     for item in variants or []:
         fields = item.model_dump(exclude_unset=True) if hasattr(item, 'model_dump') else dict(item)
         identifier = fields.pop('id', None)
+        initial_stock = fields.pop('initial_stock', None)
         if identifier is None:
             if not fields.get('sku'): raise CatalogError('invalid_variant', 'New variants require a SKU')
             variant = Variant(product_id=product.id, is_active=False, availability=AvailabilityStatus.UNKNOWN)
@@ -183,6 +230,8 @@ def apply_product(db: Session, product, data):
             seen_ids.add(identifier)
             variant = next((v for v in product.variants if v.id == identifier), None)
             if variant is None: raise CatalogError('invalid_variant', 'Variant does not belong to this product')
+        if initial_stock is not None:
+            initial_stock_by_variant[variant] = initial_stock
         for key, value in fields.items():
             setattr(variant, key, AvailabilityStatus(value) if key == 'availability' else value)
         if not variant.sku: raise CatalogError('invalid_variant', 'SKU cannot be cleared')
@@ -190,10 +239,11 @@ def apply_product(db: Session, product, data):
             raise CatalogError('invalid_variant', 'Enter a price before activating the variant', fields=[{'field': 'variants.price_minor', 'code': 'required', 'message': 'An active variant requires a price'}])
 
     # Auto-synchronize variant supplier mappings to agree with product stock responsibility
-    from app.models.inventory import InventoryBalance, SupplierVariant
+    from app.models.inventory import InventoryBalance, SupplierVariant, StockEvent
     from app.models.suppliers import get_or_create_internal_supplier
+    from datetime import datetime, timezone
     target_supplier_id = None
-    if product.stock_management_source == 'alphazee_managed':
+    if product.stock_management_source == 'alphazee_managed' or product.stock_management_source is None:
         internal_sup = get_or_create_internal_supplier(db)
         target_supplier_id = internal_sup.id
     elif product.stock_management_source == 'vendor_managed' and product.vendor_id:
@@ -201,6 +251,7 @@ def apply_product(db: Session, product, data):
 
     if target_supplier_id:
         db.flush()
+        default_cost = 0 if product.stock_management_source != 'vendor_managed' else None
         for v in product.variants:
             if not v.id:
                 continue
@@ -213,11 +264,14 @@ def apply_product(db: Session, product, data):
                     supplier_id=target_supplier_id,
                     variant_id=v.id,
                     active=True,
-                    supplier_cost_minor=None
+                    supplier_cost_minor=default_cost
                 )
                 db.add(sv)
                 db.flush()
-                db.add(InventoryBalance(supplier_variant_id=sv.id, on_hand=0))
+                balance = InventoryBalance(supplier_variant_id=sv.id, on_hand=0)
+                db.add(balance)
+                db.flush()
+                active_sv = sv
             elif is_reassignment and active_sv.supplier_id != target_supplier_id:
                 active_sv.active = False
                 db.flush()
@@ -227,16 +281,44 @@ def apply_product(db: Session, product, data):
                 ))
                 if new_sv:
                     new_sv.active = True
+                    active_sv = new_sv
                 else:
                     new_sv = SupplierVariant(
                         supplier_id=target_supplier_id,
                         variant_id=v.id,
                         active=True,
-                        supplier_cost_minor=None
+                        supplier_cost_minor=default_cost
                     )
                     db.add(new_sv)
                     db.flush()
-                    db.add(InventoryBalance(supplier_variant_id=new_sv.id, on_hand=0))
+                    balance = InventoryBalance(supplier_variant_id=new_sv.id, on_hand=0)
+                    db.add(balance)
+                    db.flush()
+                    active_sv = new_sv
+
+            # If an explicit initial / updated stock count was provided
+            desired_stock = initial_stock_by_variant.get(v)
+            if desired_stock is not None and active_sv:
+                balance = db.scalar(select(InventoryBalance).where(InventoryBalance.supplier_variant_id == active_sv.id).with_for_update())
+                if balance is None:
+                    balance = InventoryBalance(supplier_variant_id=active_sv.id, on_hand=0)
+                    db.add(balance)
+                    db.flush()
+                if balance.on_hand != desired_stock:
+                    old_on_hand = balance.on_hand
+                    balance.on_hand = desired_stock
+                    balance.version = (balance.version or 0) + 1
+                    balance.last_counted_at = datetime.now(timezone.utc)
+                    db.add(StockEvent(
+                        supplier_variant_id=active_sv.id,
+                        actor_user_id=None,
+                        quantity_delta=desired_stock - old_on_hand,
+                        physical_on_hand_after=desired_stock,
+                        reason='manual_count',
+                        notes='Product catalog stock update',
+                    ))
+                if desired_stock > 0 and v.availability == AvailabilityStatus.UNKNOWN and v.price_minor is not None:
+                    v.availability = AvailabilityStatus.AVAILABLE
 
     gaps = publication_requirements(product) if product.status == 'published' else []
     new_gaps = [item for item in gaps if item['field'] not in existing_gaps]

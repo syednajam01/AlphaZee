@@ -373,14 +373,46 @@ export function initVendorPortal() {
       return content;
     }
 
-    const grid = document.createElement('div');
-    grid.className = 'vp-stock-grid';
-
+    const groups = new Map();
     stockItems.forEach(item => {
-      grid.appendChild(renderStockCard(item));
+      const key = `${item.product_title}|||${item.color || 'Standard'}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          title: item.product_title,
+          color: item.color || 'Standard',
+          thumb: sanitizeMediaUrl(item.thumbnail_url, '/images/storefront-empty.svg'),
+          items: []
+        });
+      }
+      groups.get(key).items.push(item);
     });
 
-    content.appendChild(grid);
+    groups.forEach(group => {
+      const groupSection = document.createElement('section');
+      groupSection.className = 'vp-stock-group';
+      groupSection.style.cssText = 'margin-bottom: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;';
+      
+      const groupHeader = document.createElement('div');
+      groupHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 14px;';
+      groupHeader.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <img src="${escapeHtml(group.thumb)}" width="40" height="50" style="border-radius: 4px; object-fit: cover;" alt="">
+          <div>
+            <h3 style="margin: 0; font-size: 1rem; color: #0f172a; font-weight: 600;">${escapeHtml(group.title)}</h3>
+            <span style="font-size: 0.8125rem; color: #64748b;">Color: <strong style="color: #0f172a;">${escapeHtml(group.color)}</strong> · ${group.items.length} size${group.items.length === 1 ? '' : 's'}</span>
+          </div>
+        </div>
+      `;
+      groupSection.appendChild(groupHeader);
+
+      const grid = document.createElement('div');
+      grid.className = 'vp-stock-grid';
+      group.items.forEach(item => {
+        grid.appendChild(renderStockCard(item));
+      });
+      groupSection.appendChild(grid);
+      content.appendChild(groupSection);
+    });
     const pages = Math.ceil(totalItems / limit);
     if (pages > 1) {
       const nav = document.createElement('nav'); nav.className = 'vp-pagination'; nav.setAttribute('aria-label', 'Stock pages');

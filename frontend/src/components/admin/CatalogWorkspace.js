@@ -33,8 +33,17 @@ export function collectVariant(row) {
   if (!color) throw new Error('Color is required for each variant. Please enter a color name.');
   const is_active = row.querySelector('[name="variant_active"]').checked;
   if (is_active && price_minor === null) throw new Error('Enter a price before activating this variant.');
+  const stockInput = row.querySelector('[name="initial_stock"]');
+  const rawStock = stockInput ? stockInput.value.trim() : '';
+  let initial_stock = undefined;
+  if (rawStock !== '') {
+    const parsed = Number(rawStock);
+    if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error('Variant stock must be a non-negative whole integer.');
+    initial_stock = parsed;
+  }
   return { ...(row.dataset.variantId ? { id: Number(row.dataset.variantId) } : {}), sku,
-    size: value('size') || null, color: color || null, price_minor, is_active, availability: value('availability') };
+    size: value('size') || null, color: color || null, price_minor, is_active, availability: value('availability'),
+    ...(initial_stock !== undefined ? { initial_stock } : {}) };
 }
 
 export function mountCatalogSection(section, container, context) {
@@ -179,13 +188,22 @@ export function mountCatalogSection(section, container, context) {
   function variantRowMarkup(v, colorName) {
     const price = v.price_minor === null || v.price_minor === undefined ? '' : `${Math.floor(v.price_minor / 100)}.${String(v.price_minor % 100).padStart(2, '0')}`;
     const size = v.size || '';
+    const stock = v.stock_on_hand !== undefined ? v.stock_on_hand : '';
+    const held = v.held_reservations || 0;
+    const avail = v.available_to_sell !== undefined ? v.available_to_sell : stock;
     return `<fieldset class="catalog-variant variant-size-card" ${v.id ? `data-variant-id="${v.id}"` : ''} data-size="${esc(size)}">
-      <legend class="variant-size-legend">Size: <strong>${esc(size || 'Standard')}</strong>${v.id ? ` · Variant #${v.id}` : ' · new'}</legend>
+      <legend class="variant-size-legend">
+        Size: <strong>${esc(size || 'Standard')}</strong>${v.id ? ` · Variant #${v.id}` : ' · new'}
+        ${v.id ? `<span class="variant-stock-summary-tag" style="margin-left: 10px; font-size: 0.75rem; color: rgba(255, 255, 255, 0.6); font-weight: normal;">(Stock: <strong style="color: #FFFFFF;">${stock || 0}</strong> | Held: ${held} | Avail: <strong style="color: ${avail > 0 ? '#4ADE80' : '#F87171'};">${avail || 0}</strong>)</span>` : ''}
+      </legend>
       <input type="hidden" name="color" value="${esc(colorName || v.color || '')}">
       <input type="hidden" name="size" value="${esc(size)}">
       <div class="catalog-fields variant-fields-row">
         ${field('sku', 'SKU (required)', v.sku || '', { max: 100 })}
         ${field('price', 'Retail price PKR', price, { max: 20 })}
+        <label>Stock (units)
+          <input type="number" name="initial_stock" min="0" step="1" placeholder="e.g. 10" value="${esc(String(stock !== '' ? stock : ''))}">
+        </label>
         <label>Availability
           <select name="availability">${options([['available', 'Available'], ['unavailable', 'Unavailable'], ['unknown', 'Unknown']], v.availability || 'available')}</select>
         </label>
@@ -214,12 +232,16 @@ export function mountCatalogSection(section, container, context) {
             <input type="text" class="color-group-name" value="${esc(colorName)}" placeholder="e.g. Jet Black, Chalk White, Forest Green" maxlength="100" required>
           </label>
         </div>
-        <div class="color-group-batch-wrap">
-          <div class="batch-price-box">
-            <input type="text" class="color-batch-price" placeholder="Price for all sizes (PKR)" maxlength="20">
-            <button type="button" class="btn btn-secondary btn-apply-batch-price" style="font-size: 0.8rem; padding: 6px 10px;">Apply to Sizes</button>
+        <div class="color-group-batch-wrap" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <div class="batch-price-box" style="display: flex; gap: 4px; align-items: center;">
+            <input type="text" class="color-batch-price" placeholder="Price for all (PKR)" style="width: 140px; font-size: 0.8rem; padding: 4px 8px;" maxlength="20">
+            <button type="button" class="btn btn-secondary btn-apply-batch-price" style="font-size: 0.75rem; padding: 4px 8px;">Apply Price</button>
           </div>
-          <button type="button" class="btn btn-secondary btn-remove-color-group" style="font-size: 0.8rem; padding: 6px 10px; color: #f87171;">Remove Color</button>
+          <div class="batch-stock-box" style="display: flex; gap: 4px; align-items: center;">
+            <input type="number" min="0" step="1" class="color-batch-stock" placeholder="Stock for all" style="width: 110px; font-size: 0.8rem; padding: 4px 8px;">
+            <button type="button" class="btn btn-secondary btn-apply-batch-stock" style="font-size: 0.75rem; padding: 4px 8px;">Apply Stock</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-remove-color-group" style="font-size: 0.75rem; padding: 4px 8px; color: #f87171; margin-left: auto;">Remove Color</button>
         </div>
       </div>
       <div class="color-sizes-selector-section">
@@ -355,6 +377,22 @@ export function mountCatalogSection(section, container, context) {
       status(`Applied PKR ${formatted} to sizes in this color.`);
     });
 
+    const batchStockBtn = card.querySelector('.btn-apply-batch-stock');
+    batchStockBtn?.addEventListener('click', () => {
+      const stockInput = card.querySelector('.color-batch-stock');
+      const stockVal = stockInput.value.trim();
+      if (!stockVal || isNaN(Number(stockVal)) || Number(stockVal) < 0) {
+        status('Enter a non-negative whole unit stock number first.', true);
+        return;
+      }
+      const val = parseInt(stockVal, 10);
+      variantsList.querySelectorAll('.catalog-variant input[name="initial_stock"]').forEach(inp => {
+        inp.value = val;
+      });
+      markDirty();
+      status(`Applied stock (${val} units) to all sizes in this color.`);
+    });
+
     const removeColorBtn = card.querySelector('.btn-remove-color-group');
     removeColorBtn?.addEventListener('click', () => {
       const savedVariants = card.querySelectorAll('.catalog-variant[data-variant-id]');
@@ -364,6 +402,52 @@ export function mountCatalogSection(section, container, context) {
       card.remove();
       markDirty();
     });
+  }
+
+  function renderStockMatrix(variants) {
+    if (!variants || variants.length === 0) return '';
+    const colors = [...new Set(variants.map(v => v.color || 'Standard'))];
+    const sizes = [...new Set(variants.map(v => v.size || 'Standard'))];
+    let grandStock = 0, grandAvail = 0;
+
+    const rows = colors.map(col => {
+      let colStock = 0;
+      let colAvail = 0;
+      const cells = sizes.map(sz => {
+        const match = variants.find(v => (v.color || 'Standard') === col && (v.size || 'Standard') === sz);
+        if (!match) return '<td style="padding: 6px 10px; text-align: center; color: rgba(255,255,255,0.25);">—</td>';
+        const st = match.stock_on_hand || 0;
+        const av = match.available_to_sell !== undefined ? match.available_to_sell : st;
+        colStock += st;
+        colAvail += av;
+        grandStock += st;
+        grandAvail += av;
+        return `<td style="padding: 6px 10px; text-align: center;"><span style="color: #FFFFFF; font-weight: 600;">${st}</span> <span style="color: ${av > 0 ? '#4ADE80' : '#F87171'}; font-size: 0.75rem;">(${av} av)</span></td>`;
+      }).join('');
+      return `<tr style="border-bottom: 1px solid rgba(255,255,255,0.06);"><td style="padding: 6px 10px; font-weight: 600; color: #FFFFFF;">${esc(col)}</td>${cells}<td style="padding: 6px 10px; text-align: right; font-weight: 700; color: #60A5FA;">${colStock} <span style="font-size: 0.75rem; color: #94A3B8;">(${colAvail} av)</span></td></tr>`;
+    }).join('');
+
+    return `
+      <details class="catalog-stock-matrix-accordion" style="margin: 14px 0 20px 0; background: #161A18; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 12px;" open>
+        <summary style="font-weight: 700; cursor: pointer; color: #FFFFFF; font-size: 0.875rem; user-select: none;">
+          Color × Size Stock Breakdown & Reorder Matrix (Total: ${grandStock} on hand · ${grandAvail} available to sell)
+        </summary>
+        <div style="overflow-x: auto; margin-top: 12px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.8125rem;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.6);">
+                <th style="padding: 6px 10px; text-align: left;">Color</th>
+                ${sizes.map(sz => `<th style="padding: 6px 10px; text-align: center;">Size ${esc(sz)}</th>`).join('')}
+                <th style="padding: 6px 10px; text-align: right;">Total Units</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    `;
   }
 
   async function editProduct(product) {
@@ -454,6 +538,7 @@ export function mountCatalogSection(section, container, context) {
           </div>
           <button type="button" class="btn btn-secondary" id="catalog-add-color">+ Add Color</button>
         </div>
+        ${product.id && product.variants?.length ? renderStockMatrix(product.variants) : ''}
         <div id="catalog-variants">${initialColorGroupsHtml}</div>
       </div>
 

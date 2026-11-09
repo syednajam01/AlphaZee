@@ -20,6 +20,7 @@ class VariantEdit(Command):
     price_minor: Minor | None = None
     is_active: bool = False
     availability: Literal['available', 'unavailable', 'unknown'] = 'unknown'
+    initial_stock: int | None = Field(default=None, ge=0, le=2147483647)
 
     @field_validator('sku', 'size', 'color', mode='before')
     @classmethod

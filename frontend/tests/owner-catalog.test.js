@@ -27,6 +27,14 @@ test('variant inputs preserve exact paisas and reject missing active prices/exce
   assert.throws(() => collectVariant(row), /price before activating/);
   row.querySelector('[name="variant_active"]').checked = false;
   assert.equal(collectVariant(row).price_minor, null);
+
+  // Test initial_stock collection and validation
+  row.innerHTML = '<input name="sku"><input name="size"><input name="color"><input name="price"><input name="variant_active" type="checkbox"><select name="availability"></select><input name="initial_stock">';
+  fill(row, 'sku', 'SAMPLE-SKU'); fill(row, 'size', 'XL'); fill(row, 'color', 'Black'); fill(row, 'availability', 'available'); fill(row, 'price', '150');
+  fill(row, 'initial_stock', '15');
+  assert.equal(collectVariant(row).initial_stock, 15);
+  fill(row, 'initial_stock', '-5');
+  assert.throws(() => collectVariant(row), /non-negative whole integer/);
 });
 
 test('atomic save rejection retains input and uses the unchanged product version on retry', async () => {
