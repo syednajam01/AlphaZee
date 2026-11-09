@@ -30,7 +30,7 @@ def publication_requirements(product):
         fields.append({'field': field, 'code': code, 'message': message})
     if not product.title: required('title', 'Enter a product title')
     if not product.slug: required('slug', 'Enter a unique product slug')
-    if not product.collection or not product.collection.is_active:
+    if product.collection and not product.collection.is_active:
         required('collection_id', 'Choose an active collection')
     if not product.description: required('description', 'Enter a customer description')
     primary = next((link.asset for link in product.media_links if link.role == 'primary'), None)
@@ -378,3 +378,45 @@ def reorder_collections(db, command):
         collection.display_order = ids.index(collection.id)
         collection.edit_version += 1
     return collections
+
+
+def delete_collection(db, identifier):
+    from app.services.media import reference_lock
+    reference_lock(db)
+    collection = db.scalar(select(Collection).where(Collection.id == identifier).with_for_update())
+    if collection is None:
+        raise CatalogError('not_found', 'Collection does not exist', 404)
+
+    # 1. Clear any HeroSlide referencing this collection
+    from app.models.media import HeroSlide
+    slides = db.scalars(select(HeroSlide).where(HeroSlide.target_collection_id == identifier).with_for_update()).all()
+    for slide in slides:
+        slide.target_collection_id = None
+        slide.edit_version += 1
+
+    # 2. Find all products that had any link to this collection
+    from app.models.catalog import ProductCollection
+    linked_product_ids = set(db.scalars(select(ProductCollection.product_id).where(ProductCollection.collection_id == identifier)).all())
+    linked_product_ids.update(db.scalars(select(Product.id).where(Product.collection_id == identifier)).all())
+
+    # 3. Delete the ProductCollection entries for this collection
+    db.execute(delete(ProductCollection).where(ProductCollection.collection_id == identifier))
+
+    # 4. Reassign or clear collection for affected products
+    if linked_product_ids:
+        affected_products = db.scalars(select(Product).where(Product.id.in_(linked_product_ids)).with_for_update()).all()
+        for p in affected_products:
+            p.collection_links = [link for link in (p.collection_links or []) if link.collection_id != identifier]
+            if p.collection_id == identifier:
+                if p.collection_links:
+                    p.collection_id = p.collection_links[0].collection_id
+                    p.collection = db.get(Collection, p.collection_id)
+                else:
+                    p.collection_id = None
+                    p.collection = None
+            p.edit_version += 1
+
+    db.delete(collection)
+    db.flush()
+    return collection
+

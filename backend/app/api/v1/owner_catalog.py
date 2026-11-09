@@ -111,3 +111,9 @@ def reorder_collections(payload: CollectionReorder, db: Session = Depends(get_db
 @router.post('/collections/{collection_id}')
 def update_collection(collection_id: str, payload: CollectionUpdate, db: Session = Depends(get_db)):
     return persist(db, lambda: service.edit_collection(db, collection_id, payload), service.collection_response)
+
+
+@router.delete('/collections/{collection_id}', status_code=200)
+def delete_collection(collection_id: str, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.delete_collection(db, collection_id), lambda c: {'deleted': True, 'id': collection_id})
+

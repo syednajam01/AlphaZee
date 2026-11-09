@@ -27,7 +27,7 @@ def test_incomplete_drafts_versions_and_publication_requirements(admin_client):
     assert admin_client.get('/api/v1/products').json()['total'] == public_count
     response = admin_client.post(f"/api/v1/admin/products/{product['id']}/publish", json={'expected_version': 1})
     assert response.status_code == 422
-    assert {item['field'] for item in response.json()['detail']['fields']} == {'title', 'slug', 'collection_id', 'description', 'primary_media_id', 'variants'}
+    assert {item['field'] for item in response.json()['detail']['fields']} == {'title', 'slug', 'description', 'primary_media_id', 'variants'}
     path = f"/api/v1/admin/products/{product['id']}"
     updated = admin_client.post(path, json={'expected_version': 1, 'title': ' SAMPLE Tee ', 'slug': 'SAMPLE-TEE',
         'variants': [{'sku': ' SAMPLE-M ', 'size': ' M ', 'price_minor': 123450, 'is_active': True}]}).json()
@@ -249,4 +249,51 @@ def test_product_multiple_collections_assignment_and_queries(admin_client):
     assert not any(p['id'] == prod['id'] for p in list1_after['products'])
     list2_after = admin_client.get(f"/api/v1/admin/products?collection_id={col2['id']}").json()
     assert any(p['id'] == prod['id'] for p in list2_after['products'])
+
+
+def test_delete_collection_unlinks_products_and_preserves_multiple_memberships(admin_client):
+    col_a = admin_client.post('/api/v1/admin/collections', json={'name': 'Del Col A', 'slug': 'del-col-a'}).json()
+    col_b = admin_client.post('/api/v1/admin/collections', json={'name': 'Del Col B', 'slug': 'del-col-b'}).json()
+
+    # Product 1: in both Col A and Col B
+    p1 = create_draft(
+        admin_client,
+        title='Product in Both',
+        slug='product-in-both',
+        collection_ids=[col_a['id'], col_b['id']],
+        variants=[{'sku': 'BOTH-1', 'size': 'M', 'price_minor': 100000, 'is_active': True}]
+    )
+
+    # Product 2: in Col A only
+    p2 = create_draft(
+        admin_client,
+        title='Product in A Only',
+        slug='product-in-a-only',
+        collection_ids=[col_a['id']],
+        variants=[{'sku': 'A-ONLY-1', 'size': 'L', 'price_minor': 150000, 'is_active': True}]
+    )
+
+    # Delete Collection A
+    del_res = admin_client.delete(f"/api/v1/admin/collections/{col_a['id']}")
+    assert del_res.status_code == 200
+
+    # Verify Col A no longer exists in owner list
+    cols_after = admin_client.get('/api/v1/admin/collections').json()['collections']
+    assert not any(c['id'] == col_a['id'] for c in cols_after)
+    assert any(c['id'] == col_b['id'] for c in cols_after)
+
+    # Product 1 should now belong only to Col B (primary collection_id updated to Col B)
+    p1_after = admin_client.get(f"/api/v1/admin/products/{p1['id']}").json()
+    assert p1_after['collection_id'] == col_b['id']
+    assert p1_after['collection_ids'] == [col_b['id']]
+
+    # Product 2 should now belong to NO collections (collection_id is None, collection_ids is [])
+    p2_after = admin_client.get(f"/api/v1/admin/products/{p2['id']}").json()
+    assert p2_after['collection_id'] is None
+    assert p2_after['collection_ids'] == []
+
+    # Product 2 still exists completely in product listings
+    prods_all = admin_client.get('/api/v1/admin/products').json()['products']
+    assert any(p['id'] == p2['id'] for p in prods_all)
+
 

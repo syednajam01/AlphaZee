@@ -169,6 +169,7 @@ export function fetchVariantStock(id) { return request(`/admin/catalog/variants/
 export function fetchStockHolds(id, params = {}) { return request(`/admin/inventory/${encodeURIComponent(id)}/holds?${new URLSearchParams(params)}`); }
 export function createOwnerCollection(payload) { return ownerCatalogWrite('/admin/collections', payload); }
 export function updateOwnerCollection(id, payload) { return ownerCatalogWrite(`/admin/collections/${encodeURIComponent(id)}`, payload); }
+export function deleteOwnerCollection(id) { return request(`/admin/collections/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
 export function reorderOwnerCollections(items) { return ownerCatalogWrite('/admin/collections/reorder', { items }); }
 function ownerCatalogWrite(path, payload) {
   return request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });

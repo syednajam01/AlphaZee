@@ -67,11 +67,15 @@ def get_active_products(
     page_size = min(page_size, MAX_PAGE_SIZE)
     offset = (page - 1) * page_size
 
-    # Base filter — join Collection to ensure only products in active collections are returned
+    # Base filter — outer join Collection to support products with or without collections
     base_stmt = (
         select(Product)
-        .join(Collection, Product.collection_id == Collection.id)
-        .where(Product.is_active.is_(True), Product.status == 'published', Collection.is_active.is_(True))
+        .outerjoin(Collection, Product.collection_id == Collection.id)
+        .where(
+            Product.is_active.is_(True),
+            Product.status == 'published',
+            or_(Product.collection_id.is_(None), Collection.is_active.is_(True)),
+        )
     )
     if collection_id:
         target_col_ids = select(Collection.id).where(
@@ -127,12 +131,12 @@ def get_public_product(db: Session, identity) -> Product | None:
     """
     stmt = (
         select(Product)
-        .join(Collection, Product.collection_id == Collection.id)
+        .outerjoin(Collection, Product.collection_id == Collection.id)
         .where(
             identity,
             Product.is_active.is_(True),
             Product.status == 'published',
-            Collection.is_active.is_(True),
+            or_(Product.collection_id.is_(None), Collection.is_active.is_(True)),
         )
         .options(
             *public_loads()
@@ -151,12 +155,12 @@ def get_hero_products(db: Session) -> list[Product]:
     """
     stmt = (
         select(Product)
-        .join(Collection, Product.collection_id == Collection.id)
+        .outerjoin(Collection, Product.collection_id == Collection.id)
         .where(
             Product.is_active.is_(True),
             Product.status == 'published',
             Product.is_hero.is_(True),
-            Collection.is_active.is_(True),
+            or_(Product.collection_id.is_(None), Collection.is_active.is_(True)),
         )
         .options(
             *public_loads()

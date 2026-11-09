@@ -216,3 +216,39 @@ test('delete draft deletes draft normally but blocks published products with unp
 
   view.destroy();
 });
+
+test('delete collection unlinks products and deletes collection via admin UI', async () => {
+  const container = install();
+  const calls = [];
+  globalThis.window.confirm = () => true;
+
+  const col1 = { id: 'col-1', name: 'Winter Edit', slug: 'winter-edit', is_active: true, edit_version: 1 };
+  let colList = [col1];
+
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET' });
+    let data = {}, status = 200;
+    if (url === '/api/v1/admin/collections') {
+      data = { collections: colList, total: colList.length };
+    } else if (url.includes('/admin/media')) {
+      data = { assets: [], total: 0 };
+    } else if (url === '/api/v1/admin/collections/col-1' && options.method === 'DELETE') {
+      colList = [];
+      status = 204;
+    }
+    return { ok: status < 400, status, json: async () => data };
+  };
+
+  const view = mountCatalogSection('collections', container, { isCurrent: () => true, setDirty() {}, canLeave: () => true });
+  await view.ready;
+
+  const delBtn = container.querySelector('[data-delete-collection="col-1"]');
+  assert.ok(delBtn);
+  delBtn.click();
+  await flush();
+
+  assert.equal(calls.filter(c => c.method === 'DELETE' && c.url.includes('col-1')).length, 1);
+  assert.match(container.querySelector('#catalog-status').textContent, /Collection "Winter Edit" deleted/);
+
+  view.destroy();
+});

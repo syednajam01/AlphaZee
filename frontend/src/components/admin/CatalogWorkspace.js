@@ -797,11 +797,19 @@ export function mountCatalogSection(section, container, context) {
     shell(`<div class="catalog-toolbar">${button('New collection', 'catalog-new-collection')}</div>
       <p>Deactivating a collection hides its products without deleting them.</p>
       <div class="catalog-grid">${collections.map((c, index) => `<article class="catalog-card"><h3>${esc(c.name)}</h3><p>${esc(c.slug)} · ${c.is_active ? 'Active' : 'Inactive'}</p>
-        ${button('Edit collection', '', `data-edit-collection="${esc(c.id)}"`)}<div class="catalog-toolbar">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+          ${button('Edit collection', '', `data-edit-collection="${esc(c.id)}"`)}
+          ${button('Delete', '', `data-delete-collection="${esc(c.id)}" class="btn btn-danger" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);"`)}
+        </div>
+        <div class="catalog-toolbar">
         ${button('Move up', '', `data-collection-move="${index}" data-delta="-1" ${index === 0 ? 'disabled' : ''}`)}
         ${button('Move down', '', `data-collection-move="${index}" data-delta="1" ${index === collections.length-1 ? 'disabled' : ''}`)}</div></article>`).join('') || '<p>No collections yet.</p>'}</div><div id="catalog-collection-editor"></div>`);
     bind('#catalog-new-collection', () => { if (context.canLeave()) collectionEditor({ is_active: true }); });
     container.querySelectorAll('[data-edit-collection]').forEach(node => node.addEventListener('click', () => { if (context.canLeave()) collectionEditor(collections.find(c => c.id === node.dataset.editCollection)); }));
+    container.querySelectorAll('[data-delete-collection]').forEach(node => node.addEventListener('click', () => {
+      const col = collections.find(c => c.id === node.dataset.deleteCollection);
+      if (col) confirmDeleteCollection(col);
+    }));
     container.querySelectorAll('[data-collection-move]').forEach(node => node.addEventListener('click', () => {
       if (!context.canLeave()) return;
       const reordered = [...collections], from = Number(node.dataset.collectionMove), to = from + Number(node.dataset.delta);
@@ -809,6 +817,21 @@ export function mountCatalogSection(section, container, context) {
       action(() => api.reorderOwnerCollections(reordered.map(c => ({ id: c.id, expected_version: c.edit_version }))), collectionList);
     }));
   }
+
+  const confirmDeleteCollection = (col) => {
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      if (!window.confirm(`Are you sure you want to delete collection "${col.name}"? Products linked to this collection will not be deleted, but will simply be unlinked from this collection.`)) {
+        return;
+      }
+    }
+    action(async () => {
+      await api.deleteOwnerCollection(col.id);
+    }, async () => {
+      query('#catalog-collection-editor').innerHTML = '';
+      await collectionList();
+      status(`Collection "${col.name}" deleted.`);
+    });
+  };
   async function collectionEditor(collection) {
     currentCollection = collection;
     context.setDirty(false);
@@ -841,8 +864,9 @@ export function mountCatalogSection(section, container, context) {
         <div id="catalog-col-deactivation-warning" style="display: ${!collection.is_active && publishedCount > 0 ? 'block' : 'none'}; padding: 10px 14px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--admin-radius-sm); color: #f87171; font-size: 0.8125rem; margin-top: 8px;">
           Warning: Deactivating this collection will hide ${publishedCount} published product(s) from customer catalog listings and checkout, because published products require an active collection.
         </div>
-        <div class="catalog-toolbar" style="margin-top: 12px;">
+        <div class="catalog-toolbar" style="margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <button type="submit" class="btn btn-primary" id="catalog-save-collection">Save collection details</button>
+          ${collection.id ? button('Delete collection', 'catalog-delete-collection-btn', 'class="btn btn-danger" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);"') : ''}
           ${button('Close editor', 'catalog-close-collection')}
         </div>
       </form>
@@ -891,6 +915,7 @@ export function mountCatalogSection(section, container, context) {
 
     const form = query('#catalog-collection-form'); wireDirty(form); form.querySelector('[name="name"]').focus();
     bind('#catalog-close-collection', () => { if (context.canLeave()) { query('#catalog-collection-editor').innerHTML = ''; context.setDirty(false); } });
+    bind('#catalog-delete-collection-btn', () => { confirmDeleteCollection(collection); });
 
     query('#catalog-col-is-active')?.addEventListener('change', event => {
       const warning = query('#catalog-col-deactivation-warning');

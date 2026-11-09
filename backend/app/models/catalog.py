@@ -131,7 +131,7 @@ class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
         CheckConstraint("status IN ('draft', 'published', 'archived')", name='ck_product_status'),
-        CheckConstraint("status != 'published' OR (title IS NOT NULL AND slug IS NOT NULL AND collection_id IS NOT NULL)", name='ck_product_published_identity'),
+        CheckConstraint("status != 'published' OR (title IS NOT NULL AND slug IS NOT NULL)", name='ck_product_published_identity'),
         CheckConstraint("stock_management_source IN ('alphazee_managed', 'vendor_managed')", name='ck_product_stock_management_source'),
         CheckConstraint("stock_management_source != 'vendor_managed' OR vendor_id IS NOT NULL", name='ck_product_vendor_managed_requires_vendor'),
         Index('ix_products_vendor_id', 'vendor_id'),
@@ -157,7 +157,7 @@ class Product(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     collection_id: Mapped[str | None] = mapped_column(
-        String(100), ForeignKey("collections.id", ondelete="RESTRICT"), nullable=True
+        String(100), ForeignKey("collections.id", ondelete="SET NULL"), nullable=True
     )
     """Foreign key to the owning collection. Prevents accidental orphan products."""
 
