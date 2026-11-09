@@ -38,7 +38,9 @@ def run(args, *, output=None, stdin=None):
         raise DeploymentError(f'Required executable is missing: {name}.{hint}') from None
     if result.returncode:
         # Commands can contain environment configuration; never echo arguments/stderr.
-        raise DeploymentError(f'External command failed ({Path(str(args[0])).name}, exit {result.returncode})')
+        cmd_summary = [str(a) for a in args if not str(a).startswith('-') and '/' not in str(a) and '\\' not in str(a)][:3]
+        cmd_name = ' '.join(cmd_summary) or Path(str(args[0])).name
+        raise DeploymentError(f'External command failed ({cmd_name}, exit {result.returncode})')
     return (result.stdout or b'').decode().strip() if output is None else ''
 
 
@@ -233,7 +235,10 @@ class Deployer:
             # tar is system-provided on the Linux VM; originals are only read.
             run(['tar', '-C', mount, '-czf', directory / 'media.tar.gz', '.'])
         finally:
-            self.live('start', 'api')
+            try:
+                self.live('start', 'api')
+            except DeploymentError:
+                self.live('up', '-d', '--no-deps', 'api')
         # Resume customer traffic before uploading the captured, consistent snapshot.
         account = self.config['backup_storage_account']
         container = self.config['backup_container']
