@@ -84,3 +84,104 @@ test('destroyed variant panels ignore late private responses', async () => {
   finish(response(state)); await flush();
   assert.equal(host.innerHTML,before);
 });
+
+test('inherits product supplier, renders supplier badge, omits inline supplier registration, and saves mapping', async () => {
+  const host = install(), calls = [];
+  const unmappedState = {
+    public_availability: 'unavailable',
+    readiness_reasons: ['No active supplier mapping'],
+    historical_mappings: [],
+    mapping: null,
+  };
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/stock')) return response(unmappedState);
+    return response({});
+  };
+
+  const suppliersList = {
+    suppliers: [
+      { id: 'internal-sup-id', name: 'AlphaZee Warehouse', supplier_type: 'alphazee_internal', status: 'active' },
+      { id: 'vendor-sup-id', name: 'Silk Route Vendor', supplier_type: 'external_vendor', status: 'active' },
+    ]
+  };
+
+  const vendorProduct = {
+    stock_management_source: 'vendor_managed',
+    vendor_id: 'vendor-sup-id',
+  };
+  const controller = mountVariantStock(host, { id: 101, sku: 'PROD-BLK-M' }, {
+    isCurrent: () => true,
+    onDirty() {},
+    suppliers: async () => suppliersList,
+    product: vendorProduct,
+  });
+
+  host.querySelector('[data-load-stock]').click();
+  await flush();
+
+  // Verify inline registration accordion is NOT present
+  assert.equal(host.querySelector('[data-new-supplier]'), null);
+  assert.equal(host.querySelector('[name="stock_new_name"]'), null);
+
+  // Verify supplier badge shows vendor name
+  assert.match(host.querySelector('.supplier-badge').textContent, /Silk Route Vendor/);
+
+  // Verify preselected supplier value matches vendor
+  assert.equal(host.querySelector('[name="stock_supplier"]').value, 'vendor-sup-id');
+
+  // Fill cost and save
+  const costInput = host.querySelector('[name="stock_cost"]');
+  costInput.value = '2500';
+  host.dispatchEvent({ type: 'input', target: costInput, stopPropagation() {} });
+
+  host.querySelector('[data-save-mapping]').click();
+  await flush();
+
+  const assignCall = calls.find(c => c.url.includes('/suppliers/'));
+  assert.ok(assignCall);
+  assert.match(assignCall.url, /vendor-sup-id/);
+  assert.deepEqual(assignCall.body, { variant_id: 101, supplier_cost_minor: 250000, active: true });
+
+  controller.destroy();
+
+  // Test 2: Internal managed product inherits alphazee_internal supplier
+  const internalProduct = {
+    stock_management_source: 'alphazee_managed',
+    vendor_id: null,
+  };
+  const internalHost = install();
+  const internalCalls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    internalCalls.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith('/stock')) return response(unmappedState);
+    return response({});
+  };
+  const internalController = mountVariantStock(internalHost, { id: 102, sku: 'PROD-WHT-S' }, {
+    isCurrent: () => true,
+    onDirty() {},
+    suppliers: async () => suppliersList,
+    product: internalProduct,
+  });
+
+  internalHost.querySelector('[data-load-stock]').click();
+  await flush();
+
+  assert.equal(internalHost.querySelector('[data-new-supplier]'), null);
+  assert.match(internalHost.querySelector('.supplier-badge').textContent, /AlphaZee Warehouse/);
+  assert.equal(internalHost.querySelector('[name="stock_supplier"]').value, 'internal-sup-id');
+
+  const intCostInput = internalHost.querySelector('[name="stock_cost"]');
+  intCostInput.value = '1800';
+  internalHost.dispatchEvent({ type: 'input', target: intCostInput, stopPropagation() {} });
+
+  internalHost.querySelector('[data-save-mapping]').click();
+  await flush();
+
+  const intAssignCall = internalCalls.find(c => c.url.includes('/suppliers/'));
+  assert.ok(intAssignCall);
+  assert.match(intAssignCall.url, /internal-sup-id/);
+  assert.deepEqual(intAssignCall.body, { variant_id: 102, supplier_cost_minor: 180000, active: true });
+
+  internalController.destroy();
+});

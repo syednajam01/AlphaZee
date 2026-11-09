@@ -621,7 +621,12 @@ export function mountCatalogSection(section, container, context) {
     for (const variant of product.variants || []) {
       if (archived) continue;
       stockViews.push(mountVariantStock(query(`[data-variant-stock="${variant.id}"]`), variant, {
-        isCurrent: current, suppliers,
+        isCurrent: current, suppliers, product,
+        getProduct: () => ({
+          ...product,
+          stock_management_source: form.querySelector('input[name="stock_management_source"]:checked')?.value || product.stock_management_source || 'alphazee_managed',
+          vendor_id: form.querySelector('#catalog-vendor-id')?.value || product.vendor_id || null,
+        }),
         onDirty(id, value) { if (value) dirtyStock.add(id); else dirtyStock.delete(id); parentContext.setDirty(catalogDirty || dirtyStock.size > 0); },
       }));
     }
