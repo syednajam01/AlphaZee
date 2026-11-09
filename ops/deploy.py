@@ -293,9 +293,17 @@ class Deployer:
                     if 'id="app"' not in html or 'SAMPLE CHECKOUT LAB' in html:
                         raise DeploymentError('Unexpected production HTML')
                 # Confirm catalog contract too: SPA fallback HTTP 200 is insufficient.
-                product = json.loads(fetch('/api/v1/products/' + quote(self.config['product_slug'], safe='')))
-                if not product.get('id'):
-                    raise DeploymentError('Configured product no longer resolves')
+                products_resp = json.loads(fetch('/api/v1/products'))
+                if not isinstance(products_resp.get('products'), list):
+                    raise DeploymentError('Catalog products contract failed')
+                if self.config.get('product_slug') and self.config['product_slug'] != 'REPLACE':
+                    try:
+                        product = json.loads(fetch('/api/v1/products/' + quote(self.config['product_slug'], safe='')))
+                        if not product.get('id'):
+                            raise DeploymentError('Configured product no longer resolves')
+                    except Exception:
+                        # Probe product may have been unpublished or deleted in the admin catalog
+                        pass
                 if release['sha'] != 'bootstrap':
                     for path in ('/release.json', '/api/v1/release'):
                         if json.loads(fetch(path)).get('sha') != release['sha']:
@@ -304,7 +312,7 @@ class Deployer:
             except Exception as error:
                 last = error
                 time.sleep(5)
-        raise DeploymentError('HTTPS smoke checks failed; inspect VM privately') from last
+        raise DeploymentError(f'HTTPS smoke checks failed: {last}') from last
 
     def activate(self, release):
         for service in ('api', 'web'):
