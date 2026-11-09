@@ -163,6 +163,12 @@ class Deployer:
                                   ('api', [('catalog_media', '/var/lib/alphazee/catalog-media')]),
                                   ('web', [('caddy_data', '/data'), ('caddy_config', '/config')])):
             container = self.live('ps', '-q', service)
+            if not container:
+                try:
+                    self.live('start', service)
+                except DeploymentError:
+                    self.live('up', '-d', '--no-deps', service)
+                container = self.live('ps', '-q', service)
             if not container or '\n' in container:
                 raise DeploymentError('Expected one running container for each production service')
             actual = json.loads(run(['docker', 'inspect', container]))[0]
