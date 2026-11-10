@@ -89,9 +89,10 @@ test('late private responses cannot overwrite login after session expiry', async
   dashboard.destroy();
 });
 
-test('section parsing distinguishes admin root, reports and unknown paths', () => {
+test('section parsing distinguishes admin root, reports, hero and unknown paths', () => {
   assert.equal(adminSection('/admin/'), 'overview');
   assert.equal(adminSection('/admin/reports'), 'reports');
+  assert.equal(adminSection('/admin/hero'), 'hero');
   assert.equal(adminSection('/admin/orders/extra'), 'not-found');
   assert.equal(adminSection('/administrator'), 'not-found');
 });
