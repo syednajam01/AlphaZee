@@ -46,6 +46,7 @@ jobs:
           NODE_PATH=/tmp/browser-release/node_modules node ops/browser_smoke.cjs
           NODE_PATH=/tmp/browser-release/node_modules node ops/admin_mobile_smoke.cjs
           NODE_PATH=/tmp/browser-release/node_modules node ops/navbar_smoke.cjs
+          NODE_PATH=/tmp/browser-release/node_modules node ops/vendor_matrix_smoke.cjs
       - name: Push the tested images and record digests
         id: images
         run: |

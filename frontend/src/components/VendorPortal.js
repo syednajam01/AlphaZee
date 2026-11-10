@@ -2,7 +2,7 @@
  * VendorPortal.js — Mobile-first Vendor Stock workspace (VS2-VS3).
  *
  * Dedicated stock-only portal for supplier shop staff to maintain physical stock
- * counts allocated to AlphaZee with zero leakage of prices, wholesale costs,
+ * counts allocated to AlphaZee, including their agreed supply rate, without retail prices,
  * customer data, or other vendors' products.
  */
 
@@ -18,7 +18,8 @@ import {
 } from '../utils/api.js';
 
 import { sanitizeMediaUrl } from '../utils/dom.js';
-import { formatPkr } from '../utils/money.js';
+import { VendorCountDrafts, parseVendorCount, MAX_VENDOR_COUNT } from '../utils/vendorMatrix.js';
+import { createVendorStockMatrix } from './VendorStockMatrix.js';
 
 export function initVendorPortal() {
   const root = document.getElementById('app');
@@ -40,6 +41,10 @@ export function initVendorPortal() {
   let saving = false;
   let restoreFocusId = null;
   let debounceTimer = null;
+  let destroyed = false;
+  let refreshing = false;
+  let batchGeneration = 0;
+  const drafts = new VendorCountDrafts();
   const previousOverflow = document.body.style.overflow;
 
   function closeModal() {
@@ -74,9 +79,14 @@ export function initVendorPortal() {
 
   const unsubscribeSession = onVendorSessionExpired(() => {
     session = null;
+    batchGeneration++;
+    saving = false;
+    refreshing = false;
+    drafts.clear();
     stockRequest++;
     activeModal = null;
     stockItems = [];
+    searchQuery = ''; page = 1; totalItems = 0;
     notice = '';
     isLoading = false;
     render();
@@ -87,7 +97,9 @@ export function initVendorPortal() {
     errorMsg = null;
     render();
     try {
-      session = await fetchVendorSession();
+      const restored = await fetchVendorSession();
+      if (destroyed) return;
+      session = restored;
       await loadStock();
     } catch {
       session = null;
@@ -96,27 +108,35 @@ export function initVendorPortal() {
     }
   }
 
-  async function loadStock() {
+  async function loadStock({ quiet = false } = {}) {
+    quiet = quiet || Boolean(activeModal);
+    if (!session || destroyed || saving || quiet && refreshing) return;
+    refreshing = true;
+    const actor = session;
     const request = ++stockRequest;
-    isLoading = true;
+    if (!quiet) isLoading = true;
     errorMsg = null;
-    render();
+    if (!quiet) render();
     try {
       const res = await fetchVendorStock({ page, limit, search: searchQuery });
-      if (request !== stockRequest || !session) return;
+      if (request !== stockRequest || session !== actor || destroyed) return;
       stockItems = res.items || [];
       totalItems = res.total_items || 0;
+      drafts.reconcile(stockItems);
     } catch (err) {
-      if (request !== stockRequest || !session) return;
-      errorMsg = err.message || 'Failed to load stock list';
+      if (request !== stockRequest || session !== actor || destroyed) return;
+      if (quiet) notice = 'Could not refresh stock. Your pending edits are kept; use Refresh stock to retry.';
+      else errorMsg = err.message || 'Failed to load stock list';
     } finally {
-      if (request === stockRequest) { isLoading = false; render(); }
+      if (request === stockRequest && session === actor && !destroyed) { refreshing = false; isLoading = false; if (!activeModal) render(); }
     }
   }
 
   function render() {
+    if (destroyed) return;
     const focusedId = document.activeElement?.id;
     const selection = document.activeElement?.selectionStart;
+    const selectionEnd = document.activeElement?.selectionEnd;
     root.innerHTML = '';
     const container = document.createElement('div');
     container.className = 'vendor-portal-container';
@@ -147,9 +167,9 @@ export function initVendorPortal() {
       const target = document.getElementById(focusedId);
       if (target && container.querySelector('.vp-modal-dialog')?.contains(target)) target.focus();
       else container.querySelector('.vp-modal-dialog input, .vp-modal-close')?.focus();
-    } else if (focusedId === 'vp-stock-search') {
+    } else if (focusedId === 'vp-stock-search' || focusedId?.startsWith('vp-matrix-count-')) {
       const input = document.getElementById(focusedId); input?.focus();
-      if (typeof selection === 'number') { try { input?.setSelectionRange(selection, selection); } catch {} }
+      if (typeof selection === 'number') { try { input?.setSelectionRange(selection, typeof selectionEnd === 'number' ? selectionEnd : selection); } catch {} }
     }
   }
 
@@ -241,7 +261,9 @@ export function initVendorPortal() {
       submitBtn.textContent = 'Signing in…';
       try {
         errorMsg = null;
-        session = await loginVendor(uname, pwd);
+        const restored = await loginVendor(uname, pwd);
+        if (destroyed) return;
+        session = restored;
         await loadStock();
       } catch (err) {
         errorMsg = err.message || 'Login failed';
@@ -263,8 +285,8 @@ export function initVendorPortal() {
         <div class="vp-role-pill">Stock workspace</div>
       </div>
       <div class="vp-header-right">
-        <button type="button" class="vp-btn vp-btn-outline vp-btn-sm" id="vp-refresh-btn">Refresh stock</button>
-        <button type="button" class="vp-btn vp-btn-outline vp-btn-sm" id="vp-history-btn">
+        <button type="button" class="vp-btn vp-btn-outline vp-btn-sm" id="vp-refresh-btn" ${saving ? 'disabled' : ''}>Refresh stock</button>
+        <button type="button" class="vp-btn vp-btn-outline vp-btn-sm" id="vp-history-btn" ${saving ? 'disabled' : ''}>
           Update history
         </button>
         <button type="button" class="vp-btn vp-btn-subtle vp-btn-sm" id="vp-logout-btn" title="Sign out ${escapeHtml(session.username)}">
@@ -276,10 +298,18 @@ export function initVendorPortal() {
     header.querySelector('#vp-history-btn').addEventListener('click', openHistoryModal);
     header.querySelector('#vp-refresh-btn').addEventListener('click', () => { notice = ''; loadStock(); });
     header.querySelector('#vp-logout-btn').addEventListener('click', async () => {
+      batchGeneration++; stockRequest++;
+      drafts.clear();
+      header.querySelector('#vp-logout-btn').disabled = true;
       try {
         await logoutVendor();
       } finally {
         session = null;
+        saving = false;
+        activeModal = null;
+        stockItems = [];
+        searchQuery = ''; page = 1; totalItems = 0;
+        notice = '';
         render();
       }
     });
@@ -321,23 +351,24 @@ export function initVendorPortal() {
     bar.innerHTML = `
       <div class="vp-search-input-wrap">
         <label for="vp-stock-search" class="vp-search-label">Find a variant</label>
-        <input type="search" id="vp-stock-search" class="vp-input" placeholder="Search name, SKU, size or color" value="${escapeHtml(searchQuery)}" />
+        <input type="search" id="vp-stock-search" class="vp-input" placeholder="Search name, SKU, size or color" value="${escapeHtml(searchQuery)}" ${saving ? 'disabled' : ''} />
         ${searchQuery ? '<button type="button" class="vp-search-clear" id="vp-clear-search" aria-label="Clear search">Clear</button>' : ''}
       </div>
     `;
 
     const input = bar.querySelector('#vp-stock-search');
     input.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      page = 1;
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        searchQuery = e.target.value;
-        page = 1;
         loadStock();
       }, 300);
     });
 
     const clearBtn = bar.querySelector('#vp-clear-search');
     if (clearBtn) {
+      clearBtn.disabled = saving;
       clearBtn.addEventListener('click', () => {
         searchQuery = '';
         page = 1;
@@ -346,6 +377,20 @@ export function initVendorPortal() {
     }
 
     return bar;
+  }
+
+  function renderMatrix(items = stockItems) {
+    return createVendorStockMatrix({
+      items, totalItems, limit, drafts, saving,
+      onSave: prepareCounts, onCount: openCountModal, onShortage: openShortageModal,
+      onDiscard: () => {
+        restoreFocusId = 'vp-stock-search';
+        activeModal = { type: 'matrixConfirm', title: 'Discard pending counts?',
+          description: 'This removes your unsaved edits, including edits on other pages. Saved stock and reported shortages stay unchanged.',
+          confirmLabel: 'Discard edits', action: () => { drafts.clear(); render(); document.getElementById('vp-stock-search')?.focus(); } };
+        render();
+      },
+    });
   }
 
   function renderStockContent() {
@@ -367,57 +412,21 @@ export function initVendorPortal() {
       content.innerHTML = `
         <div class="vp-empty-state">
           <div class="vp-empty-icon" aria-hidden="true">—</div>
-          <h3>No assigned items found</h3>
-          <p>${searchQuery ? 'No variants match your search filter.' : 'Your shop does not have active variants assigned yet.'}</p>
+          <h3>${totalItems > 0 ? 'This page has no items' : 'No assigned items found'}</h3>
+          <p>${totalItems > 0 ? 'Inventory changed. Return to the first page to see your assigned stock.' : searchQuery ? 'No variants match your search filter.' : 'Your shop does not have active variants assigned yet.'}</p>
+          ${totalItems > 0 ? '<button type="button" class="vp-btn vp-btn-outline" id="vp-first-page">Return to first page</button>' : ''}
         </div>
       `;
+      if (drafts.pending().length) content.prepend(renderMatrix([]));
+      content.querySelector('#vp-first-page')?.addEventListener('click', () => { page = 1; loadStock(); });
       return content;
     }
 
-    const groups = new Map();
-    stockItems.forEach(item => {
-      const key = `${item.product_title}|||${item.color || 'Standard'}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          title: item.product_title,
-          color: item.color || 'Standard',
-          thumb: sanitizeMediaUrl(item.thumbnail_url, '/images/storefront-empty.svg'),
-          items: []
-        });
-      }
-      groups.get(key).items.push(item);
-    });
-
-    groups.forEach(group => {
-      const groupSection = document.createElement('section');
-      groupSection.className = 'vp-stock-group';
-      groupSection.style.cssText = 'margin-bottom: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;';
-      
-      const groupHeader = document.createElement('div');
-      groupHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 14px;';
-      groupHeader.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <img src="${escapeHtml(group.thumb)}" width="40" height="50" style="border-radius: 4px; object-fit: cover;" alt="">
-          <div>
-            <h3 style="margin: 0; font-size: 1rem; color: #0f172a; font-weight: 600;">${escapeHtml(group.title)}</h3>
-            <span style="font-size: 0.8125rem; color: #64748b;">Color: <strong style="color: #0f172a;">${escapeHtml(group.color)}</strong> · ${group.items.length} size${group.items.length === 1 ? '' : 's'}</span>
-          </div>
-        </div>
-      `;
-      groupSection.appendChild(groupHeader);
-
-      const grid = document.createElement('div');
-      grid.className = 'vp-stock-grid';
-      group.items.forEach(item => {
-        grid.appendChild(renderStockCard(item));
-      });
-      groupSection.appendChild(grid);
-      content.appendChild(groupSection);
-    });
+    content.appendChild(renderMatrix());
     const pages = Math.ceil(totalItems / limit);
     if (pages > 1) {
       const nav = document.createElement('nav'); nav.className = 'vp-pagination'; nav.setAttribute('aria-label', 'Stock pages');
-      nav.innerHTML = `<button class="vp-btn vp-btn-outline" id="vp-prev-page" ${page <= 1 ? 'disabled' : ''}>Previous</button><span>Page ${page} of ${pages}</span><button class="vp-btn vp-btn-outline" id="vp-next-page" ${page >= pages ? 'disabled' : ''}>Next</button>`;
+      nav.innerHTML = `<button class="vp-btn vp-btn-outline" id="vp-prev-page" ${saving || page <= 1 ? 'disabled' : ''}>Previous</button><span>Page ${page} of ${pages}</span><button class="vp-btn vp-btn-outline" id="vp-next-page" ${saving || page >= pages ? 'disabled' : ''}>Next</button>`;
       nav.querySelector('#vp-prev-page').addEventListener('click', () => { page--; loadStock(); });
       nav.querySelector('#vp-next-page').addEventListener('click', () => { page++; loadStock(); });
       content.appendChild(nav);
@@ -425,72 +434,62 @@ export function initVendorPortal() {
     return content;
   }
 
-  function renderStockCard(item) {
-    const card = document.createElement('article');
-    card.className = 'vp-stock-card';
-    card.id = `vp-card-${item.variant_id}`;
-
-    const hasShortageRisk = item.held_quantity > item.allocated_on_hand;
-    const isOutOfStock = item.available_quantity === 0;
-
-    card.innerHTML = `
-      <div class="vp-card-top">
-        <img class="vp-item-photo" src="${escapeHtml(sanitizeMediaUrl(item.thumbnail_url, '/images/storefront-empty.svg'))}" alt="" width="64" height="80" loading="lazy" />
-        <div class="vp-card-info">
-          <h3 class="vp-item-title">${escapeHtml(item.product_title)}</h3>
-          <div class="vp-item-tags">
-            <span class="vp-badge vp-badge-sku">${escapeHtml(item.variant_sku)}</span>
-            ${item.size ? `<span class="vp-badge vp-badge-opt">Size: ${escapeHtml(item.size)}</span>` : ''}
-            ${item.color ? `<span class="vp-badge vp-badge-opt">Color: ${escapeHtml(item.color)}</span>` : ''}
-            ${item.supplier_cost_minor !== undefined && item.supplier_cost_minor !== null ? `<span class="vp-badge vp-badge-cost" title="Your agreed supply rate">Unit Cost: ${formatPkr(item.supplier_cost_minor)}</span>` : ''}
-          </div>
-        </div>
-        ${hasShortageRisk ? '<span class="vp-tag vp-tag-danger">Count needs review</span>' : isOutOfStock ? '<span class="vp-tag vp-tag-muted">Unavailable online</span>' : '<span class="vp-tag vp-tag-active">Available</span>'}
-      </div>
-
-      <div class="vp-card-counters">
-        <div class="vp-counter-box">
-          <div class="vp-counter-label">Your stock</div>
-          <div class="vp-counter-num ${item.allocated_on_hand === 0 ? 'is-zero' : ''}">${item.allocated_on_hand}</div>
-        </div>
-        <div class="vp-counter-box">
-          <div class="vp-counter-label">Customer holds</div>
-          <div class="vp-counter-num is-held">${item.held_quantity}</div>
-        </div>
-        <div class="vp-counter-box">
-          <div class="vp-counter-label">Available online</div>
-          <div class="vp-counter-num is-avail">${item.available_quantity}</div>
-        </div>
-      </div>
-
-      <p class="vp-updated">${item.last_updated_at ? `Last updated ${formatDate(item.last_updated_at)}` : 'Not counted yet'}</p>
-      <div class="vp-card-actions">
-        <button type="button" class="vp-btn vp-btn-primary vp-btn-sm vp-update-btn" data-variant-id="${item.variant_id}">
-          Update count
-        </button>
-        <button type="button" class="vp-btn vp-btn-outline vp-btn-sm vp-shortage-btn" data-variant-id="${item.variant_id}">
-          Report a shortage
-        </button>
-      </div>
-    `;
-
-    card.querySelector('.vp-update-btn').addEventListener('click', () => {
-      openCountModal(item);
-    });
-    card.querySelector('.vp-update-btn').id = `vp-count-open-${item.variant_id}`;
-    card.querySelector('.vp-shortage-btn').id = `vp-shortage-open-${item.variant_id}`;
-
-    card.querySelector('.vp-shortage-btn').addEventListener('click', () => {
-      openShortageModal(item);
-    });
-
-    return card;
-  }
-
   function openCountModal(item) {
     restoreFocusId = `vp-count-open-${item.variant_id}`;
-    activeModal = { type: 'count', item };
+    activeModal = { type: 'count', item, initialCount: parseVendorCount(drafts.get(item.variant_id)?.value) ?? item.allocated_on_hand };
     render();
+  }
+
+  function prepareCounts(ids, focusId) {
+    if (saving || !session) return;
+    const changes = drafts.snapshot(ids);
+    if (!changes.length) return;
+    if (changes.some(change => change.count === null || change.needsReview)) {
+      notice = 'Check invalid or conflicting counts before saving.'; render(); return;
+    }
+    restoreFocusId = focusId;
+    const belowHolds = changes.filter(change => change.count < change.item.held_quantity);
+    if (belowHolds.length) {
+      activeModal = { type: 'matrixConfirm', title: 'Counts below customer holds',
+        description: 'Below-hold counts create shortage reports for owner review. Recorded stock and existing reservations stay intact. Other changed sizes save separately.',
+        changes: belowHolds, confirmLabel: 'Report shortages and save counts', action: () => saveCounts(changes) };
+      render();
+    } else saveCounts(changes);
+  }
+
+  async function saveCounts(changes) {
+    if (saving || !session || destroyed) return;
+    const actor = session, generation = ++batchGeneration;
+    clearTimeout(debounceTimer);
+    stockRequest++; refreshing = false;
+    saving = true; let saved = 0, reported = 0, failed = 0;
+    for (const [index, change] of changes.entries()) {
+      if (session !== actor || destroyed || generation !== batchGeneration) return;
+      const id = change.item.variant_id;
+      drafts.saving(id);
+      notice = `Saving size ${index + 1} of ${changes.length}…`;
+      render();
+      try {
+        const result = await updateVendorStockCount(id, { counted_quantity: change.count,
+          expected_version: change.baseVersion, reason: 'manual_count', request_ref: change.requestRef });
+        if (session !== actor || destroyed || generation !== batchGeneration) return;
+        drafts.acknowledge(id, result);
+        stockItems = stockItems.map(item => item.variant_id === id ? { ...item, ...result } : item);
+        result.shortage_detected ? reported++ : saved++;
+      } catch (error) {
+        if (session !== actor || destroyed || generation !== batchGeneration) return;
+        drafts.fail(id, error); failed++;
+      }
+    }
+    if (session !== actor || destroyed || generation !== batchGeneration) return;
+    saving = false;
+    notice = `${saved} saved · ${reported} shortage reports · ${failed} not saved${failed ? '. Unsaved edits are kept; review each row.' : ''}`;
+    render();
+    await loadStock({ quiet: true });
+    if (session === actor && !destroyed) {
+      const opener = document.getElementById(restoreFocusId);
+      (opener && !opener.disabled ? opener : document.getElementById(`vp-matrix-count-${changes[0].item.variant_id}`) || document.getElementById('vp-stock-search'))?.focus();
+    }
   }
 
   function openShortageModal(item) {
@@ -528,9 +527,16 @@ export function initVendorPortal() {
     dialog.setAttribute('aria-modal', 'true');
     dialog.setAttribute('aria-labelledby', 'vp-modal-title');
 
-    if (activeModal.type === 'count') {
+    if (activeModal.type === 'matrixConfirm') {
+      const confirmation = activeModal;
+      dialog.innerHTML = `<div class="vp-modal-header"><h2 id="vp-modal-title">${escapeHtml(confirmation.title)}</h2><button type="button" class="vp-modal-close" id="vp-close-modal" aria-label="Close dialog">×</button></div>
+        <div class="vp-modal-body"><p class="vp-modal-desc">${escapeHtml(confirmation.description)}</p>
+        ${confirmation.changes ? `<ul class="vp-confirm-counts">${confirmation.changes.map(change => `<li><strong>${escapeHtml(change.item.variant_sku)}</strong>: ${change.count} counted, ${change.item.held_quantity} held</li>`).join('')}</ul>` : ''}
+        <div class="vp-modal-actions"><button type="button" class="vp-btn vp-btn-outline" id="vp-cancel-count">Cancel</button><button type="button" class="vp-btn vp-btn-primary" id="vp-confirm-matrix">${escapeHtml(confirmation.confirmLabel)}</button></div></div>`;
+      dialog.querySelector('#vp-confirm-matrix').addEventListener('click', () => { activeModal = null; render(); confirmation.action(); });
+    } else if (activeModal.type === 'count') {
       const item = activeModal.item;
-      let currentVal = item.allocated_on_hand;
+      let currentVal = activeModal.initialCount;
 
       dialog.innerHTML = `
         <div class="vp-modal-header">
@@ -555,7 +561,7 @@ export function initVendorPortal() {
               <label for="vp-new-count">Units you have for AlphaZee</label>
               <div class="vp-stepper">
                 <button type="button" class="vp-step-btn" id="vp-step-minus" aria-label="Decrease count">−</button>
-                <input type="number" id="vp-new-count" class="vp-input vp-step-input" min="0" max="9999" step="1" inputmode="numeric" value="${currentVal}" required />
+                <input type="number" id="vp-new-count" class="vp-input vp-step-input" min="0" max="${MAX_VENDOR_COUNT}" step="1" inputmode="numeric" value="${currentVal}" required />
                 <button type="button" class="vp-step-btn" id="vp-step-plus" aria-label="Increase count">+</button>
               </div>
             </div>
@@ -621,7 +627,7 @@ export function initVendorPortal() {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (saving) return;
-        if (!Number.isInteger(Number(input.value)) || Number(input.value) < 0 || input.value === '') {
+        if (parseVendorCount(input.value) === null) {
           modalError(dialog, 'Enter a whole number of units, zero or more.'); return;
         }
         saving = true;
@@ -632,6 +638,7 @@ export function initVendorPortal() {
         const newCount = parseInt(input.value, 10);
         const reason = dialog.querySelector('#vp-reason').value;
         const note = dialog.querySelector('#vp-note').value.trim();
+        const actor = session, modal = activeModal;
 
         try {
           const res = await updateVendorStockCount(item.variant_id, {
@@ -640,14 +647,17 @@ export function initVendorPortal() {
             reason,
             note: note || undefined,
           });
+          if (destroyed || session !== actor || activeModal !== modal) return;
 
           // Show confirmation message
           saving = false;
           activeModal = null;
           notice = res.shortage_detected ? res.message : `Stock count saved: ${newCount} units. Customer holds are preserved.`;
+          drafts.reset(item.variant_id);
           await loadStock();
           document.getElementById(restoreFocusId)?.focus();
         } catch (err) {
+          if (destroyed || session !== actor || activeModal !== modal) return;
           saving = false;
           if (!activeModal || !session) return;
           modalError(dialog, err.status === 409 ? 'This count changed. Close this dialog and refresh stock before trying again.' : `Could not save: ${err.message}`);
@@ -700,7 +710,7 @@ export function initVendorPortal() {
         e.preventDefault();
         if (saving) return;
         const countValue = dialog.querySelector('#vp-shortage-count').value;
-        if (countValue === '' || !Number.isInteger(Number(countValue)) || Number(countValue) < 0) {
+        if (parseVendorCount(countValue) === null) {
           modalError(dialog, 'Enter a whole number of units, zero or more.'); return;
         }
         if (!dialog.querySelector('#vp-shortage-note').value.trim()) {
@@ -713,18 +723,21 @@ export function initVendorPortal() {
 
         const reportedCount = parseInt(dialog.querySelector('#vp-shortage-count').value, 10);
         const note = dialog.querySelector('#vp-shortage-note').value.trim();
+        const actor = session, modal = activeModal;
 
         try {
           await reportVendorShortage(item.variant_id, {
             reported_count: reportedCount,
             note,
           });
+          if (destroyed || session !== actor || activeModal !== modal) return;
           saving = false;
           activeModal = null;
           notice = 'Shortage reported. AlphaZee will review it; customer holds remain protected.';
           await loadStock();
           document.getElementById(restoreFocusId)?.focus();
         } catch (err) {
+          if (destroyed || session !== actor || activeModal !== modal) return;
           saving = false;
           if (!activeModal || !session) return;
           modalError(dialog, `Could not send report: ${err.message}`);
@@ -822,5 +835,12 @@ export function initVendorPortal() {
   }
 
   checkAuthAndLoad();
-  return { destroy() { stockRequest++; clearTimeout(debounceTimer); unsubscribeSession(); document.removeEventListener('keydown', modalKeys); document.body.style.overflow = previousOverflow; } };
+  const refreshVisible = () => { if (session && !saving && !isLoading && !refreshing && !activeModal && document.visibilityState !== 'hidden') loadStock({ quiet: true }); };
+  const storageRefresh = event => { if (event.key === 'alphazee_catalog_changed') refreshVisible(); };
+  const poll = window.setInterval(refreshVisible, 30000);
+  window.addEventListener('focus', refreshVisible);
+  window.addEventListener('pageshow', refreshVisible);
+  window.addEventListener('storage', storageRefresh);
+  document.addEventListener('visibilitychange', refreshVisible);
+  return { destroy() { destroyed = true; batchGeneration++; stockRequest++; drafts.clear(); stockItems = []; session = null; window.clearInterval(poll); clearTimeout(debounceTimer); unsubscribeSession(); document.removeEventListener('keydown', modalKeys); window.removeEventListener('focus', refreshVisible); window.removeEventListener('pageshow', refreshVisible); window.removeEventListener('storage', storageRefresh); document.removeEventListener('visibilitychange', refreshVisible); document.body.style.overflow = previousOverflow; root.textContent = ''; } };
 }

@@ -139,7 +139,8 @@ async function request(endpoint, options = {}) {
     }
 
     const data = res.status === 204 ? null : await res.json();
-    if (!['GET','HEAD','OPTIONS'].includes(method) && /^\/admin\/(products|collections|media|suppliers|inventory)(\/|$)/.test(endpoint)) {
+    if (!['GET','HEAD','OPTIONS'].includes(method) && (/^\/admin\/(products|collections|media|suppliers|inventory)(\/|$)/.test(endpoint)
+      || /^\/vendor\/stock\/\d+\/(count|shortage)$/.test(endpoint))) {
       try { window.localStorage?.setItem('alphazee_catalog_changed', `${Date.now()}-${Math.random()}`); } catch {}
       if (typeof window !== 'undefined') window.dispatchEvent?.(new Event('alphazee:catalog-change'));
     }

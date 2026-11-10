@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchVendorSession, fetchVendorStock, reportVendorShortage } from '../src/utils/api.js';
+import { fetchVendorSession, fetchVendorStock, reportVendorShortage, updateVendorStockCount } from '../src/utils/api.js';
 
 test('vendor session restore, pagination and shortage payload match backend contracts', async () => {
   const previous = globalThis.fetch;
@@ -24,4 +24,17 @@ test('vendor session restore, pagination and shortage payload match backend cont
     assert.deepEqual(JSON.parse(calls[2].options.body), { variant_id: 42, reported_count: 0, note: 'SAMPLE damaged unit' });
     assert.equal(calls[2].options.headers['X-CSRF-Token'], 'sample-only');
   } finally { globalThis.fetch = previous; }
+});
+
+test('vendor stock writes notify other local tabs without private stock or identity data', async () => {
+  const previousFetch = globalThis.fetch, previousWindow = globalThis.window;
+  const notices = [], events = [];
+  globalThis.window = { localStorage: { setItem: (key, value) => notices.push({ key, value }) }, dispatchEvent: event => events.push(event.type) };
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
+  try {
+    await updateVendorStockCount(42, { counted_quantity: 8, expected_version: 1, reason: 'manual_count' });
+    assert.equal(notices[0].key, 'alphazee_catalog_changed');
+    assert.match(notices[0].value, /^\d+-[\d.]+$/);
+    assert.deepEqual(events, ['alphazee:catalog-change']);
+  } finally { globalThis.fetch = previousFetch; globalThis.window = previousWindow; }
 });
