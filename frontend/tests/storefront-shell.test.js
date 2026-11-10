@@ -1,35 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createMockElement } from './helpers/dom.js';
+import { installDom } from '../react-tests/dom.js';
 import { initApp } from '../src/app.js';
 import { cart } from '../src/utils/cart.js';
-
-function installDom() {
-  const body = createMockElement('body');
-  const app = createMockElement('div');
-  app.id = 'app';
-  body.appendChild(app);
-  const doc = createMockElement('document');
-  Object.assign(doc, {
-    body, createElement: createMockElement,
-    getElementById: id => body.querySelector(`#${id}`),
-    querySelector: selector => body.querySelector(selector),
-    querySelectorAll: selector => body.querySelectorAll(selector),
-    activeElement: body,
-  });
-  globalThis.document = doc;
-  const listeners = new Map();
-  globalThis.window = { addEventListener(type, listener) { listeners.set(type, listener); },
-    removeEventListener(type) { listeners.delete(type); }, dispatchEvent(event) { listeners.get(event.type)?.(event); },
-    location: { search: '' }, matchMedia: () => ({ matches: false }) };
-  return { doc, app };
-}
+import { act } from 'react';
 
 test('offline storefront mounts, closed overlays are inert, and shell controls respond', async () => {
   installDom();
   globalThis.fetch = async () => { throw new Error('SAMPLE offline API'); };
-  const application = initApp();
-  await new Promise(resolve => setTimeout(resolve, 10));
+  let application;
+  await act(async () => { application = initApp(); });
+  await new Promise(resolve => setTimeout(resolve, 60));
   for (const id of ['product-modal', 'checkout-modal', 'tracking-modal', 'cart-drawer', 'mobile-nav-drawer']) {
     const root = document.getElementById(id);
     assert.ok(root, `${id} must mount`);
@@ -46,7 +27,7 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
   assert.equal(document.body.style.overflow, '');
   document.getElementById('btn-mobile-menu').click();
   assert.equal(document.getElementById('mobile-nav-drawer').hidden, false);
-  document.dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() {} });
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(document.getElementById('mobile-nav-drawer').hidden, true);
   document.getElementById('nav-track-order').click();
   assert.equal(document.getElementById('tracking-modal').hidden, false);
@@ -63,6 +44,7 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
     document.getElementById('tracking-close-btn').click();
   }
   document.getElementById('btn-browse-catalog').click();
+  await new Promise(resolve => window.requestAnimationFrame(resolve));
   assert.ok(document.getElementById('featured').scrolledIntoView);
   const questions = document.querySelectorAll('.faq-question');
   questions[1].click();
@@ -89,16 +71,16 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
     return { ok: true, json: async () => data };
   };
   document.querySelectorAll('.btn-retry').forEach(button => button.click());
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await new Promise(resolve => setTimeout(resolve, 60));
   assert.ok(document.querySelector('.product-card-btn'));
   document.querySelector('.collection-card').click();
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await new Promise(resolve => setTimeout(resolve, 60));
   assert.ok(requests.some(url => url.includes('collection_id=sample')));
   document.querySelector('.product-card-btn').click();
   assert.equal(document.getElementById('product-modal').hidden, false);
   document.querySelector('[data-size="L"]').click();
   document.getElementById('btn-modal-add-to-cart').click();
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await new Promise(resolve => setTimeout(resolve, 60));
   assert.equal(document.getElementById('product-modal').hidden, true);
   assert.equal(document.getElementById('cart-drawer').hidden, false);
   assert.equal(cart.getState().items[0].variant_id, 1002);
@@ -113,7 +95,7 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
   assert.equal(document.getElementById('cart-drawer').hidden, true);
   assert.equal(document.body.style.overflow, '');
   const beforeRefresh = requests.length;
-  window.dispatchEvent({type:'storage', key:'alphazee_catalog_changed'});
+  window.dispatchEvent(new window.StorageEvent('storage', { key: 'alphazee_catalog_changed' }));
   await new Promise(resolve => setTimeout(resolve, 180));
   assert.ok(requests.length >= beforeRefresh + 3, 'accepted owner changes refetch hero, collections and products');
   application.destroy();
@@ -126,8 +108,9 @@ test('clicking brand logo sends user to main page /', async () => {
     scrolledToTop = true;
   };
   globalThis.fetch = async () => { throw new Error('offline'); };
-  const application = initApp();
-  await new Promise(resolve => setTimeout(resolve, 10));
+  let application;
+  await act(async () => { application = initApp(); });
+  await new Promise(resolve => setTimeout(resolve, 60));
 
   const logo = document.querySelector('#header-logo-slot .brand-logo-link');
   assert.ok(logo, 'Header brand logo must be mounted');

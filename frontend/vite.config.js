@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => ({
+  plugins: [react()],
   server: {
     port: mode === 'test' ? 3001 : 3000,
     strictPort: true,

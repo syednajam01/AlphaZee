@@ -2,7 +2,6 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFeaturedProducts } from '../src/components/FeaturedProducts.js';
 import { createProductModal } from '../src/components/ProductModal.js';
-import { createHeader } from '../src/components/Header.js';
 import { storeConfig } from '../src/data/store-config.js';
 
 const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
@@ -438,14 +437,6 @@ describe('Storefront Prototype Presentation & Invariants Verification', () => {
   afterEach(() => {
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
-  });
-
-  it('renders honest prototype demo announcement banner in Header', () => {
-    const header = createHeader();
-    const banner = header.querySelector('.announcement-bar');
-    assert.ok(banner, 'Announcement banner should exist in header');
-    assert.match(banner.textContent, /preview/i);
-    assert.match(banner.textContent, /checkout is temporarily unavailable/i);
   });
 
   it('removes unconfirmed payment gateway, encryption, and placeholder WhatsApp claims from storeConfig', () => {

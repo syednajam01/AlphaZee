@@ -10,8 +10,7 @@
   --radius-media: 2px; --radius-badge: 2px;
   background: var(--color-bg); color: var(--color-text);
 }
-.storefront .site-header { background: #fffefa; box-shadow: none; }
-.storefront .site-header.is-scrolled { box-shadow: 0 1px 0 #dedfd7; }
+.storefront .site-header { background: transparent; box-shadow: none; }
 .storefront .nav-link { font-size: 13px; font-weight: 500; letter-spacing: 0; }
 .storefront .nav-link::after { height: 1px; }
 .storefront .header-action-btn:hover { transform: none; background: #edeee7; box-shadow: none; }
