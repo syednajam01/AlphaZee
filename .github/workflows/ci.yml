@@ -14,7 +14,7 @@ concurrency:
 jobs:
   inspect-vm-disk:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ops/inspect-vm-disk'
-    name: Read-only VM disk inspection (no app deployment)
+    name: Reclaim old unreferenced AlphaZee images (no app deployment)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production
@@ -22,21 +22,18 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Inspect disk, Docker cache and deployment state without changing them
+      - name: Reclaim reviewed image cache with release and container protections
         run: |
-          az vm run-command invoke --resource-group alphazee-staging --name alphazee-vm --command-id RunShellScript --scripts 'set -eu; echo DIRECTORY_TOTALS; du -sh /var/lib/docker /var/lib/containerd /var/lib/alphazee-cicd /var/cache/apt/archives 2>/dev/null || true; echo RELEASE_FIELDS; python3 -c "import json,pathlib; root=pathlib.Path(\"/var/lib/alphazee-cicd\"); names=[\"current.json\",\"previous.json\",\"releases/1f92c72a0b4ccc085f02c9f19ebdba5c01306234/manifest.json\"]; [(print(name,json.dumps({k:v for k,v in json.loads((root/name).read_text()).items() if k in [\"sha\",\"head\",\"api\",\"web\",\"images\",\"api_id\",\"web_id\"]}))) for name in names if (root/name).exists()]"; echo DOCKER_STORAGE; docker system df; echo DISK_USAGE; df -h /' --output json > /tmp/alphazee-disk-report.json
-          python3 - <<'PY'
-          import json
-          with open('/tmp/alphazee-disk-report.json') as stream:
-              report=json.load(stream)
-          for item in report.get('value', []):
-              print(item.get('message', ''))
-          PY
+          python3 -m unittest discover -s ops/tests -p test_reclaim_vm_images.py -v
+          python3 ops/reclaim_vm_images.py
   frontend:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
