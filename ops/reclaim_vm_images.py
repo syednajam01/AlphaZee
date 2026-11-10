@@ -60,6 +60,10 @@ def guest():
         assert identifiers
         images = json.loads(run('docker', 'image', 'inspect', *identifiers))
         plan = removal_plan(images, protected, datetime.now(timezone.utc))
+        if not plan:
+            unprotected = [item for item in images if item['Id'] not in protected]
+            print(json.dumps({'unprotected_count': len(unprotected), 'sample_metadata': [
+                {key: item.get(key) for key in ['Id', 'RepoDigests', 'RepoTags', 'Created']} for item in unprotected[:2]]}))
         assert len(plan) <= 100
         before = shutil.disk_usage(state).free
         for ref in plan:
