@@ -386,7 +386,7 @@
 @media (min-width: 960px) {
   .product-page-details.is-sticky {
     position: sticky;
-    top: calc(var(--header-height) + 24px);
+    top: calc(var(--storefront-header-height, var(--header-height)) + var(--lab-notice-height, 0px) + 24px);
     align-self: start;
   }
 }

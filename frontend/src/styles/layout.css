@@ -31,7 +31,7 @@
 #collections,
 #reassurance,
 #faq {
-  scroll-margin-top: calc(var(--header-height, 64px) + var(--space-6, 24px));
+  scroll-margin-top: calc(var(--storefront-header-height, var(--header-height, 64px)) + var(--lab-notice-height, 0px) + var(--space-6, 24px));
 }
 
 @media (min-width: 768px) {

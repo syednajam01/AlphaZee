@@ -115,7 +115,15 @@ export function initApp() {
   }
 
   // 3. Create Section Components
-  const header = createHeader();
+  const header = createHeader({
+    onCart: () => cartDrawer.open(),
+    onMenu: () => mobileNav.open(),
+    onTrack: () => { mobileNav.close(); orderTracking.open(); },
+    onCatalog: () => {
+      if (window.location?.pathname !== '/') navigate('/');
+      requestAnimationFrame(() => document.getElementById('featured')?.scrollIntoView({ behavior: 'smooth' }));
+    },
+  });
 
   const productPage = createProductPage({
     onAddedToCart: () => cartDrawer.open(),
@@ -159,26 +167,6 @@ export function initApp() {
   });
 
   const footer = createReassuranceAndFooter();
-
-  // 4. Connect Header & Navigation Triggers
-  header.querySelector('#btn-cart')?.addEventListener('click', () => {
-    cartDrawer.open();
-  });
-
-  header.querySelector('#btn-mobile-menu')?.addEventListener('click', () => {
-    mobileNav.open();
-  });
-
-  header.querySelector('#btn-browse-catalog')?.addEventListener('click', () => {
-    if (typeof window !== 'undefined' && window.location?.pathname && window.location.pathname !== '/') {
-      navigate('/');
-      setTimeout(() => {
-        document.getElementById('featured')?.scrollIntoView({ behavior: 'smooth' });
-      }, 50);
-    } else {
-      document.getElementById('featured')?.scrollIntoView({ behavior: 'smooth' });
-    }
-  });
 
   // 5. Assemble Application DOM
   app.appendChild(header);
@@ -358,6 +346,7 @@ export function initApp() {
   return {
     destroy() {
       clearTimeout(refreshTimer);
+      header.destroy();
       hero.destroy();
       productModal.close();
       productPage.destroy();
