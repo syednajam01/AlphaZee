@@ -12,6 +12,31 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  inspect-vm-disk:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ops/inspect-vm-disk'
+    name: Read-only VM disk inspection (no app deployment)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Inspect disk, Docker cache and deployment state without changing them
+        run: |
+          az vm run-command invoke --resource-group alphazee-staging --name alphazee-vm --command-id RunShellScript --scripts 'set -eu; echo DISK_USAGE; df -h /; echo DOCKER_STORAGE; docker system df; echo CACHE_OPTIONS; docker builder prune --help; echo DIRECTORY_TOTALS; du -sh /var/lib/docker /var/lib/alphazee-cicd /var/cache/apt/archives; echo IMAGE_INVENTORY; docker image ls --digests --no-trunc; echo RUNNING_CONTAINERS; docker ps --format "{{.Names}} {{.Image}}"' --output json > /tmp/alphazee-disk-report.json
+          python3 - <<'PY'
+          import json
+          with open('/tmp/alphazee-disk-report.json') as stream:
+              report=json.load(stream)
+          for item in report.get('value', []):
+              print(item.get('message', ''))
+          PY
   frontend:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
