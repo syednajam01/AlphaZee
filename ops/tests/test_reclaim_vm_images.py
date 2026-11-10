@@ -26,3 +26,9 @@ class SafeImageSelection(unittest.TestCase):
     def test_only_old_owned_digest_references_are_selected_once(self):
         old = image()
         self.assertEqual(removal_plan([old, old], set(), self.now), old['RepoDigests'])
+
+    def test_digest_pinned_containerd_alias_is_not_a_foreign_manual_tag(self):
+        old = image()
+        old['RepoTags'] = list(old['RepoDigests'])
+        self.assertEqual(removal_plan([old], set(), self.now), old['RepoDigests'])
+        self.assertEqual(removal_plan([old], {old['Id']}, self.now), [])

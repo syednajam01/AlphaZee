@@ -20,7 +20,8 @@ def removal_plan(images, protected, now):
         tags = item.get('RepoTags') or []
         if not digests or any(not REPO.fullmatch(ref) for ref in digests):
             continue
-        if any(not tag.startswith(('ghcr.io/syednajam01/alphazee-api:', 'ghcr.io/syednajam01/alphazee-web:')) for tag in tags):
+        if any(not (tag.startswith(('ghcr.io/syednajam01/alphazee-api:', 'ghcr.io/syednajam01/alphazee-web:'))
+                    or tag in digests and REPO.fullmatch(tag)) for tag in tags):
             continue
         try:
             age = (now - datetime.fromisoformat(item['Created'].replace('Z', '+00:00'))).total_seconds()
