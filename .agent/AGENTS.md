@@ -14,7 +14,7 @@ Canonical guide. Read before each task. Keep under 1,200 words; put details in `
 
 ## Current state and scope
 
-Design: `.context/unslop_storefront_report.md`; skill `.agent/skills/unslop/SKILL.md`; admin `.context/unslop_admin_implementation_guide.md`; vendor `.context/unslop_vendor_report.md`; mobile repair `.context/admin_mobile_layout_fix.md`. React navbar: `.context/react_navbar_implementation.md`.
+Design: `.context/unslop_storefront_report.md`; skill `.agent/skills/unslop/SKILL.md`; admin `.context/unslop_admin_implementation_guide.md`; vendor `.context/unslop_vendor_report.md`; mobile repair `.context/admin_mobile_layout_fix.md`. Navbar: `.context/react_navbar_implementation.md`; matrix: `.context/vendor_matrix_implementation.md`.
 
 **Three-portal UI/UX, performance and browser acceptance are complete and verified.** Admin Portal unslopping complete (CC BY 4.0 Damir Sokolovsky); see `.context/unslop_admin_report.md` and `.context/unslop_admin_progress.md`. Read `.context/three_portal_quality_report.md` for authoritative evidence across all 6 gates (82 screenshots captured, 100% PASS), and `.context/three_portal_quality_progress.md` for phase history. Follow the owner's next task; do not infer another phase.
 
@@ -64,7 +64,7 @@ Storefront design: `.context/frontend_design_implementation_guide.md`; progress:
 
 Historical browser evidence limitations: `.context/browser_acceptance_v2_review.md`. Preserve reports and distinguish recorded claims from independently verified outcomes; local acceptance is not production certification.
 
-Azure: live CI/CD verified at alphazee.tech, revision `dff5adc` (migration head `d3f8a1c9e2b4`). See `.context/cicd_deployment_repair.md`. Genuine Blob restore verified 42 tables/4 assets. Target `alphazee-staging/alphazee-vm`, project `alphazee-prod`. Checkout on, COD; temporary All Pakistan shipping PKR 200, no free threshold. Preserve data/volume identities.
+Azure: live CI/CD verified at alphazee.tech, migration head `d3f8a1c9e2b4`. See `.context/cicd_deployment_repair.md`. Genuine Blob restore verified 42 tables/4 assets. Target `alphazee-staging/alphazee-vm`, project `alphazee-prod`. Checkout on, COD; temporary All Pakistan shipping PKR 200, no free threshold. Preserve data/volume identities.
 
 `.context/next_priorities_and_browser_testing.md` covers acceptance planning; it is not fresh evidence.
 

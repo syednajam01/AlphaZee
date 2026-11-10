@@ -100,6 +100,7 @@ jobs:
           NODE_PATH=/tmp/browser-ci/node_modules node ops/browser_smoke.cjs
           NODE_PATH=/tmp/browser-ci/node_modules node ops/admin_mobile_smoke.cjs
           NODE_PATH=/tmp/browser-ci/node_modules node ops/navbar_smoke.cjs
+          NODE_PATH=/tmp/browser-ci/node_modules node ops/vendor_matrix_smoke.cjs
   ci-required:
     if: always()
     needs: [frontend, backend, operations, packaging]
