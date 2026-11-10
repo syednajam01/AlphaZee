@@ -93,6 +93,10 @@ class Collection(Base):
     """URL to the collection hero image; file lives outside the database."""
     image_media_id: Mapped[str | None] = mapped_column(ForeignKey('media_assets.id', ondelete='RESTRICT'))
 
+    hover_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Secondary / hover collection image URL."""
+    hover_image_media_id: Mapped[str | None] = mapped_column(ForeignKey('media_assets.id', ondelete='RESTRICT'), nullable=True)
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     """Inactive collections and their products are excluded from public API responses."""
 

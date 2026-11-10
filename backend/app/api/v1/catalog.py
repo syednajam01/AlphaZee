@@ -162,7 +162,15 @@ def _build_product_detail(product, db=None) -> ProductDetailSchema:
     ),
 )
 def list_collections(db: Session = Depends(get_db)) -> CollectionListResponse:
+    from sqlalchemy import func, select
+    from app.models.catalog import ProductCollection, Product
     collections = get_active_collections(db)
+    counts = dict(db.execute(
+        select(ProductCollection.collection_id, func.count(ProductCollection.product_id))
+        .join(Product, Product.id == ProductCollection.product_id)
+        .where(Product.is_active.is_(True))
+        .group_by(ProductCollection.collection_id)
+    ).all())
     return CollectionListResponse(
         collections=[
             CollectionSchema(
@@ -171,7 +179,9 @@ def list_collections(db: Session = Depends(get_db)) -> CollectionListResponse:
                 name=c.name,
                 description=c.description,
                 image_url=c.image_url,
+                hover_image_url=c.hover_image_url,
                 display_order=c.display_order,
+                product_count=counts.get(c.id, 0),
             )
             for c in collections
         ],

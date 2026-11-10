@@ -83,6 +83,7 @@ class CollectionCreate(Command):
     display_order: int = Field(default=0, ge=0, le=2147483647)
     is_active: bool = True
     image_media_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+    hover_image_media_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
 
     _slug = field_validator('slug')(ProductFields.slug_format.__func__)
 
@@ -110,6 +111,7 @@ class CollectionUpdate(Command):
     display_order: int | None = Field(default=None, ge=0, le=2147483647)
     is_active: bool | None = None
     image_media_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+    hover_image_media_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
 
     @field_validator('name', 'slug', 'display_order', 'is_active')
     @classmethod

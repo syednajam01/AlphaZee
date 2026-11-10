@@ -63,6 +63,7 @@ export function mountCatalogSection(section, container, context) {
   const knownAssets = new Map();
   const posterDrafts = new Map();
   let productsPage = 1, productFilter = { search: '', status: '', collection_id: '' };
+  let collectionSearchText = '';
   const controllers = new Set(), objectUrls = new Set();
   const queue = [];
   let uploading = false;
@@ -1246,25 +1247,124 @@ export function mountCatalogSection(section, container, context) {
     const data = await api.fetchOwnerCollections(); await loadAssets();
     if (!current()) return;
     currentCollection = null; collections = data.collections || []; context.setDirty(false);
-    shell(`<div class="catalog-toolbar">${button('New collection', 'catalog-new-collection')}</div>
-      <p>Deactivating a collection hides its products without deleting them.</p>
-      <div class="catalog-grid">${collections.map((c, index) => `<article class="catalog-card"><h3>${esc(c.name)}</h3><p>${esc(c.slug)} · ${c.is_active ? 'Active' : 'Inactive'}</p>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-          ${button('Edit collection', '', `data-edit-collection="${esc(c.id)}"`)}
-          ${button('Delete', '', `data-delete-collection="${esc(c.id)}" class="btn btn-danger" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);"`)}
+
+    const q = (collectionSearchText || '').toLowerCase().trim();
+    const visibleCollections = q
+      ? collections.filter(c => (c.name || '').toLowerCase().includes(q) || (c.slug || '').toLowerCase().includes(q))
+      : collections;
+
+    shell(`
+      <div class="catalog-header-bar">
+        <div class="catalog-title-group">
+          <button type="button" class="btn btn-primary btn-icon-only btn-new-draft" id="catalog-new-collection" aria-label="New collection" title="New collection">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <span class="catalog-total-pill" title="Total collections">${collections.length} collection${collections.length === 1 ? '' : 's'}</span>
         </div>
-        <div class="catalog-toolbar">
-        ${button('Move up', '', `data-collection-move="${index}" data-delta="-1" ${index === 0 ? 'disabled' : ''}`)}
-        ${button('Move down', '', `data-collection-move="${index}" data-delta="1" ${index === collections.length-1 ? 'disabled' : ''}`)}</div></article>`).join('') || '<p>No collections yet.</p>'}</div><div id="catalog-collection-editor"></div>`);
+        <div class="catalog-search-form" style="margin-left: auto;">
+          <div class="search-field-wrap">
+            <svg class="search-field-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input id="catalog-collections-search" class="catalog-search-input" placeholder="Search collection name or slug…" value="${esc(collectionSearchText || '')}" maxlength="200" aria-label="Search collections">
+            ${collectionSearchText ? '<button type="button" class="btn-clear-search" id="catalog-clear-col-search" title="Clear search">×</button>' : ''}
+          </div>
+        </div>
+      </div>
+
+      <p class="catalog-hint-text">Deactivating a collection hides its products from customer catalog listings and checkout without deleting them.</p>
+
+      ${visibleCollections.length ? `<div class="catalog-grid">${visibleCollections.map((c, index) => {
+        const thumbUrl = c.image_url || '';
+        const prodCount = c.product_count !== undefined ? c.product_count : 0;
+        return `
+          <article class="catalog-card catalog-collection-card" data-collection-id="${esc(c.id)}">
+            <div class="catalog-card-body">
+              <div class="catalog-card-media-wrapper">
+                ${thumbUrl
+                  ? `<img src="${esc(thumbUrl)}" alt="${esc(c.name)}" class="catalog-card-thumb" loading="lazy" decoding="async">`
+                  : `<div class="catalog-card-thumb catalog-card-thumb-empty" title="No collection image">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                      </svg>
+                    </div>`
+                }
+              </div>
+              <div class="catalog-card-info">
+                <div class="catalog-card-top-row">
+                  <span class="catalog-status-badge ${c.is_active ? 'status-published' : 'status-archived'}">${c.is_active ? 'Active' : 'Inactive'}</span>
+                  <span class="catalog-variants-count">${prodCount} product${prodCount === 1 ? '' : 's'}</span>
+                </div>
+                <h3 class="catalog-card-title" title="${esc(c.name)}">${esc(c.name)}</h3>
+                <p class="catalog-card-slug" title="/${esc(c.slug)}">/${esc(c.slug)}</p>
+                ${c.description ? `<p class="catalog-card-desc" title="${esc(c.description)}">${esc(c.description)}</p>` : ''}
+              </div>
+            </div>
+            <div class="catalog-card-actions">
+              <div class="catalog-card-reorder-group">
+                ${index > 0 ? `
+                  <button type="button" class="btn-card-action btn-card-move" data-collection-move="${index}" data-delta="-1" title="Move up" aria-label="Move up">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="18 15 12 9 6 15"></polyline>
+                    </svg>
+                  </button>
+                ` : ''}
+                ${index < visibleCollections.length - 1 ? `
+                  <button type="button" class="btn-card-action btn-card-move" data-collection-move="${index}" data-delta="1" title="Move down" aria-label="Move down">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                ` : ''}
+              </div>
+              <div class="catalog-card-btn-group">
+                <button type="button" class="btn-card-action btn-card-edit" data-edit-collection="${esc(c.id)}" title="Edit collection" aria-label="Edit collection">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+                <button type="button" class="btn-card-action btn-card-delete" data-delete-collection="${esc(c.id)}" title="Delete collection" aria-label="Delete collection">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('')}</div>` : `<p class="catalog-empty-notice">No collections found.</p>`}
+      <div id="catalog-collection-editor"></div>
+    `);
+
     bind('#catalog-new-collection', () => { if (context.canLeave()) collectionEditor({ is_active: true }); });
-    container.querySelectorAll('[data-edit-collection]').forEach(node => node.addEventListener('click', () => { if (context.canLeave()) collectionEditor(collections.find(c => c.id === node.dataset.editCollection)); }));
+
+    const searchInput = query('#catalog-collections-search');
+    searchInput?.addEventListener('input', e => {
+      collectionSearchText = e.target.value;
+      collectionList();
+    });
+    bind('#catalog-clear-col-search', () => {
+      collectionSearchText = '';
+      collectionList();
+    });
+
+    container.querySelectorAll('[data-edit-collection]').forEach(node => node.addEventListener('click', () => {
+      if (context.canLeave()) collectionEditor(collections.find(c => c.id === node.dataset.editCollection));
+    }));
+
     container.querySelectorAll('[data-delete-collection]').forEach(node => node.addEventListener('click', () => {
       const col = collections.find(c => c.id === node.dataset.deleteCollection);
       if (col) confirmDeleteCollection(col);
     }));
+
     container.querySelectorAll('[data-collection-move]').forEach(node => node.addEventListener('click', () => {
       if (!context.canLeave()) return;
-      const reordered = [...collections], from = Number(node.dataset.collectionMove), to = from + Number(node.dataset.delta);
+      const reordered = [...collections];
+      const from = Number(node.dataset.collectionMove);
+      const to = from + Number(node.dataset.delta);
+      if (to < 0 || to >= reordered.length) return;
       [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
       action(() => api.reorderOwnerCollections(reordered.map(c => ({ id: c.id, expected_version: c.edit_version }))), collectionList);
     }));
@@ -1284,19 +1384,15 @@ export function mountCatalogSection(section, container, context) {
       status(`Collection "${col.name}" deleted.`);
     });
   };
+
   async function collectionEditor(collection) {
     currentCollection = collection;
     context.setDirty(false);
     let memberProducts = [];
-    let unassignedProducts = [];
     if (collection.id) {
       try {
-        const [memberRes, unassignedRes] = await Promise.all([
-          api.fetchOwnerProducts({ collection_id: collection.id, page_size: 100 }),
-          api.fetchOwnerProducts({ collection_id: 'unassigned', page_size: 100 })
-        ]);
+        const memberRes = await api.fetchOwnerProducts({ collection_id: collection.id, page_size: 100 });
         memberProducts = memberRes.products || [];
-        unassignedProducts = unassignedRes.products || [];
       } catch (err) {
         console.warn('Could not load collection products', err);
       }
@@ -1304,70 +1400,139 @@ export function mountCatalogSection(section, container, context) {
     const publishedCount = memberProducts.filter(p => p.status === 'published').length;
 
     query('#catalog-collection-editor').innerHTML = `
-      <form id="catalog-collection-form">
-        <h3>${collection.id ? 'Edit' : 'Create'} collection</h3>
-        <div class="catalog-fields">
-          ${field('name', 'Name', collection.name, { max: 200 })}
-          ${field('slug', 'URL slug', collection.slug, { max: 100 })}
-          ${field('description', 'Description', collection.description, { textarea: true })}
-          <label>Collection banner image<select name="image_media_id">${options(imageChoices().concat(collection.image_media_id && !assets.some(a => a.id === collection.image_media_id) ? [[collection.image_media_id, 'Current saved image']] : []), collection.image_media_id)}</select></label>
-          <label><input name="is_active" id="catalog-col-is-active" type="checkbox" ${collection.is_active ? 'checked' : ''}> Active collection</label>
-        </div>
-        <div id="catalog-col-deactivation-warning" style="display: ${!collection.is_active && publishedCount > 0 ? 'block' : 'none'}; padding: 10px 14px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--admin-radius-sm); color: #f87171; font-size: 0.8125rem; margin-top: 8px;">
-          Warning: Deactivating this collection will hide ${publishedCount} published product(s) from customer catalog listings and checkout, because published products require an active collection.
-        </div>
-        <div class="catalog-toolbar" style="margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <button type="submit" class="btn btn-primary" id="catalog-save-collection">Save collection details</button>
-          ${collection.id ? button('Delete collection', 'catalog-delete-collection-btn', 'class="btn btn-danger" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);"') : ''}
-          ${button('Close editor', 'catalog-close-collection')}
-        </div>
-      </form>
-      ${collection.id ? `
-        <section style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--admin-border-hairline);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h4 style="margin: 0; font-size: 0.9375rem; font-weight: 500; color: var(--admin-text-primary);">Products in this collection (${memberProducts.length})</h4>
-            ${button('Create product here', 'catalog-col-create-prod', 'class="btn btn-secondary" style="font-size: 0.8125rem; padding: 6px 12px;"')}
+      <form id="catalog-collection-form" class="collection-editor-card">
+        <div class="collection-editor-header">
+          <div class="collection-editor-title-group">
+            <button type="button" class="btn btn-secondary btn-icon-only" id="catalog-close-collection" title="Back to collections" aria-label="Back to collections">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+            </button>
+            <h3 class="collection-editor-title">${collection.id ? 'Edit Collection' : 'Create Collection'}</h3>
+            ${collection.id ? `<span class="catalog-status-badge ${collection.is_active ? 'status-published' : 'status-archived'}">${collection.is_active ? 'Active' : 'Inactive'}</span>` : ''}
           </div>
-          <p style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.6); margin-bottom: 12px;">
-            Products can belong to multiple collections simultaneously. Adding or removing a collection preserves its SKU, variants, inventory, and order history.
-          </p>
+          <div class="collection-editor-actions">
+            ${collection.id ? `
+              <button type="button" class="btn btn-danger btn-icon-only" id="catalog-delete-collection-btn" title="Delete collection" aria-label="Delete collection" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            ` : ''}
+            <button type="submit" class="btn btn-primary btn-icon-only" id="catalog-save-collection" title="Save collection" aria-label="Save collection">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
 
-          <div class="catalog-toolbar" style="margin-bottom: 16px; padding: 12px; background: #101713; border: 1px solid #2d3e33; border-radius: 6px;">
-            <label style="flex: 1; min-width: 220px;">Add existing unassigned product:
-              <select id="catalog-col-add-prod-select">
-                ${options([['', unassignedProducts.length ? 'Choose unassigned product...' : 'No unassigned drafts available'], ...unassignedProducts.map(p => [p.id, `${p.title || 'Untitled'} (${p.status})`])])}
+        <div class="collection-fields-grid">
+          ${field('name', 'Collection Name', collection.name, { max: 200 })}
+          ${field('slug', 'URL Slug', collection.slug, { max: 100 })}
+        </div>
+
+        <div class="collection-fields-row" style="margin-top: 14px;">
+          ${field('description', 'Description', collection.description, { textarea: true })}
+        </div>
+
+        <div class="collection-images-grid">
+          <div class="collection-image-field-wrap">
+            <label class="catalog-field-label">Primary Image (Card Front)
+              <select name="image_media_id" class="catalog-select-input" id="col-primary-media-select">
+                ${options(imageChoices().concat(collection.image_media_id && !assets.some(a => a.id === collection.image_media_id) ? [[collection.image_media_id, 'Current saved primary image']] : []), collection.image_media_id)}
               </select>
             </label>
-            ${button('Add to collection', 'catalog-col-add-prod-btn', unassignedProducts.length ? '' : 'disabled')}
+            <div class="collection-image-preview-box" id="col-primary-preview">
+              ${collection.image_url ? `<img src="${esc(collection.image_url)}" class="collection-preview-thumb">` : '<span class="collection-preview-empty">No primary image</span>'}
+            </div>
           </div>
+          <div class="collection-image-field-wrap">
+            <label class="catalog-field-label">Hover Image (Card Back)
+              <select name="hover_image_media_id" class="catalog-select-input" id="col-hover-media-select">
+                ${options(imageChoices().concat(collection.hover_image_media_id && !assets.some(a => a.id === collection.hover_image_media_id) ? [[collection.hover_image_media_id, 'Current saved hover image']] : []), collection.hover_image_media_id)}
+              </select>
+            </label>
+            <div class="collection-image-preview-box" id="col-hover-preview">
+              ${collection.hover_image_url ? `<img src="${esc(collection.hover_image_url)}" class="collection-preview-thumb">` : '<span class="collection-preview-empty">No hover image</span>'}
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 14px;">
+          <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.875rem; color: #fff; cursor: pointer;">
+            <input name="is_active" id="catalog-col-is-active" type="checkbox" ${collection.is_active ? 'checked' : ''}> Active collection (visible to customers)
+          </label>
+        </div>
+
+        <div id="catalog-col-deactivation-warning" style="display: ${!collection.is_active && publishedCount > 0 ? 'block' : 'none'}; padding: 10px 14px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--admin-radius-sm); color: #f87171; font-size: 0.8125rem; margin-top: 12px;">
+          Warning: Deactivating this collection will hide ${publishedCount} published product(s) from customer catalog listings and checkout, because published products require an active collection.
+        </div>
+      </form>
+
+      ${collection.id ? `
+        <section class="collection-products-section">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: #fff;">Products in this collection (${memberProducts.length})</h4>
+            <span style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.45);">All product assignments are managed in Products & Catalog</span>
+          </div>
+          <p style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.6); margin-bottom: 16px;">
+            To add products or change collection links, open the product in the Products & Catalog workspace.
+          </p>
 
           <div class="collection-members-list">
-            ${memberProducts.length ? memberProducts.map(p => `
-              <div class="collection-member-item" data-product-id="${p.id}">
-                <div>
-                  <span class="collection-member-title">${esc(p.title || 'Untitled draft')}</span>
-                  <span class="collection-member-status status-${esc(p.status)}">${esc(p.status)}</span>
-                  <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); margin-top: 2px;">
-                    slug: ${esc(p.slug || 'no-slug')} · ${p.variants?.length || 0} variant(s)
+            ${memberProducts.length ? memberProducts.map(p => {
+              const pThumb = p.image_url || p.media?.find(m => m.role === 'primary')?.asset?.url || '';
+              return `
+                <div class="collection-member-item" data-product-id="${p.id}">
+                  <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+                    ${pThumb
+                      ? `<img src="${esc(pThumb)}" class="collection-member-thumb" alt="${esc(p.title || '')}" loading="lazy">`
+                      : `<div class="collection-member-thumb-empty"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`
+                    }
+                    <div style="min-width: 0;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="collection-member-title" title="${esc(p.title || 'Untitled draft')}">${esc(p.title || 'Untitled draft')}</span>
+                        <span class="catalog-status-badge status-${esc(p.status)}">${esc(p.status)}</span>
+                      </div>
+                      <div class="collection-member-meta">
+                        /${esc(p.slug || 'no-slug')} · ${p.variants?.length || 0} variant${(p.variants?.length || 0) === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <button type="button" class="btn btn-secondary btn-icon-only" data-open-member-prod="${p.id}" title="Edit product in Catalog" aria-label="Edit product in Catalog">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                      </svg>
+                    </button>
                   </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  ${button('Open', '', `data-open-member-prod="${p.id}" style="padding: 4px 8px; font-size: 0.75rem;"`)}
-                  <select data-move-target="${p.id}" style="padding: 4px 8px; font-size: 0.75rem; background: #141715; color: #FFF; border: 1px solid #486352; border-radius: 4px;">
-                    ${options([['', 'Move to other collection...'], ['__unassign__', 'Unassign (Choose later)'], ...collections.filter(c => c.id !== collection.id).map(c => [c.id, c.name])])}
-                  </select>
-                  ${button('Move', '', `data-move-member-prod="${p.id}" style="padding: 4px 8px; font-size: 0.75rem;"`)}
-                </div>
-              </div>
-            `).join('') : '<p style="color: rgba(255, 255, 255, 0.5); font-size: 0.85rem;">No products in this collection yet.</p>'}
+              `;
+            }).join('') : '<p class="catalog-empty-notice" style="padding: 16px 0;">No products currently assigned to this collection.</p>'}
           </div>
         </section>
       ` : ''}
     `;
 
-    const form = query('#catalog-collection-form'); wireDirty(form); form.querySelector('[name="name"]').focus();
-    bind('#catalog-close-collection', () => { if (context.canLeave()) { query('#catalog-collection-editor').innerHTML = ''; context.setDirty(false); } });
-    bind('#catalog-delete-collection-btn', () => { confirmDeleteCollection(collection); });
+    const form = query('#catalog-collection-form');
+    wireDirty(form);
+    form.querySelector('[name="name"]')?.focus();
+
+    bind('#catalog-close-collection', () => {
+      if (context.canLeave()) {
+        query('#catalog-collection-editor').innerHTML = '';
+        context.setDirty(false);
+      }
+    });
+
+    bind('#catalog-delete-collection-btn', () => {
+      confirmDeleteCollection(collection);
+    });
 
     query('#catalog-col-is-active')?.addEventListener('change', event => {
       const warning = query('#catalog-col-deactivation-warning');
@@ -1375,70 +1540,47 @@ export function mountCatalogSection(section, container, context) {
       markDirty();
     });
 
-    bind('#catalog-col-create-prod', () => {
-      if (!context.canLeave()) return;
-      action(async () => {
-        const newProd = await api.createOwnerProduct({ collection_id: collection.id });
-        return newProd;
-      }, p => editProduct(p));
-    });
-
-    bind('#catalog-col-add-prod-btn', () => {
-      const prodId = query('#catalog-col-add-prod-select')?.value;
-      const targetProd = unassignedProducts.find(p => p.id === prodId);
-      if (!targetProd) return;
-      const existingCols = targetProd.collection_ids || (targetProd.collection_id ? [targetProd.collection_id] : []);
-      const nextCols = [...new Set([...existingCols, collection.id])];
-      action(() => api.updateOwnerProduct(targetProd.id, {
-        expected_version: targetProd.edit_version,
-        collection_ids: nextCols,
-        collection_id: nextCols[0] || null,
-      }), async () => {
-        await collectionEditor(collection);
-        status(`Product "${targetProd.title || 'Untitled'}" added to collection.`);
+    const wireImgPreview = (selectId, previewId) => {
+      query(selectId)?.addEventListener('change', e => {
+        const assetId = e.target.value;
+        const preview = query(previewId);
+        if (!preview) return;
+        const asset = knownAssets.get(assetId);
+        if (asset && asset.url) {
+          preview.innerHTML = `<img src="${esc(asset.url)}" class="collection-preview-thumb">`;
+        } else {
+          preview.innerHTML = `<span class="collection-preview-empty">No image</span>`;
+        }
+        markDirty();
       });
-    });
+    };
+    wireImgPreview('#col-primary-media-select', '#col-primary-preview');
+    wireImgPreview('#col-hover-media-select', '#col-hover-preview');
 
     container.querySelectorAll('[data-open-member-prod]').forEach(btn => btn.addEventListener('click', () => {
       if (!context.canLeave()) return;
       action(() => api.fetchOwnerProduct(btn.dataset.openMemberProd), p => editProduct(p));
     }));
 
-    container.querySelectorAll('[data-move-member-prod]').forEach(btn => btn.addEventListener('click', () => {
-      const prodId = btn.dataset.moveMemberProd;
-      const select = container.querySelector(`[data-move-target="${prodId}"]`);
-      const targetColId = select?.value;
-      if (!targetColId) {
-        status('Select a destination collection or Unassign.', true);
-        return;
-      }
-      const prod = memberProducts.find(p => p.id === prodId);
-      if (!prod) return;
-      const existingCols = prod.collection_ids || (prod.collection_id ? [prod.collection_id] : []);
-      let nextCols;
-      if (targetColId === '__unassign__') {
-        nextCols = existingCols.filter(id => id !== collection.id);
-      } else {
-        nextCols = [...new Set([...existingCols.filter(id => id !== collection.id), targetColId])];
-      }
-      action(() => api.updateOwnerProduct(prod.id, {
-        expected_version: prod.edit_version,
-        collection_ids: nextCols,
-        collection_id: nextCols[0] || null,
-      }), async () => {
-        await collectionEditor(collection);
-        status(`Product collection updated.`);
-      });
-    }));
-
     form.addEventListener('submit', event => {
       event.preventDefault();
       action(async () => {
-        const fields = { name: value(form, 'name').trim(), slug: value(form, 'slug').trim(), description: value(form, 'description').trim() || null, is_active: form.querySelector('[name="is_active"]').checked };
+        const fields = {
+          name: value(form, 'name').trim(),
+          slug: value(form, 'slug').trim(),
+          description: value(form, 'description').trim() || null,
+          is_active: form.querySelector('[name="is_active"]').checked
+        };
         if (!fields.name || !fields.slug) throw new Error('Enter a collection name and slug.');
         fields.image_media_id = value(form, 'image_media_id') || null;
-        return currentCollection.id ? api.updateOwnerCollection(currentCollection.id, { ...fields, expected_version: currentCollection.edit_version }) : api.createOwnerCollection(fields);
-      }, async () => { await collectionList(); status('Collection saved.'); });
+        fields.hover_image_media_id = value(form, 'hover_image_media_id') || null;
+        return currentCollection.id
+          ? api.updateOwnerCollection(currentCollection.id, { ...fields, expected_version: currentCollection.edit_version })
+          : api.createOwnerCollection(fields);
+      }, async () => {
+        await collectionList();
+        status('Collection saved.');
+      });
     });
   }
 

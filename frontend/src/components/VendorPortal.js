@@ -296,7 +296,7 @@ export function initVendorPortal() {
     bar.className = 'vp-stats-bar';
     bar.innerHTML = `
       <div class="vp-stat-card">
-        <div class="vp-stat-label">Matching variants</div>
+        <div class="vp-stat-label">${searchQuery ? 'Matching items' : 'Total assigned items'}</div>
         <div class="vp-stat-val">${totalItems}</div>
       </div>
       <div class="vp-stat-card">

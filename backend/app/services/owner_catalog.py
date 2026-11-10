@@ -121,7 +121,7 @@ def product_response(product):
 
 def collection_response(collection):
     return {field: getattr(collection, field) for field in
-            ('id', 'name', 'slug', 'description', 'display_order', 'is_active', 'edit_version', 'image_url', 'image_media_id')}
+            ('id', 'name', 'slug', 'description', 'display_order', 'is_active', 'edit_version', 'image_url', 'image_media_id', 'hover_image_url', 'hover_image_media_id')}
 
 
 def apply_product(db: Session, product, data):
@@ -452,10 +452,14 @@ def create_collection(db, command):
     reference_lock(db)
     data = command.model_dump()
     identifier = data.pop('image_media_id', None)
+    hover_identifier = data.pop('hover_image_media_id', None)
     asset = ready(db, identifier, 'image') if identifier else None
+    hover_asset = ready(db, hover_identifier, 'image') if hover_identifier else None
     collection = Collection(id='col-' + uuid.uuid4().hex, **data,
                             image_media_id=asset.id if asset else None,
-                            image_url=public_asset(asset)['url'] if asset else None)
+                            image_url=public_asset(asset)['url'] if asset else None,
+                            hover_image_media_id=hover_asset.id if hover_asset else None,
+                            hover_image_url=public_asset(hover_asset)['url'] if hover_asset else None)
     db.add(collection); db.flush()
     return collection
 
@@ -468,7 +472,11 @@ def edit_collection(db, identifier, command):
         asset = ready(db, command.image_media_id, 'image') if command.image_media_id else None
         collection.image_media_id = asset.id if asset else None
         collection.image_url = public_asset(asset)['url'] if asset else None
-    for key, value in command.model_dump(exclude_unset=True, exclude={'expected_version', 'image_media_id'}).items():
+    if 'hover_image_media_id' in command.model_fields_set:
+        hover_asset = ready(db, command.hover_image_media_id, 'image') if command.hover_image_media_id else None
+        collection.hover_image_media_id = hover_asset.id if hover_asset else None
+        collection.hover_image_url = public_asset(hover_asset)['url'] if hover_asset else None
+    for key, value in command.model_dump(exclude_unset=True, exclude={'expected_version', 'image_media_id', 'hover_image_media_id'}).items():
         setattr(collection, key, value)
     collection.edit_version += 1
     return collection

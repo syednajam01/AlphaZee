@@ -87,7 +87,9 @@ class CollectionSchema(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    hover_image_url: Optional[str] = None
     display_order: int
+    product_count: Optional[int] = None
 
 
 class CollectionListResponse(BaseModel):

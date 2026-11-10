@@ -93,8 +93,19 @@ def delete_product(product_id: str, db: Session = Depends(get_db)):
 
 @router.get('/collections')
 def collections(db: Session = Depends(get_db)):
+    from sqlalchemy import func
+    from app.models.catalog import ProductCollection
     rows = db.scalars(select(Collection).order_by(Collection.display_order, Collection.id)).all()
-    return {'collections': [service.collection_response(c) for c in rows], 'total': len(rows)}
+    counts = dict(db.execute(
+        select(ProductCollection.collection_id, func.count(ProductCollection.product_id))
+        .group_by(ProductCollection.collection_id)
+    ).all())
+    cols = []
+    for c in rows:
+        d = service.collection_response(c)
+        d['product_count'] = counts.get(c.id, 0)
+        cols.append(d)
+    return {'collections': cols, 'total': len(rows)}
 
 
 @router.post('/collections', status_code=201)
