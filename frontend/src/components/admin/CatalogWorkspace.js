@@ -133,49 +133,44 @@ export function mountCatalogSection(section, container, context) {
 
     shell(`
       <div class="catalog-header-bar">
-        <div class="catalog-header-top">
-          <div class="catalog-title-group">
-            <button type="button" class="btn btn-primary" id="catalog-new-product">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              <span>New draft</span>
-            </button>
-            <span class="catalog-total-pill">${total} product${total === 1 ? '' : 's'}</span>
-          </div>
-          <form id="catalog-search" class="catalog-search-form">
-            <div class="search-field-wrap">
-              <svg class="search-field-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input name="search" class="catalog-search-input" placeholder="Search title, slug, SKU…" value="${esc(productFilter.search || '')}" maxlength="200" aria-label="Search title, slug or SKU">
-              ${productFilter.search ? '<button type="button" class="btn-clear-search" id="catalog-clear-search" title="Clear search">×</button>' : ''}
-            </div>
-            <div class="filter-select-wrap">
-              <select name="status" class="catalog-filter-select" aria-label="Filter by status">
-                ${options([['', 'All statuses'], ['draft', 'Draft'], ['published', 'Published'], ['archived', 'Archived']], productFilter.status)}
-              </select>
-            </div>
-            <div class="filter-select-wrap">
-              <select name="collection_id" class="catalog-filter-select" aria-label="Filter by collection">
-                ${options([['', 'All collections'], ...collections.map(c => [c.id, c.name])], productFilter.collection_id)}
-              </select>
-            </div>
-            <button class="btn btn-secondary catalog-filter-btn" type="submit" title="Apply filters">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-              <span>Filter</span>
-            </button>
-          </form>
+        <div class="catalog-title-group">
+          <button type="button" class="btn btn-primary btn-icon-only btn-new-draft" id="catalog-new-product" aria-label="New draft" title="New draft">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <span class="catalog-total-pill" title="Total products">${total} products</span>
         </div>
+        <form id="catalog-search" class="catalog-search-form">
+          <div class="search-field-wrap">
+            <svg class="search-field-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input name="search" class="catalog-search-input" placeholder="Search title, slug, SKU…" value="${esc(productFilter.search || '')}" maxlength="200" aria-label="Search title, slug or SKU">
+            ${productFilter.search ? '<button type="button" class="btn-clear-search" id="catalog-clear-search" title="Clear search">×</button>' : ''}
+          </div>
+          <div class="filter-select-wrap">
+            <select name="status" class="catalog-filter-select" aria-label="Filter by status">
+              ${options([['', 'All statuses'], ['draft', 'Draft'], ['published', 'Published'], ['archived', 'Archived']], productFilter.status)}
+            </select>
+          </div>
+          <div class="filter-select-wrap">
+            <select name="collection_id" class="catalog-filter-select" aria-label="Filter by collection">
+              ${options([['', 'All collections'], ...collections.map(c => [c.id, c.name])], productFilter.collection_id)}
+            </select>
+          </div>
+        </form>
       </div>
 
       ${(data.products || []).length ? `<div class="catalog-grid">${data.products.map(p => {
         const thumbUrl = p.image_url || p.media?.find(m => m.role === 'primary')?.asset?.url || p.media?.[0]?.asset?.url || '';
         const statusClass = p.status === 'published' ? 'status-published' : (p.status === 'draft' ? 'status-draft' : 'status-archived');
         const statusLabel = p.status === 'published' ? 'Published' : (p.status === 'draft' ? 'Draft' : 'Archived');
+        const displayTitle = p.title || 'Untitled draft';
+        const displaySlug = p.slug || 'no-slug';
         return `
           <article class="catalog-card catalog-product-card">
             <div class="catalog-card-body">
               <div class="catalog-card-media-wrapper">
                 ${thumbUrl
-                  ? `<img src="${esc(thumbUrl)}" alt="${esc(p.title || 'Product')}" class="catalog-card-thumb" loading="lazy">`
-                  : `<div class="catalog-card-thumb catalog-card-thumb-empty">
+                  ? `<img src="${esc(thumbUrl)}" alt="${esc(displayTitle)}" class="catalog-card-thumb" loading="lazy" decoding="async">`
+                  : `<div class="catalog-card-thumb catalog-card-thumb-empty" title="No image uploaded">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                         <circle cx="8.5" cy="8.5" r="1.5"></circle>
@@ -186,27 +181,25 @@ export function mountCatalogSection(section, container, context) {
               </div>
               <div class="catalog-card-info">
                 <div class="catalog-card-top-row">
-                  <span class="catalog-status-badge ${statusClass}">${statusLabel}</span>
-                  <span class="catalog-variants-count">${p.variants?.length || 0} variant${(p.variants?.length || 0) === 1 ? '' : 's'}</span>
+                  <span class="catalog-status-badge ${statusClass}" title="Status: ${statusLabel}">${statusLabel}</span>
+                  <span class="catalog-variants-count" title="${p.variants?.length || 0} variant${(p.variants?.length || 0) === 1 ? '' : 's'}">${p.variants?.length || 0} variant${(p.variants?.length || 0) === 1 ? '' : 's'}</span>
                 </div>
-                <h3 class="catalog-card-title" title="${esc(p.title || 'Untitled draft')}">${esc(p.title || 'Untitled draft')}</h3>
-                <p class="catalog-card-slug" title="/${esc(p.slug || '')}">/${esc(p.slug || 'no-slug')}</p>
+                <h3 class="catalog-card-title" title="${esc(displayTitle)}">${esc(displayTitle)}</h3>
+                <p class="catalog-card-slug" title="/${esc(displaySlug)}">/${esc(displaySlug)}</p>
               </div>
             </div>
             <div class="catalog-card-actions">
-              <button type="button" class="btn-card-action btn-card-edit" data-edit-product="${esc(p.id)}" title="Edit product details">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <button type="button" class="btn-card-action btn-card-edit" data-edit-product="${esc(p.id)}" title="Edit product" aria-label="Edit product">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                 </svg>
-                <span>Edit product</span>
               </button>
-              <button type="button" class="btn-card-action btn-card-delete" data-delete-product="${esc(p.id)}" data-status="${esc(p.status)}" title="Delete product">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <button type="button" class="btn-card-action btn-card-delete" data-delete-product="${esc(p.id)}" data-status="${esc(p.status)}" title="Delete product" aria-label="Delete product">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
-                <span>Delete</span>
               </button>
             </div>
           </article>
@@ -254,12 +247,26 @@ export function mountCatalogSection(section, container, context) {
         status('Product deleted.');
       });
     }));
-    query('#catalog-search').addEventListener('submit', event => {
-      event.preventDefault();
-      productFilter = Object.fromEntries(['search', 'status', 'collection_id'].map(n => [n, value(event.target, n)]));
+
+    const searchForm = query('#catalog-search');
+    const triggerSearch = () => {
+      productFilter = {
+        search: (searchForm.querySelector('[name="search"]')?.value || '').trim(),
+        status: searchForm.querySelector('[name="status"]')?.value || '',
+        collection_id: searchForm.querySelector('[name="collection_id"]')?.value || '',
+      };
       productsPage = 1;
       action(products);
+    };
+
+    searchForm.addEventListener('submit', event => {
+      event.preventDefault();
+      triggerSearch();
     });
+    searchForm.querySelector('[name="search"]')?.addEventListener('change', triggerSearch);
+    searchForm.querySelector('[name="status"]')?.addEventListener('change', triggerSearch);
+    searchForm.querySelector('[name="collection_id"]')?.addEventListener('change', triggerSearch);
+
     bind('#catalog-products-prev', () => {
       if (productsPage > 1) {
         productsPage--;
