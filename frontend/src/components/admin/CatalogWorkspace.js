@@ -117,27 +117,124 @@ export function mountCatalogSection(section, container, context) {
   }
 
   async function products() {
-    const [data, categories] = await Promise.all([api.fetchOwnerProducts({ ...productFilter, page: productsPage }), api.fetchOwnerCollections()]);
+    const pageSize = 10;
+    const [data, categories] = await Promise.all([
+      api.fetchOwnerProducts({ ...productFilter, page: productsPage, page_size: pageSize }),
+      api.fetchOwnerCollections()
+    ]);
     if (!current()) return;
-    currentProduct = null; collections = categories.collections || []; context.setDirty(false);
-    shell(`<div class="catalog-toolbar">${button('New draft', 'catalog-new-product')}</div>
-      <form id="catalog-search" class="catalog-toolbar">
-        <label>Search title, slug or SKU<input name="search" value="${esc(productFilter.search)}" maxlength="200"></label>
-        <label>Status<select name="status">${options([['', 'All statuses'], ['draft', 'Draft'], ['published', 'Published'], ['archived', 'Archived']], productFilter.status)}</select></label>
-        <label>Collection<select name="collection_id">${options([['', 'All collections'], ...collections.map(c => [c.id, c.name])], productFilter.collection_id)}</select></label>
-        <button class="btn btn-secondary" type="submit">Apply filters</button></form>
-      <p>${data.total || 0} products. Drafts are private in catalog listings; uploaded asset URLs are public.</p>
-      ${(data.products || []).length ? `<div class="catalog-grid">${data.products.map(p => `<article class="catalog-card"><h3>${esc(p.title || 'Untitled draft')}</h3>
-        <p>${esc(p.status)} · ${esc(p.slug || 'No slug')} · ${p.variants?.length || 0} variants</p>
-        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
-          ${button('Edit product', '', `data-edit-product="${esc(p.id)}"`)}
-          ${button('Delete', '', `data-delete-product="${esc(p.id)}" data-status="${esc(p.status)}" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);"`)}
+    currentProduct = null;
+    collections = categories.collections || [];
+    context.setDirty(false);
+
+    const total = data.total || 0;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    if (productsPage > totalPages) productsPage = totalPages;
+
+    shell(`
+      <div class="catalog-header-bar">
+        <div class="catalog-header-top">
+          <div class="catalog-title-group">
+            <button type="button" class="btn btn-primary" id="catalog-new-product">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>New draft</span>
+            </button>
+            <span class="catalog-total-pill">${total} product${total === 1 ? '' : 's'}</span>
+          </div>
+          <form id="catalog-search" class="catalog-search-form">
+            <div class="search-field-wrap">
+              <svg class="search-field-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input name="search" class="catalog-search-input" placeholder="Search title, slug, SKU…" value="${esc(productFilter.search || '')}" maxlength="200" aria-label="Search title, slug or SKU">
+              ${productFilter.search ? '<button type="button" class="btn-clear-search" id="catalog-clear-search" title="Clear search">×</button>' : ''}
+            </div>
+            <div class="filter-select-wrap">
+              <select name="status" class="catalog-filter-select" aria-label="Filter by status">
+                ${options([['', 'All statuses'], ['draft', 'Draft'], ['published', 'Published'], ['archived', 'Archived']], productFilter.status)}
+              </select>
+            </div>
+            <div class="filter-select-wrap">
+              <select name="collection_id" class="catalog-filter-select" aria-label="Filter by collection">
+                ${options([['', 'All collections'], ...collections.map(c => [c.id, c.name])], productFilter.collection_id)}
+              </select>
+            </div>
+            <button class="btn btn-secondary catalog-filter-btn" type="submit" title="Apply filters">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              <span>Filter</span>
+            </button>
+          </form>
         </div>
-      </article>`).join('')}</div>`
+      </div>
+
+      ${(data.products || []).length ? `<div class="catalog-grid">${data.products.map(p => {
+        const thumbUrl = p.image_url || p.media?.find(m => m.role === 'primary')?.asset?.url || p.media?.[0]?.asset?.url || '';
+        const statusClass = p.status === 'published' ? 'status-published' : (p.status === 'draft' ? 'status-draft' : 'status-archived');
+        const statusLabel = p.status === 'published' ? 'Published' : (p.status === 'draft' ? 'Draft' : 'Archived');
+        return `
+          <article class="catalog-card catalog-product-card">
+            <div class="catalog-card-body">
+              <div class="catalog-card-media-wrapper">
+                ${thumbUrl
+                  ? `<img src="${esc(thumbUrl)}" alt="${esc(p.title || 'Product')}" class="catalog-card-thumb" loading="lazy">`
+                  : `<div class="catalog-card-thumb catalog-card-thumb-empty">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                      </svg>
+                    </div>`
+                }
+              </div>
+              <div class="catalog-card-info">
+                <div class="catalog-card-top-row">
+                  <span class="catalog-status-badge ${statusClass}">${statusLabel}</span>
+                  <span class="catalog-variants-count">${p.variants?.length || 0} variant${(p.variants?.length || 0) === 1 ? '' : 's'}</span>
+                </div>
+                <h3 class="catalog-card-title" title="${esc(p.title || 'Untitled draft')}">${esc(p.title || 'Untitled draft')}</h3>
+                <p class="catalog-card-slug" title="/${esc(p.slug || '')}">/${esc(p.slug || 'no-slug')}</p>
+              </div>
+            </div>
+            <div class="catalog-card-actions">
+              <button type="button" class="btn-card-action btn-card-edit" data-edit-product="${esc(p.id)}" title="Edit product details">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                <span>Edit product</span>
+              </button>
+              <button type="button" class="btn-card-action btn-card-delete" data-delete-product="${esc(p.id)}" data-status="${esc(p.status)}" title="Delete product">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                <span>Delete</span>
+              </button>
+            </div>
+          </article>
+        `;
+      }).join('')}</div>`
         : '<p>No products match. Create your first draft to begin.</p>'}
-      <div class="catalog-toolbar">${button('Previous', 'catalog-products-prev', productsPage === 1 ? 'disabled' : '')}<span>Page ${productsPage}</span>
-        ${button('Next', 'catalog-products-next', productsPage * 20 >= (data.total || 0) ? 'disabled' : '')}</div>`);
+
+      <div class="catalog-pagination">
+        <button type="button" class="btn-pagination" id="catalog-products-prev" ${productsPage <= 1 ? 'disabled' : ''} aria-label="Previous page" title="Previous page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <span class="catalog-page-indicator"><span>Page </span><strong>${productsPage}</strong><span> of </span><strong>${totalPages}</strong></span>
+        <button type="button" class="btn-pagination" id="catalog-products-next" ${productsPage >= totalPages ? 'disabled' : ''} aria-label="Next page" title="Next page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+    `);
+
     bind('#catalog-new-product', () => action(() => api.createOwnerProduct(), product => editProduct(product)));
+    bind('#catalog-clear-search', () => {
+      productFilter.search = '';
+      productsPage = 1;
+      action(products);
+    });
     container.querySelectorAll('[data-edit-product]').forEach(node => node.addEventListener('click', () => action(() => api.fetchOwnerProduct(node.dataset.editProduct), p => editProduct(p))));
     container.querySelectorAll('[data-delete-product]').forEach(node => node.addEventListener('click', () => {
       const id = node.dataset.deleteProduct;
@@ -157,9 +254,24 @@ export function mountCatalogSection(section, container, context) {
         status('Product deleted.');
       });
     }));
-    query('#catalog-search').addEventListener('submit', event => { event.preventDefault(); productFilter = Object.fromEntries(['search', 'status', 'collection_id'].map(n => [n, value(event.target, n)])); productsPage = 1; action(products); });
-    bind('#catalog-products-prev', () => { productsPage--; action(products); });
-    bind('#catalog-products-next', () => { productsPage++; action(products); });
+    query('#catalog-search').addEventListener('submit', event => {
+      event.preventDefault();
+      productFilter = Object.fromEntries(['search', 'status', 'collection_id'].map(n => [n, value(event.target, n)]));
+      productsPage = 1;
+      action(products);
+    });
+    bind('#catalog-products-prev', () => {
+      if (productsPage > 1) {
+        productsPage--;
+        action(products);
+      }
+    });
+    bind('#catalog-products-next', () => {
+      if (productsPage < totalPages) {
+        productsPage++;
+        action(products);
+      }
+    });
   }
 
   const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'One Size'];

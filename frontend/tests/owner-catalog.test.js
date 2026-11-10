@@ -260,3 +260,82 @@ test('delete collection unlinks products and deletes collection via admin UI', a
 
   view.destroy();
 });
+
+test('products list renders compact toolbar, front image thumbnail, slug, and 10-item pagination', async () => {
+  const container = install();
+  const calls = [];
+
+  const sampleProducts = [
+    {
+      id: 'p-with-img',
+      title: 'Silk Embroidered Kurta',
+      slug: 'silk-kurta',
+      status: 'published',
+      image_url: 'https://alphazee.tech/media/sample.jpg',
+      variants: [{ id: 1, sku: 'KURTA-BLK-M' }],
+    },
+    {
+      id: 'p-no-img',
+      title: 'Linen Casual Trouser',
+      slug: 'linen-trouser',
+      status: 'draft',
+      image_url: null,
+      variants: [],
+    }
+  ];
+
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, method: options.method || 'GET' });
+    let data = {}, status = 200;
+    if (url.includes('/admin/products?')) {
+      data = { products: sampleProducts, total: 25, page: 1, page_size: 10 };
+    } else if (url === '/api/v1/admin/collections') {
+      data = { collections: [{ id: 'col-1', name: 'Summer 2026' }] };
+    }
+    return { ok: status < 400, status, json: async () => data };
+  };
+
+  const view = mountCatalogSection('products', container, { isCurrent: () => true, setDirty() {}, canLeave: () => true });
+  await view.ready;
+
+  // 1. Verify query parameter requested page_size=10
+  const productFetchCall = calls.find(c => c.url.includes('/admin/products?'));
+  assert.ok(productFetchCall);
+  assert.match(productFetchCall.url, /page_size=10/);
+
+  // 2. Verify compact toolbar
+  assert.ok(container.querySelector('#catalog-new-product'));
+  assert.ok(container.querySelector('.catalog-search-input'));
+  assert.ok(container.querySelector('select[name="status"]'));
+  assert.ok(container.querySelector('select[name="collection_id"]'));
+  assert.match(container.querySelector('.catalog-total-pill').textContent, /25 products/);
+
+  // 3. Verify product cards have thumbnail, title, slug, and action buttons
+  const cards = container.querySelectorAll('.catalog-card');
+  assert.equal(cards.length, 2);
+
+  const firstCard = cards[0];
+  const imgNode = firstCard.querySelector('.catalog-card-thumb');
+  assert.ok(imgNode);
+  assert.equal(imgNode.getAttribute('src'), 'https://alphazee.tech/media/sample.jpg');
+  assert.match(firstCard.querySelector('.catalog-card-title').textContent, /Silk Embroidered Kurta/);
+  assert.match(firstCard.querySelector('.catalog-card-slug').textContent, /\/silk-kurta/);
+  assert.ok(firstCard.querySelector('[data-edit-product="p-with-img"]'));
+  assert.ok(firstCard.querySelector('[data-delete-product="p-with-img"]'));
+
+  const secondCard = cards[1];
+  assert.ok(secondCard.querySelector('.catalog-card-thumb-empty'));
+  assert.match(secondCard.querySelector('.catalog-card-title').textContent, /Linen Casual Trouser/);
+  assert.match(secondCard.querySelector('.catalog-card-slug').textContent, /\/linen-trouser/);
+
+  // 4. Verify pagination controls
+  const prevBtn = container.querySelector('#catalog-products-prev');
+  const nextBtn = container.querySelector('#catalog-products-next');
+  assert.ok(prevBtn);
+  assert.ok(nextBtn);
+  assert.equal(prevBtn.disabled, true); // on page 1
+  assert.equal(nextBtn.disabled, false); // total 25 > 10 items
+  assert.match(container.querySelector('.catalog-page-indicator').textContent, /Page.*1.*of.*3/);
+
+  view.destroy();
+});
