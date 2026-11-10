@@ -1718,34 +1718,39 @@ export function mountCatalogSection(section, container, context) {
     context.setDirty(false);
 
     shell(`
-      <div class="catalog-toolbar">
-        ${button('Add hero slide', 'catalog-new-hero-slide', 'class="btn btn-primary"')}
-        ${button('Reload playlist', 'catalog-reload-hero')}
+      <div class="catalog-header-bar">
+        <div class="catalog-title-group">
+          <button type="button" class="btn btn-primary btn-icon-only btn-new-draft" id="catalog-new-hero-slide" aria-label="Add hero slide" title="Add hero slide">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <span class="catalog-total-pill" title="Total hero slides">${slides.length} banner slide${slides.length === 1 ? '' : 's'}</span>
+        </div>
+        <div style="margin-left: auto;">
+          <button type="button" class="btn btn-secondary btn-icon-only" id="catalog-reload-hero" aria-label="Reload playlist" title="Reload playlist">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+          </button>
+        </div>
       </div>
 
       <div class="hero-guidelines-card" style="margin: 16px 0 20px 0; padding: 18px 20px; background: var(--admin-bg-card); border: 1px solid var(--admin-border-hairline); border-radius: var(--admin-radius-card); color: var(--admin-text-primary);">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-          <strong style="font-size: 0.9375rem; font-weight: 500; color: var(--admin-text-primary);">Homepage hero video & picture showcase specifications</strong>
+          <strong style="font-size: 0.9375rem; font-weight: 500; color: var(--admin-text-primary);">Homepage hero 16:9 banner specifications</strong>
         </div>
         <p style="margin: 0 0 12px 0; font-size: 0.8125rem; line-height: 1.5; color: var(--admin-text-secondary);">
-          The Hero section plays an ambient, atmospheric background video full-bleed behind a subtle blur and vignette, while featured product pictures scroll horizontally in front without text clutter.
+          Upload 16:9 MP4 videos or images. Banners run edge-to-edge in full width without letterboxing. Once a video ends, or after 5 seconds on an image, the carousel automatically scrolls horizontally to the next slide.
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; font-size: 0.8125rem;">
           <div style="background: var(--admin-bg-raised); padding: 10px 14px; border-radius: var(--admin-radius-control); border: 1px solid var(--admin-border-hairline);">
-            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Dimensions & breadth</strong>
-            <span style="color: var(--admin-text-secondary);"><strong>1920 × 1080 px</strong> (16:9 Full HD) or <strong>2560 × 1440 px</strong> (2K). Keep central subject in the middle 60% of frame for flawless mobile cropping.</span>
+            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Aspect ratio & size</strong>
+            <span style="color: var(--admin-text-secondary);"><strong>1920 × 1080 px</strong> (16:9 Full HD). Media fills the banner area edge-to-edge.</span>
           </div>
           <div style="background: var(--admin-bg-raised); padding: 10px 14px; border-radius: var(--admin-radius-control); border: 1px solid var(--admin-border-hairline);">
-            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Duration & length</strong>
-            <span style="color: var(--admin-text-secondary);"><strong>10 to 30 seconds</strong> seamless ambient loop. Avoid jarring camera cuts; prefer slow pans, model motion, or fabric drape.</span>
+            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Autoplay & loop</strong>
+            <span style="color: var(--admin-text-secondary);">Continuous muted autoplay without posters. Plays to the end, then auto-advances.</span>
           </div>
           <div style="background: var(--admin-bg-raised); padding: 10px 14px; border-radius: var(--admin-radius-control); border: 1px solid var(--admin-border-hairline);">
-            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">File size & codec</strong>
-            <span style="color: var(--admin-text-secondary);">Under <strong>15 MB</strong> (max 25 MB). Format: <strong>MP4 (H.264 video, muted / no audio)</strong> for instant autoplay without buffering.</span>
-          </div>
-          <div style="background: var(--admin-bg-raised); padding: 10px 14px; border-radius: var(--admin-radius-control); border: 1px solid var(--admin-border-hairline);">
-            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Featured pictures strip</strong>
-            <span style="color: var(--admin-text-secondary);">Active slides with images and products marked "Featured in hero" scroll horizontally. Hovering pauses scroll; clicking lands on the product page.</span>
+            <strong style="color: var(--admin-text-primary); display: block; margin-bottom: 4px; font-weight: 500;">Automatic slide scroll</strong>
+            <span style="color: var(--admin-text-secondary);">Smooth horizontal scroll transitions smoothly between active banners.</span>
           </div>
         </div>
       </div>
@@ -1758,13 +1763,14 @@ export function mountCatalogSection(section, container, context) {
       const containerNode = query('#catalog-hero-slides');
       if (!containerNode || !current()) return;
       if (!slides.length) {
-        containerNode.innerHTML = `<div class="admin-empty-state"><p>No hero slides configured. Click "Add new hero slide" to create one.</p></div>`;
+        containerNode.innerHTML = `<div class="admin-empty-state"><p>No hero slides configured. Click "+" to create a new banner.</p></div>`;
         return;
       }
       containerNode.innerHTML = slides.map((slide, index) => {
-        const dest = slide.product ? `Product: ${esc(slide.product.title)}` : slide.collection ? `Collection: ${esc(slide.collection.name)}` : 'None (Brand slide)';
-        const mediaPreview = slide.video_url
-          ? `<video preload="metadata" muted playsinline src="${esc(sanitizeMediaUrl(slide.video_url, ''))}" ${slide.poster_url ? `poster="${esc(sanitizeMediaUrl(slide.poster_url))}"` : ''} class="hero-slide-preview"></video>`
+        const dest = slide.product ? `Product: ${esc(slide.product.title)}` : slide.collection ? `Collection: ${esc(slide.collection.name)}` : 'None (Brand banner)';
+        const isVid = !!slide.video_url;
+        const mediaPreview = isVid
+          ? `<video preload="metadata" muted playsinline src="${esc(sanitizeMediaUrl(slide.video_url, ''))}" class="hero-slide-preview"></video>`
           : slide.image_url
             ? `<img src="${esc(sanitizeMediaUrl(slide.image_url))}" class="hero-slide-preview" alt="Slide preview">`
             : `<div class="hero-slide-preview" style="display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.4);">No media</div>`;
@@ -1774,18 +1780,35 @@ export function mountCatalogSection(section, container, context) {
             <div class="hero-slide-info">
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                 <strong style="font-size: 1rem; color: #FFF;">Slide #${index + 1}: ${esc(slide.title || 'Untitled slide')}</strong>
-                <span class="hero-slide-badge ${slide.is_enabled ? 'hero-badge-enabled' : 'hero-badge-disabled'}">
-                  ${slide.is_enabled ? 'Active' : 'Disabled'}
-                </span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="hero-slide-badge" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25);">
+                    ${isVid ? '16:9 Video' : '16:9 Picture'}
+                  </span>
+                  <span class="hero-slide-badge ${slide.is_enabled ? 'hero-badge-enabled' : 'hero-badge-disabled'}">
+                    ${slide.is_enabled ? 'Active' : 'Disabled'}
+                  </span>
+                </div>
               </div>
-              ${slide.benefit ? `<p style="margin: 0; font-size: 0.85rem; color: #38BDF8;">${esc(slide.benefit)}</p>` : ''}
+              ${slide.benefit ? `<p style="margin: 0; font-size: 0.85rem; color: #a1a1aa;">${esc(slide.benefit)}</p>` : ''}
               <p style="margin: 0; font-size: 0.75rem; color: rgba(255,255,255,0.5);">Destination: ${dest}</p>
-              <div class="catalog-toolbar" style="margin-top: auto; padding-top: 8px;">
-                ${button('Move up', '', `data-slide-up="${index}" ${index === 0 ? 'disabled' : ''}`)}
-                ${button('Move down', '', `data-slide-down="${index}" ${index === slides.length - 1 ? 'disabled' : ''}`)}
-                ${button(slide.is_enabled ? 'Disable' : 'Enable', '', `data-slide-toggle="${slide.id}"`)}
-                ${button('Edit', '', `data-slide-edit="${slide.id}"`)}
-                ${button('Delete', '', `data-slide-delete="${slide.id}"`)}
+              <div class="catalog-toolbar" style="margin-top: auto; padding-top: 8px; display: flex; align-items: center; gap: 6px;">
+                ${index > 0 ? `<button type="button" class="btn btn-secondary btn-icon-only" data-slide-up="${index}" title="Move up" aria-label="Move up">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                </button>` : ''}
+                ${index < slides.length - 1 ? `<button type="button" class="btn btn-secondary btn-icon-only" data-slide-down="${index}" title="Move down" aria-label="Move down">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+                </button>` : ''}
+                <button type="button" class="btn btn-secondary btn-icon-only" data-slide-toggle="${slide.id}" title="${slide.is_enabled ? 'Disable slide' : 'Enable slide'}" aria-label="${slide.is_enabled ? 'Disable slide' : 'Enable slide'}">
+                  ${slide.is_enabled
+                    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`
+                    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`}
+                </button>
+                <button type="button" class="btn btn-secondary btn-icon-only" data-slide-edit="${slide.id}" title="Edit slide" aria-label="Edit slide">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button type="button" class="btn btn-danger btn-icon-only" data-slide-delete="${slide.id}" title="Delete slide" aria-label="Delete slide" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
               </div>
             </div>
           </article>
@@ -1848,90 +1871,203 @@ export function mountCatalogSection(section, container, context) {
       const editorNode = query('#catalog-hero-editor');
       if (!editorNode) return;
       const isNew = !slide;
+      let activeType = (slide && !slide.video_asset_id && slide.image_asset_id) ? 'image' : 'video';
+
       const videoAssets = [...knownAssets.values()].filter(a => a.kind === 'video');
       const imageAssets = [...knownAssets.values()].filter(a => a.kind === 'image');
 
-      editorNode.innerHTML = `
-        <form id="catalog-hero-form" style="padding: 16px; background: #101713; border: 1px solid #40574a; border-radius: 8px; margin-bottom: 20px;">
-          <h3 style="margin-top: 0;">${isNew ? 'Create New Hero Slide' : 'Edit Hero Slide'}</h3>
-          <div class="catalog-fields">
-            ${field('title', 'Slide Title', slide?.title || '', { max: 200 })}
-            ${field('benefit', 'Benefit / Headline', slide?.benefit || '', { textarea: true, max: 2000 })}
-            <label>Background video asset (plays continuously & blurred behind hero)
-              <select name="video_asset_id">
-                ${options([['', 'None (image slide)'], ...videoAssets.map(a => [a.id, `${a.original_name} (${(a.byte_size / 1024 / 1024).toFixed(1)} MiB)`])], slide?.video_asset_id)}
-              </select>
-            </label>
-            <label>Video poster image (instant background display & product card image)
-              <select name="poster_asset_id">
-                ${options([['', 'Choose poster image'], ...imageAssets.map(a => [a.id, a.original_name])], slide?.poster_asset_id)}
-              </select>
-            </label>
-            <label>Image asset (for image-only featured cards)
-              <select name="image_asset_id">
-                ${options([['', 'None (use video above)'], ...imageAssets.map(a => [a.id, a.original_name])], slide?.image_asset_id)}
-              </select>
-            </label>
-            <label>Destination product (clicking featured image navigates here)
-              <select name="target_product_id">
-                ${options([['', 'None (no product link)'], ...allProds.map(p => [p.id, `${p.title || 'Untitled'} (${p.status})`])], slide?.target_product_id)}
-              </select>
-            </label>
-            <label>Destination collection (optional click target)
-              <select name="target_collection_id">
-                ${options([['', 'None (no collection link)'], ...allCols.map(c => [c.id, c.name])], slide?.target_collection_id)}
-              </select>
-            </label>
-            <label><input name="is_enabled" type="checkbox" ${slide ? (slide.is_enabled ? 'checked' : '') : 'checked'}> Enabled in active carousel</label>
-          </div>
-          <div class="catalog-toolbar" style="margin-top: 14px;">
-            <button type="submit" class="btn btn-primary" id="catalog-save-hero-slide">${isNew ? 'Add Slide' : 'Save Slide'}</button>
-            ${button('Cancel', 'catalog-cancel-hero-slide')}
-          </div>
-        </form>
-      `;
+      function updateEditorMarkup() {
+        editorNode.innerHTML = `
+          <form id="catalog-hero-form" style="padding: 20px; background: #121815; border: 1px solid var(--admin-border-hairline); border-radius: var(--admin-radius-card); margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+              <h3 style="margin: 0; font-size: 1.125rem; font-weight: 600; color: #FFF;">${isNew ? 'Create New Hero Banner' : 'Edit Hero Banner'}</h3>
+              <button type="button" class="btn btn-secondary btn-icon-only" id="catalog-cancel-hero-slide" title="Close editor" aria-label="Close editor">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
 
-      bind('#catalog-cancel-hero-slide', () => {
-        editorNode.innerHTML = '';
-      });
+            <!-- Banner Media Type Selection -->
+            <div style="margin-bottom: 18px;">
+              <label style="display: block; font-size: 0.8125rem; font-weight: 500; color: var(--admin-text-secondary); margin-bottom: 8px;">Banner Media Format</label>
+              <div style="display: flex; gap: 10px;">
+                <button type="button" id="btn-hero-type-video" class="btn ${activeType === 'video' ? 'btn-primary' : 'btn-secondary'}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                  16:9 Video Banner
+                </button>
+                <button type="button" id="btn-hero-type-image" class="btn ${activeType === 'image' ? 'btn-primary' : 'btn-secondary'}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                  16:9 Picture Banner
+                </button>
+              </div>
+            </div>
 
-      const form = query('#catalog-hero-form');
-      form.addEventListener('submit', event => {
-        event.preventDefault();
-        action(async () => {
-          const payload = {
-            title: value(form, 'title').trim() || null,
-            benefit: value(form, 'benefit').trim() || null,
-            video_asset_id: value(form, 'video_asset_id') || null,
-            poster_asset_id: value(form, 'poster_asset_id') || null,
-            image_asset_id: value(form, 'image_asset_id') || null,
-            target_product_id: value(form, 'target_product_id') || null,
-            target_collection_id: value(form, 'target_collection_id') || null,
-            is_enabled: form.querySelector('[name="is_enabled"]').checked,
-          };
-          if (!payload.video_asset_id && !payload.poster_asset_id && !payload.image_asset_id) {
-            throw new Error('Hero slide requires either a video asset with poster or an image asset.');
-          }
-          if (payload.video_asset_id && !payload.poster_asset_id) {
-            const vidAsset = knownAssets.get(payload.video_asset_id);
-            if (!vidAsset?.poster_id) {
-              throw new Error('Featured hero video requires an image poster.');
-            }
-          }
-          if (isNew) {
-            const created = await api.createAdminHeroSlide(payload);
-            slides.push(created);
-          } else {
-            const updated = await api.updateAdminHeroSlide(slide.id, { ...payload, expected_version: slide.edit_version });
-            const idx = slides.findIndex(s => s.id === slide.id);
-            if (idx !== -1) slides[idx] = updated;
-          }
-        }, () => {
-          editorNode.innerHTML = '';
-          renderSlideList();
-          status(`Hero slide ${isNew ? 'created' : 'saved'}.`);
+            <!-- Side Title and Headline Inputs -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 18px;">
+              <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 500; color: var(--admin-text-secondary); margin-bottom: 6px;">Side Title</label>
+                <input class="admin-input" name="title" value="${esc(slide?.title || '')}" placeholder="e.g. The Intro" maxlength="200" style="width: 100%;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 500; color: var(--admin-text-secondary); margin-bottom: 6px;">Headline / Tagline</label>
+                <input class="admin-input" name="benefit" value="${esc(slide?.benefit || '')}" placeholder="e.g. Our 1st Exclusive Drop" maxlength="2000" style="width: 100%;">
+              </div>
+            </div>
+
+            <!-- Media Selection -->
+            <div id="hero-media-select-section" style="margin-bottom: 18px;">
+              ${activeType === 'video' ? `
+                <div>
+                  <label style="display: block; font-size: 0.8125rem; font-weight: 500; color: var(--admin-text-secondary); margin-bottom: 6px;">
+                    16:9 MP4 Video Asset (Continuously runs edge-to-edge, then advances)
+                  </label>
+                  <select name="video_asset_id" id="col-hero-video-select" class="admin-input" style="width: 100%;">
+                    ${options([['', 'Select a video asset…'], ...videoAssets.map(a => [a.id, `${a.original_name} (${(a.byte_size / 1024 / 1024).toFixed(1)} MiB)`])], slide?.video_asset_id)}
+                  </select>
+                  <div id="col-hero-video-preview" style="margin-top: 10px; border-radius: 8px; overflow: hidden; background: #000; max-height: 220px; display: flex; align-items: center; justify-content: center;">
+                    ${(() => {
+                      const curVid = slide?.video_asset_id ? knownAssets.get(slide.video_asset_id) : null;
+                      return curVid && curVid.url
+                        ? `<video src="${esc(curVid.url)}" muted playsinline controls style="max-height: 200px; width: 100%; object-fit: contain;"></video>`
+                        : `<p style="padding: 24px; color: var(--admin-text-muted); font-size: 0.8125rem; margin: 0;">No video selected</p>`;
+                    })()}
+                  </div>
+                  <p style="font-size: 0.75rem; color: var(--admin-text-muted); margin: 6px 0 0 0;">
+                    ✓ No poster image required. The video autoplays muted in full width and advances to the next banner when completed.
+                  </p>
+                </div>
+              ` : `
+                <div>
+                  <label style="display: block; font-size: 0.8125rem; font-weight: 500; color: var(--admin-text-secondary); margin-bottom: 6px;">
+                    16:9 Image Asset (Displays edge-to-edge for 5 seconds, then advances)
+                  </label>
+                  <select name="image_asset_id" id="col-hero-image-select" class="admin-input" style="width: 100%;">
+                    ${options([['', 'Select an image asset…'], ...imageAssets.map(a => [a.id, a.original_name])], slide?.image_asset_id)}
+                  </select>
+                  <div id="col-hero-image-preview" style="margin-top: 10px; border-radius: 8px; overflow: hidden; background: #000; max-height: 220px; display: flex; align-items: center; justify-content: center;">
+                    ${(() => {
+                      const curImg = slide?.image_asset_id ? knownAssets.get(slide.image_asset_id) : null;
+                      return curImg && curImg.url
+                        ? `<img src="${esc(curImg.url)}" style="max-height: 200px; width: 100%; object-fit: contain;">`
+                        : `<p style="padding: 24px; color: var(--admin-text-muted); font-size: 0.8125rem; margin: 0;">No image selected</p>`;
+                    })()}
+                  </div>
+                </div>
+              `}
+            </div>
+
+            <!-- Optional Link Destination -->
+            <details style="margin: 16px 0; border: 1px solid var(--admin-border-hairline); border-radius: 6px; padding: 12px 14px; background: rgba(255,255,255,0.01);">
+              <summary style="cursor: pointer; font-size: 0.8125rem; font-weight: 500; color: var(--admin-text-secondary);">
+                Link Destination (Optional click target)
+              </summary>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px;">
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-muted); margin-bottom: 4px;">Destination product</label>
+                  <select name="target_product_id" class="admin-input" style="width: 100%;">
+                    ${options([['', 'None (no product link)'], ...allProds.map(p => [p.id, `${p.title || 'Untitled'} (${p.status})`])], slide?.target_product_id)}
+                  </select>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-muted); margin-bottom: 4px;">Destination collection</label>
+                  <select name="target_collection_id" class="admin-input" style="width: 100%;">
+                    ${options([['', 'None (no collection link)'], ...allCols.map(c => [c.id, c.name])], slide?.target_collection_id)}
+                  </select>
+                </div>
+              </div>
+            </details>
+
+            <div style="margin: 16px 0;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.8125rem; color: #FFF;">
+                <input name="is_enabled" type="checkbox" ${slide ? (slide.is_enabled ? 'checked' : '') : 'checked'} style="width: 16px; height: 16px; cursor: pointer;">
+                Active in homepage carousel
+              </label>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 20px;">
+              <button type="submit" class="btn btn-primary" id="catalog-save-hero-slide" style="padding: 9px 20px; font-weight: 500;">
+                ${isNew ? 'Create Banner' : 'Save Changes'}
+              </button>
+              <button type="button" class="btn btn-secondary" id="catalog-cancel-hero-slide-btn" style="padding: 9px 16px;">
+                Cancel
+              </button>
+            </div>
+          </form>
+        `;
+
+        bind('#btn-hero-type-video', () => {
+          activeType = 'video';
+          updateEditorMarkup();
         });
-      });
+        bind('#btn-hero-type-image', () => {
+          activeType = 'image';
+          updateEditorMarkup();
+        });
+
+        bind('#catalog-cancel-hero-slide', () => { editorNode.innerHTML = ''; });
+        bind('#catalog-cancel-hero-slide-btn', () => { editorNode.innerHTML = ''; });
+
+        query('#col-hero-video-select')?.addEventListener('change', e => {
+          const asset = knownAssets.get(e.target.value);
+          const box = query('#col-hero-video-preview');
+          if (box) {
+            box.innerHTML = asset && asset.url
+              ? `<video src="${esc(asset.url)}" muted playsinline controls style="max-height: 200px; width: 100%; object-fit: contain;"></video>`
+              : `<p style="padding: 24px; color: var(--admin-text-muted); font-size: 0.8125rem; margin: 0;">No video selected</p>`;
+          }
+        });
+
+        query('#col-hero-image-select')?.addEventListener('change', e => {
+          const asset = knownAssets.get(e.target.value);
+          const box = query('#col-hero-image-preview');
+          if (box) {
+            box.innerHTML = asset && asset.url
+              ? `<img src="${esc(asset.url)}" style="max-height: 200px; width: 100%; object-fit: contain;">`
+              : `<p style="padding: 24px; color: var(--admin-text-muted); font-size: 0.8125rem; margin: 0;">No image selected</p>`;
+          }
+        });
+
+        const form = query('#catalog-hero-form');
+        form.addEventListener('submit', event => {
+          event.preventDefault();
+          action(async () => {
+            const vidId = activeType === 'video' ? (value(form, 'video_asset_id') || null) : null;
+            const imgId = activeType === 'image' ? (value(form, 'image_asset_id') || null) : null;
+
+            if (activeType === 'video' && !vidId) {
+              throw new Error('Please select a video asset for the video banner.');
+            }
+            if (activeType === 'image' && !imgId) {
+              throw new Error('Please select an image asset for the picture banner.');
+            }
+
+            const payload = {
+              title: value(form, 'title').trim() || null,
+              benefit: value(form, 'benefit').trim() || null,
+              video_asset_id: vidId,
+              poster_asset_id: null,
+              image_asset_id: imgId,
+              target_product_id: value(form, 'target_product_id') || null,
+              target_collection_id: value(form, 'target_collection_id') || null,
+              is_enabled: form.querySelector('[name="is_enabled"]').checked,
+            };
+
+            if (isNew) {
+              const created = await api.createAdminHeroSlide(payload);
+              slides.push(created);
+            } else {
+              const updated = await api.updateAdminHeroSlide(slide.id, { ...payload, expected_version: slide.edit_version });
+              const idx = slides.findIndex(s => s.id === slide.id);
+              if (idx !== -1) slides[idx] = updated;
+            }
+          }, () => {
+            editorNode.innerHTML = '';
+            renderSlideList();
+            status(`Hero banner ${isNew ? 'created' : 'saved'}.`);
+          });
+        });
+      }
+
+      updateEditorMarkup();
     }
 
     renderSlideList();

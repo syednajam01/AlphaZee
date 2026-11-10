@@ -347,8 +347,6 @@ def create_hero_slide(db, command):
 
     if not video and not poster and not image:
         raise CatalogError('media_required', 'Hero slide requires at least a video, poster or image asset')
-    if video and not poster and not video.poster_id:
-        raise CatalogError('poster_required', 'Featured hero video requires a poster image')
 
     product = None
     if command.target_product_id:

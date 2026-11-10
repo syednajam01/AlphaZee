@@ -72,9 +72,13 @@ export function createHero(onProductClick) {
 
     const isSingle = heroItems.length === 1;
 
-    // 1. Ambient Background Media Container (Blurred continuously playing background video)
+    // 1. Ambient Background Media Container (Horizontal sliding media track)
     const bgContainer = document.createElement('div');
     bgContainer.className = 'hero-bg-container';
+
+    const mediaTrack = document.createElement('div');
+    mediaTrack.className = 'hero-media-track';
+    bgContainer.appendChild(mediaTrack);
 
     heroItems.forEach((item, index) => {
       const posterUrl = sanitizeMediaUrl(item.poster_url || item.hero_poster_url || item.image_url || item.hero_image_url, '');
@@ -115,7 +119,7 @@ export function createHero(onProductClick) {
             video.play().catch(handleAutoplayReject);
           }
         }
-        bgContainer.appendChild(video);
+        mediaTrack.appendChild(video);
       } else if (imageUrl) {
         const img = document.createElement('img');
         img.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
@@ -123,13 +127,13 @@ export function createHero(onProductClick) {
         img.alt = item.title || 'AlphaZee featured piece';
         img.loading = index === 0 ? 'eager' : 'lazy';
         img.dataset.slideIndex = String(index);
-        bgContainer.appendChild(img);
+        mediaTrack.appendChild(img);
       } else {
         const fallbackBg = document.createElement('div');
         fallbackBg.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
         fallbackBg.style.background = '#eeece6';
         fallbackBg.dataset.slideIndex = String(index);
-        bgContainer.appendChild(fallbackBg);
+        mediaTrack.appendChild(fallbackBg);
       }
     });
 
@@ -367,7 +371,7 @@ export function createHero(onProductClick) {
     if (activeMedia && activeMedia.tagName !== 'VIDEO') {
       imageTimer = setTimeout(() => {
         if (alive && !isUserPaused) goToSlide(currentSlide + 1);
-      }, 6000);
+      }, 5000);
       if (imageTimer && typeof imageTimer.unref === 'function') {
         imageTimer.unref();
       }
@@ -379,6 +383,18 @@ export function createHero(onProductClick) {
     clearImageTimer();
     const count = heroItems.length;
     currentSlide = (index + count) % count;
+
+    // 1. Horizontal slide animation for media track
+    const mediaTrack = section.querySelector('.hero-media-track');
+    if (mediaTrack && mediaTrack.style) {
+      mediaTrack.style.transform = `translateX(-${currentSlide * 100}%)`;
+    }
+
+    // 2. Horizontal slide animation for editorial text track
+    const slidesTrack = section.querySelector('.hero-slides-track');
+    if (slidesTrack && slidesTrack.style) {
+      slidesTrack.style.transform = `translateX(-${currentSlide * 100}%)`;
+    }
 
     section.querySelectorAll('.hero-bg-media').forEach((media, i) => {
       const isActive = i === currentSlide;
@@ -451,6 +467,7 @@ export function createHero(onProductClick) {
 
   // Load hero slides from API (dedicated playlist with legacy fallback)
   async function loadHero() {
+    alive = true;
     const request = ++generation;
     try {
       let items = [];

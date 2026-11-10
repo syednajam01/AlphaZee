@@ -81,14 +81,15 @@
 .storefront :is(.cart-item,.checkout-item) { box-shadow: none; }
 
 /* The hero has an actual readable editorial panel and one unblurred media stage. */
-.storefront .hero-section { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: 540px auto; min-height: 0; padding: 0; background: #f1efe9; color: #242822; isolation: isolate; }
-.storefront .hero-bg-container { grid-column: 2; grid-row: 1; position: relative; inset: auto; width: 100%; height: 100%; min-width: 0; background: #e7e5df; }
-.storefront .hero-bg-media, .storefront .hero-bg-media.hero-video-media, .storefront .hero-bg-media:not(video) { object-fit: contain; filter: none; transform: none; will-change: auto; background: #e7e5df; transition: opacity 240ms ease; }
+.storefront .hero-section { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.15fr); grid-template-rows: minmax(480px, 560px); min-height: 0; padding: 0; background: #f1efe9; color: #242822; isolation: isolate; overflow: hidden; }
+.storefront .hero-bg-container { grid-column: 2; grid-row: 1; position: relative; inset: auto; width: 100%; height: 100%; min-width: 0; background: #000; overflow: hidden; }
+.storefront .hero-media-track { display: flex; width: 100%; height: 100%; transition: transform 600ms cubic-bezier(0.25, 1, 0.5, 1); will-change: transform; }
+.storefront .hero-bg-media, .storefront .hero-bg-media.hero-video-media, .storefront .hero-bg-media:not(video) { flex: 0 0 100%; width: 100%; height: 100%; object-fit: cover; object-position: center; filter: none; transform: none; will-change: auto; background: #000; display: block; opacity: 1; }
 .storefront :is(.hero-overlay,.hero-motif) { display: none; }
-.storefront .hero-content-wrapper { grid-column: 1; grid-row: 1; align-self: center; width: 100%; padding: 48px clamp(24px,6vw,88px); min-width: 0; }
-.storefront .hero-slides-track { display: block; position: relative; transform: none; }
-.storefront .hero-slide { display: none; padding: 0; width: 100%; }
-.storefront .hero-slide.is-active { display: block; }
+.storefront .hero-content-wrapper { grid-column: 1; grid-row: 1; align-self: center; width: 100%; padding: 48px clamp(24px,6vw,88px); min-width: 0; overflow: hidden; }
+.storefront .hero-slides-track { display: flex; width: 100%; transition: transform 600ms cubic-bezier(0.25, 1, 0.5, 1); will-change: transform; }
+.storefront .hero-slide { flex: 0 0 100%; width: 100%; display: block; padding: 0; opacity: 0.35; transition: opacity 400ms ease; }
+.storefront .hero-slide.is-active { opacity: 1; }
 .storefront :is(.hero-eyebrow,.hero-badge) { display: block; font: 500 13px/1.5 var(--font-family); color: #4e5a50; letter-spacing: 0; margin-bottom: 24px; background: none; border: 0; padding: 0; }
 .storefront .hero-title { font-family: var(--font-family-serif); font-size: clamp(40px,4.4vw,68px); font-weight: 400; line-height: 1.04; letter-spacing: -.025em; overflow-wrap: anywhere; color: #242822; margin: 0 0 24px; max-width: 12ch; }
 .storefront .hero-desc { font-size: 16px; line-height: 1.7; color: #555b53; max-width: 38ch; margin: 0 0 24px; }
@@ -96,17 +97,8 @@
 .storefront .hero-cta-group { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .storefront .hero-section .btn-hero { background: #243f31; color: #fff; border: 1px solid #243f31; }
 .storefront .hero-section .hero-secondary-btn { color: #243f31; background: transparent; border: 1px solid #a4aaa0; }
-.storefront .hero-controls { position: absolute; right: 24px; top: 472px; bottom: auto; z-index: 12; display: flex; align-items: center; gap: 8px; padding: 8px; background: #faf9f5; border: 1px solid #d6d8d0; border-radius: 4px; backdrop-filter: none; box-shadow: none; }
-.storefront .hero-ctrl-btn { display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 2px; background: transparent; color: #243f31; cursor: pointer; }
-.storefront .hero-ctrl-btn:hover { background: #e8ebe3; transform: none; }
-.storefront .hero-ctrl-btn:focus-visible { outline: 2px solid #243f31; outline-offset: 2px; }
-.storefront .hero-slide-indicator { font-size: 12px; font-variant-numeric: tabular-nums; color: #4e5a50; letter-spacing: 0; padding: 0 8px; }
-.storefront .hero-marquee-container { grid-column: 1/-1; grid-row: 2; background: #faf9f5; padding: 20px clamp(24px,6vw,88px); border-bottom: 1px solid #dddcd5; overflow: auto; mask-image: none; -webkit-mask-image: none; }
-.storefront .hero-marquee-track { display: flex; gap: 16px; width: max-content; animation: none; will-change: auto; }
-.storefront .hero-picture-card { width: 64px; height: 80px; flex: 0 0 64px; background: #eeece6; border: 1px solid #d6d8d0; border-radius: 2px; box-shadow: none; }
-.storefront .hero-picture-card:hover { transform: none; box-shadow: none; border-color: #243f31; }
-.storefront .hero-picture-card:focus-visible { outline: 2px solid #243f31; outline-offset: 3px; }
-.storefront .hero-picture-img { object-fit: contain; }
+.storefront .hero-controls { display: none !important; }
+.storefront .hero-marquee-container { display: none !important; }
 @media (max-width: 767px) {
   .storefront .section { padding-block: 40px; }
   .storefront .section-header { margin-bottom: 24px; }
@@ -116,14 +108,12 @@
   .storefront .product-card-title { font-size: 14px; }
   .storefront .product-card-price-row { flex-wrap: wrap; gap: 4px; }
   .storefront .faq-question { padding: 20px 0; }
-  .storefront .hero-section { grid-template-columns: 1fr; grid-template-rows: auto 320px auto; }
+  .storefront .hero-section { grid-template-columns: 1fr; grid-template-rows: auto 340px; }
   .storefront .hero-content-wrapper { grid-row: 1; padding: 32px 24px; }
   .storefront .hero-title { font-size: 40px; max-width: 15ch; margin-bottom: 16px; }
   .storefront .hero-desc { font-size: 15px; margin-bottom: 20px; }
   .storefront .hero-eyebrow { margin-bottom: 16px; }
-  .storefront .hero-bg-container { grid-column: 1; grid-row: 2; }
-  .storefront .hero-controls { top: auto; bottom: 128px; right: 16px; }
-  .storefront .hero-marquee-container { grid-row: 3; padding: 16px 24px; }
+  .storefront .hero-bg-container { grid-column: 1; grid-row: 2; height: 340px; }
   .storefront .hero-section .btn { min-height: 44px; padding: 12px 16px; font-size: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
