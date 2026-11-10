@@ -332,8 +332,8 @@ export function mountCatalogSection(section, container, context) {
         </label>
         <div class="variant-action-wrap">
           ${v.id
-            ? '<span class="variant-db-note">Saved in DB</span>'
-            : '<button type="button" class="btn btn-secondary btn-remove-size" data-remove-variant style="color: #f87171; font-size: 0.75rem; padding: 4px 8px;">Remove size</button>'}
+            ? '<span class="variant-db-note" title="Saved in database">Saved in DB</span>'
+            : '<button type="button" class="btn-card-action btn-remove-size" data-remove-variant title="Remove size" aria-label="Remove size" style="color: #f87171;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>'}
         </div>
       </div>
       ${v.id ? `<div data-variant-stock="${v.id}"></div>` : ''}
@@ -351,16 +351,22 @@ export function mountCatalogSection(section, container, context) {
             <input type="text" class="color-group-name" value="${esc(colorName)}" placeholder="e.g. Jet Black, Chalk White, Forest Green" maxlength="100" required>
           </label>
         </div>
-        <div class="color-group-batch-wrap" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-          <div class="batch-price-box" style="display: flex; gap: 4px; align-items: center;">
-            <input type="text" class="color-batch-price" placeholder="Price for all (PKR)" style="width: 140px; font-size: 0.8rem; padding: 4px 8px;" maxlength="20">
-            <button type="button" class="btn btn-secondary btn-apply-batch-price" style="font-size: 0.75rem; padding: 4px 8px;">Apply Price</button>
+        <div class="color-group-batch-wrap">
+          <div class="batch-price-box">
+            <input type="text" class="color-batch-price" placeholder="Batch price (PKR)" maxlength="20">
+            <button type="button" class="btn-card-action btn-apply-batch-price" title="Apply price to all sizes of this color" aria-label="Apply price to all sizes">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
           </div>
-          <div class="batch-stock-box" style="display: flex; gap: 4px; align-items: center;">
-            <input type="number" min="0" step="1" class="color-batch-stock" placeholder="Stock for all" style="width: 110px; font-size: 0.8rem; padding: 4px 8px;">
-            <button type="button" class="btn btn-secondary btn-apply-batch-stock" style="font-size: 0.75rem; padding: 4px 8px;">Apply Stock</button>
+          <div class="batch-stock-box">
+            <input type="number" min="0" step="1" class="color-batch-stock" placeholder="Batch stock">
+            <button type="button" class="btn-card-action btn-apply-batch-stock" title="Apply stock to all sizes of this color" aria-label="Apply stock to all sizes">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
           </div>
-          <button type="button" class="btn btn-secondary btn-remove-color-group" style="font-size: 0.75rem; padding: 4px 8px; color: #f87171; margin-left: auto;">Remove Color</button>
+          <button type="button" class="btn-card-action btn-remove-color-group" title="Remove this color group" aria-label="Remove this color group" style="color: #f87171;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
         </div>
       </div>
       <div class="color-sizes-selector-section">
@@ -601,102 +607,281 @@ export function mountCatalogSection(section, container, context) {
 
     const activeColIds = new Set(product.collection_ids || (product.collection_id ? [product.collection_id] : []));
 
-    shell(`<div class="catalog-toolbar">${button('Back to products', 'catalog-back-products')}${button('Reload saved product', 'catalog-reload-product')}
-      <strong id="catalog-product-state">${esc(product.status)} · version ${product.edit_version}</strong></div>
-      <form id="catalog-product-form"><fieldset ${archived ? 'disabled' : ''}><legend>Product details</legend><div class="catalog-fields">
-      ${field('title', 'Title', product.title, { max: 300 })}${field('slug', 'URL slug', product.slug, { max: 100 })}
-      <div class="product-collections-box" style="grid-column: 1 / -1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin: 8px 0;">
-        <label style="font-weight: 600; display: block; margin-bottom: 8px; color: #f8fafc;">Collections (one product can belong to multiple collections)</label>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap;" id="product-collections-checkboxes">
-          ${collections.map(c => `
-            <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: #cbd5e1; background: #1e293b; padding: 6px 12px; border-radius: 6px; border: 1px solid ${activeColIds.has(c.id) ? '#3b82f6' : '#475569'};">
-              <input type="checkbox" name="collection_ids" value="${esc(c.id)}" ${activeColIds.has(c.id) ? 'checked' : ''} class="col-checkbox">
-              <span>${esc(c.name)}${c.is_active ? '' : ' <em style="color: #94a3b8; font-size: 0.75rem;">(inactive)</em>'}</span>
-            </label>
-          `).join('') || '<p style="color: #94a3b8; font-size: 0.85rem; margin: 0;">No collections created yet.</p>'}
-        </div>
-        <select name="collection_id" style="display: none;">
-          ${options([['', 'Choose later'], ...collections.map(c => [c.id, c.name])], product.collection_id)}
-        </select>
-        <p style="font-size: 0.85rem; color: #94a3b8; margin: 8px 0 0 0;">Check all collections where this product should be listed.</p>
-      </div>
-      <div class="stock-responsibility-box" style="grid-column: 1 / -1; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin: 8px 0;">
-        <label style="font-weight: 600; display: block; margin-bottom: 8px; color: #f8fafc;">Who manages this product's stock?</label>
-        <div style="display: flex; gap: 24px; margin-bottom: 12px; flex-wrap: wrap;">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #cbd5e1;">
-            <input type="radio" name="stock_management_source" value="alphazee_managed" ${(product.stock_management_source || 'alphazee_managed') === 'alphazee_managed' ? 'checked' : ''} id="source-alphazee">
-            <span><strong>AlphaZee — no external vendor</strong></span>
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #cbd5e1;">
-            <input type="radio" name="stock_management_source" value="vendor_managed" ${product.stock_management_source === 'vendor_managed' ? 'checked' : ''} id="source-vendor">
-            <span><strong>Vendor — choose an active shop</strong></span>
-          </label>
-        </div>
-        <div id="vendor-selection-wrapper" style="display: ${product.stock_management_source === 'vendor_managed' ? 'block' : 'none'}; margin-top: 10px;">
-          <label style="display: block; margin-bottom: 4px; color: #cbd5e1;">Assigned Vendor Shop
-            <select name="vendor_id" id="catalog-vendor-id" style="width: 100%; max-width: 400px; padding: 8px; border-radius: 4px; border: 1px solid #475569; background: #1e293b; color: #fff;">
-              <option value="">-- Choose active vendor shop --</option>
-              ${vendorOptions}
-            </select>
-          </label>
-        </div>
-        <p style="font-size: 0.85rem; color: #94a3b8; margin: 8px 0 0 0;">
-          Vendor users can update allocated quantities only; AlphaZee controls product pricing, media, publishing, and customer orders.
-        </p>
-      </div>
-      ${field('badge', 'Card badge', product.badge, { max: 100 })}${field('short_description', 'Short description', product.short_description, { textarea: true, max: 2000 })}
-      ${field('description', 'Customer description', product.description, { textarea: true, max: 20000 })}
-      ${field('material', 'Material', product.material, { textarea: true })}${field('care', 'Care instructions', product.care, { textarea: true })}${field('sizing', 'Sizing details', product.sizing, { textarea: true })}
-      <label><input name="is_hero" type="checkbox" ${product.is_hero ? 'checked' : ''}> Featured in hero</label>
-      ${field('hero_order', 'Hero order', product.hero_order, { type: 'number' })}${field('hero_benefit', 'Hero benefit', product.hero_benefit, { textarea: true, max: 2000 })}</div>
-      <div class="catalog-variants-section">
-        <div class="catalog-variants-header">
-          <div>
-            <h3>Colors & Available Sizes</h3>
-            <p>Define each color available for this piece, and select the sizes offered for that color. Each size creates an inventory-tracked variant.</p>
-          </div>
-          <button type="button" class="btn btn-secondary" id="catalog-add-color">+ Add Color</button>
-        </div>
-        ${product.id && product.variants?.length ? renderStockMatrix(product.variants) : ''}
-        <div id="catalog-variants">${initialColorGroupsHtml}</div>
-      </div>
+    const statusClass = product.status === 'published' ? 'status-published' : (product.status === 'draft' ? 'status-draft' : 'status-archived');
+    const statusLabel = product.status === 'published' ? 'Published' : (product.status === 'draft' ? 'Draft' : 'Archived');
+    const displayTitle = product.title || 'Untitled draft';
 
-      <h3>Storefront Card Images</h3>
-      <p>Explicitly select the Card Front image and Card Hover/Back image shown in listings and grids. These selections are independent of gallery order.</p>
-      <div class="role-selector-grid">
-        <div class="role-selector-card" id="card-front-selector-card">
-          <div class="role-thumbnail" id="card-front-thumb">No front image</div>
-          <div class="role-selector-info">
-            <strong>Card Front Image (Primary)</strong>
-            <p>Main product image displayed on category pages, search results, and hero.</p>
-            <label>Select front image:
-              <select id="catalog-select-front"></select>
-            </label>
-            <button type="button" class="btn btn-secondary" id="catalog-clear-front" style="font-size: 0.75rem; padding: 4px 8px; align-self: start;">Clear front image</button>
+    shell(`
+      <div class="draft-header-bar">
+        <div class="draft-header-left">
+          <button type="button" class="btn-action-icon" id="catalog-back-products" title="Back to products" aria-label="Back to products">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+          </button>
+          <div class="draft-title-block">
+            <h2 class="draft-page-title" title="${esc(displayTitle)}">${esc(displayTitle)}</h2>
+            <div class="draft-meta-tags">
+              <span class="catalog-status-badge ${statusClass}">${statusLabel}</span>
+              <span id="catalog-product-state" class="catalog-version-pill" title="Version ${product.edit_version}">v${product.edit_version}</span>
+            </div>
           </div>
         </div>
-        <div class="role-selector-card" id="card-hover-selector-card">
-          <div class="role-thumbnail" id="card-hover-thumb">No hover image</div>
-          <div class="role-selector-info">
-            <strong>Card Hover / Back Image</strong>
-            <p>Revealed on desktop cursor hover. Defaults to front image if unset.</p>
-            <label>Select hover image:
-              <select id="catalog-select-hover"></select>
-            </label>
-            <button type="button" class="btn btn-secondary" id="catalog-clear-hover" style="font-size: 0.75rem; padding: 4px 8px; align-self: start;">Clear hover image</button>
-          </div>
+
+        <div class="draft-header-actions">
+          <button type="button" class="btn-action-icon" id="catalog-reload-product" title="Reload saved product" aria-label="Reload saved product">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+          </button>
+
+          ${!archived ? `
+            <button type="button" class="btn-action-icon ${product.status === 'published' ? 'btn-action-unpublish' : 'btn-action-publish'}" id="catalog-publish" title="${product.status === 'published' ? 'Unpublish product (make private)' : 'Publish product (make live)'}" aria-label="${product.status === 'published' ? 'Unpublish product' : 'Publish product'}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                ${product.status === 'published'
+                  ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>`
+                  : `<circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>`
+                }
+              </svg>
+            </button>
+            <button type="button" class="btn-action-icon btn-action-archive" id="catalog-archive" title="Archive product" aria-label="Archive product">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                <rect x="1" y="3" width="22" height="5"></rect>
+                <line x1="10" y1="12" x2="14" y2="12"></line>
+              </svg>
+            </button>
+          ` : `
+            <button type="button" class="btn-action-icon btn-action-restore" id="catalog-restore" title="Restore to draft" aria-label="Restore to draft">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+            </button>
+          `}
+
+          <button type="button" class="btn-action-icon btn-action-delete" id="catalog-delete-product" title="Delete product" aria-label="Delete product">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+
+          <button type="submit" form="catalog-product-form" class="btn-action-icon btn-action-save" id="catalog-save-product" title="Save product and media" aria-label="Save product and media">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+          </button>
         </div>
       </div>
 
-      <h3>Product gallery and featured media</h3><p>Uploaded files are public resources. Detaching keeps the file in the library.</p>
-      <div id="catalog-product-media"></div>
-      <div class="catalog-toolbar"><label>Library asset<select id="catalog-attach-asset">${options([['', 'Choose an asset'], ...assets.map(a => [a.id, `${a.original_name} (${a.kind})`])])}</select></label>
-        <label>Presentation role<select id="catalog-attach-role">${options([['gallery', 'Gallery'], ['primary', 'Primary image (card front)'], ['hover_image', 'Hover image (card back)'], ['hero_image', 'Hero image'], ['hero_video', 'Hero video'], ['hero_poster', 'Hero poster']])}</select></label>${button('Attach asset', 'catalog-attach')}
-        ${button('Previous library page', 'catalog-library-prev', mediaPage === 1 ? 'disabled' : '')}${button('Next library page', 'catalog-library-next', mediaPage * 100 >= assetTotal ? 'disabled' : '')}</div>
-      <div id="catalog-upload-box"></div><button type="submit" class="btn btn-primary" id="catalog-save-product">Save product and media</button></fieldset></form>
-      <section><h3>Publication requirements</h3><ul id="catalog-requirements"></ul><div class="catalog-toolbar">
-        ${!archived ? button(product.status === 'published' ? 'Unpublish' : 'Publish', 'catalog-publish') + button('Archive', 'catalog-archive') : button('Restore to draft', 'catalog-restore')}
-        ${button('Delete product', 'catalog-delete-product', 'style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3); margin-left: auto;"')}</div></section>`);
+      <form id="catalog-product-form" class="catalog-edit-form">
+        <fieldset ${archived ? 'disabled' : ''} class="catalog-edit-fieldset">
+
+          <!-- Card 1: Basic Information (Row by row) -->
+          <div class="catalog-form-card">
+            <div class="catalog-form-card-header">
+              <h3 class="catalog-form-card-title">Basic Information</h3>
+              <p class="catalog-form-card-desc">Product title, URL slug, and customer descriptions.</p>
+            </div>
+            <div class="form-rows-stack">
+              <div class="form-row-2col">
+                ${field('title', 'Product Title', product.title, { max: 300 })}
+                ${field('slug', 'URL Slug (unique)', product.slug, { max: 100 })}
+              </div>
+              <div class="form-row">
+                ${field('badge', 'Card Badge (e.g. New Season, Limited Edition)', product.badge, { max: 100 })}
+              </div>
+              <div class="form-row">
+                ${field('short_description', 'Short Summary (appears in previews and lists)', product.short_description, { textarea: true, max: 2000 })}
+              </div>
+              <div class="form-row">
+                ${field('description', 'Customer Detailed Description', product.description, { textarea: true, max: 20000 })}
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Organization & Inventory Responsibility -->
+          <div class="catalog-form-card">
+            <div class="catalog-form-card-header">
+              <h3 class="catalog-form-card-title">Organization & Stock Responsibility</h3>
+              <p class="catalog-form-card-desc">Categorization and vendor stock assignment.</p>
+            </div>
+            <div class="form-rows-stack">
+              <div class="form-row">
+                <label class="section-sublabel">Collections (multi-select)</label>
+                <div class="collections-chips-grid" id="product-collections-checkboxes">
+                  ${collections.map(c => `
+                    <label class="collection-chip ${activeColIds.has(c.id) ? 'is-selected' : ''}">
+                      <input type="checkbox" name="collection_ids" value="${esc(c.id)}" ${activeColIds.has(c.id) ? 'checked' : ''} class="col-checkbox">
+                      <span>${esc(c.name)}${c.is_active ? '' : ' <em class="chip-inactive">(inactive)</em>'}</span>
+                    </label>
+                  `).join('') || '<p class="field-empty-note">No collections created yet.</p>'}
+                </div>
+                <select name="collection_id" style="display: none;">
+                  ${options([['', 'Choose later'], ...collections.map(c => [c.id, c.name])], product.collection_id)}
+                </select>
+                <p class="field-help-text">Check all collections where this product should appear.</p>
+              </div>
+
+              <div class="form-row">
+                <label class="section-sublabel">Who manages this product's inventory?</label>
+                <div class="stock-source-options">
+                  <label class="stock-source-card ${(product.stock_management_source || 'alphazee_managed') === 'alphazee_managed' ? 'is-selected' : ''}">
+                    <input type="radio" name="stock_management_source" value="alphazee_managed" ${(product.stock_management_source || 'alphazee_managed') === 'alphazee_managed' ? 'checked' : ''} id="source-alphazee">
+                    <div class="source-card-content">
+                      <strong class="source-card-title">AlphaZee Internal</strong>
+                      <span class="source-card-desc">Stock counted and held directly in-house without an external vendor.</span>
+                    </div>
+                  </label>
+                  <label class="stock-source-card ${product.stock_management_source === 'vendor_managed' ? 'is-selected' : ''}">
+                    <input type="radio" name="stock_management_source" value="vendor_managed" ${product.stock_management_source === 'vendor_managed' ? 'checked' : ''} id="source-vendor">
+                    <div class="source-card-content">
+                      <strong class="source-card-title">Vendor Shop</strong>
+                      <span class="source-card-desc">Inventory allocated and counted by an authorized vendor partner.</span>
+                    </div>
+                  </label>
+                </div>
+                <div id="vendor-selection-wrapper" style="display: ${product.stock_management_source === 'vendor_managed' ? 'block' : 'none'}; margin-top: 12px;">
+                  <label>Assigned Vendor Shop
+                    <select name="vendor_id" id="catalog-vendor-id" class="vendor-select-dropdown">
+                      <option value="">-- Choose active vendor shop --</option>
+                      ${vendorOptions}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Specifications & Care Instructions -->
+          <div class="catalog-form-card">
+            <div class="catalog-form-card-header">
+              <h3 class="catalog-form-card-title">Fabric & Specifications</h3>
+              <p class="catalog-form-card-desc">Material composition, wash care instructions, and sizing advice.</p>
+            </div>
+            <div class="form-rows-stack">
+              <div class="form-row">
+                ${field('material', 'Material & Fabric Composition', product.material, { textarea: true })}
+              </div>
+              <div class="form-row">
+                ${field('care', 'Care Instructions', product.care, { textarea: true })}
+              </div>
+              <div class="form-row">
+                ${field('sizing', 'Sizing Details & Fit Guide', product.sizing, { textarea: true })}
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 4: Homepage Hero Placement -->
+          <div class="catalog-form-card">
+            <div class="catalog-form-card-header">
+              <h3 class="catalog-form-card-title">Homepage Hero Placement</h3>
+              <p class="catalog-form-card-desc">Showcase this product prominently in the homepage hero carousel.</p>
+            </div>
+            <div class="form-rows-stack">
+              <div class="form-row">
+                <label class="hero-checkbox-label">
+                  <input name="is_hero" type="checkbox" ${product.is_hero ? 'checked' : ''}>
+                  <span>Feature this product in the homepage hero banner</span>
+                </label>
+              </div>
+              <div class="form-row-2col">
+                ${field('hero_order', 'Hero Slide Order (0 = first)', product.hero_order, { type: 'number' })}
+                ${field('hero_benefit', 'Hero Benefit / Headline Tagline', product.hero_benefit, { max: 2000 })}
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 5: Colors & Available Sizes -->
+          <div class="catalog-form-card">
+            <div class="catalog-form-card-header catalog-variants-card-header">
+              <div>
+                <h3 class="catalog-form-card-title">Colors & Available Sizes</h3>
+                <p class="catalog-form-card-desc">Define each color variant and choose sizes offered. Each size creates an inventory-tracked variant.</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-add-color-head" id="catalog-add-color">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Add Color</span>
+              </button>
+            </div>
+            ${product.id && product.variants?.length ? renderStockMatrix(product.variants) : ''}
+            <div id="catalog-variants">${initialColorGroupsHtml}</div>
+          </div>
+
+          <!-- Card 6: Storefront Card Images -->
+          <div class="catalog-form-card">
+            <div class="catalog-form-card-header">
+              <h3 class="catalog-form-card-title">Storefront Card Images</h3>
+              <p class="catalog-form-card-desc">Explicitly select the Card Front image and Card Hover/Back image shown in product listings.</p>
+            </div>
+            <div class="role-selector-grid">
+              <div class="role-selector-card" id="card-front-selector-card">
+                <div class="role-thumbnail" id="card-front-thumb">No front image</div>
+                <div class="role-selector-info">
+                  <strong class="role-info-title">Card Front Image (Primary)</strong>
+                  <p class="role-info-desc">Main image displayed on category pages, search results, and hero.</p>
+                  <label class="role-select-label">Select front image:
+                    <select id="catalog-select-front"></select>
+                  </label>
+                  <button type="button" class="btn btn-secondary btn-clear-role" id="catalog-clear-front">Clear front image</button>
+                </div>
+              </div>
+              <div class="role-selector-card" id="card-hover-selector-card">
+                <div class="role-thumbnail" id="card-hover-thumb">No hover image</div>
+                <div class="role-selector-info">
+                  <strong class="role-info-title">Card Hover / Back Image</strong>
+                  <p class="role-info-desc">Revealed on desktop cursor hover. Defaults to front image if unset.</p>
+                  <label class="role-select-label">Select hover image:
+                    <select id="catalog-select-hover"></select>
+                  </label>
+                  <button type="button" class="btn btn-secondary btn-clear-role" id="catalog-clear-hover">Clear hover image</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 7: Product Gallery & Library Upload -->
+          <div class="catalog-form-card">
+            <div class="catalog-form-card-header">
+              <h3 class="catalog-form-card-title">Product Gallery & Media</h3>
+              <p class="catalog-form-card-desc">Uploaded files are securely stored. Detaching keeps the file available in your library.</p>
+            </div>
+            <div id="catalog-product-media"></div>
+            <div class="media-library-toolbar">
+              <div class="media-toolbar-selects">
+                <label class="media-select-label">Library asset
+                  <select id="catalog-attach-asset">${options([['', 'Choose library asset…'], ...assets.map(a => [a.id, `${a.original_name} (${a.kind})`])])}</select>
+                </label>
+                <label class="media-select-label">Role
+                  <select id="catalog-attach-role">${options([['gallery', 'Gallery'], ['primary', 'Primary image (card front)'], ['hover_image', 'Hover image (card back)'], ['hero_image', 'Hero image'], ['hero_video', 'Hero video'], ['hero_poster', 'Hero poster']])}</select>
+                </label>
+                <button type="button" class="btn btn-secondary btn-icon-only" id="catalog-attach" title="Attach asset to product" aria-label="Attach asset">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+              </div>
+              <div class="media-toolbar-pagination">
+                <button type="button" class="btn-pagination" id="catalog-library-prev" ${mediaPage === 1 ? 'disabled' : ''} title="Previous library page" aria-label="Previous library page">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <span class="catalog-page-indicator"><span>Page </span><strong>${mediaPage}</strong></span>
+                <button type="button" class="btn-pagination" id="catalog-library-next" ${mediaPage * 100 >= assetTotal ? 'disabled' : ''} title="Next library page" aria-label="Next library page">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+              </div>
+            </div>
+            <div id="catalog-upload-box"></div>
+          </div>
+
+          <!-- Invisible publication requirements container to satisfy existing JS methods -->
+          <ul id="catalog-requirements" style="display: none;" hidden></ul>
+        </fieldset>
+      </form>
+    `);
     requirements(product); renderLinks(); wireRoleSelectors(); updateRoleSelectors();
     if (!archived) mountUploadBox(() => loadAssets().then(updateAssetChoices));
     const form = query('#catalog-product-form'); wireDirty(form);
@@ -712,10 +897,18 @@ export function mountCatalogSection(section, container, context) {
       if (!isVendor && vendorSelect) {
         vendorSelect.value = '';
       }
+      query('#source-alphazee')?.closest('.stock-source-card')?.classList.toggle('is-selected', !isVendor);
+      query('#source-vendor')?.closest('.stock-source-card')?.classList.toggle('is-selected', isVendor);
       markDirty();
     };
     sourceAlphazee?.addEventListener('change', updateVendorVisibility);
     sourceVendor?.addEventListener('change', updateVendorVisibility);
+    form.querySelectorAll('.col-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        cb.closest('.collection-chip')?.classList.toggle('is-selected', cb.checked);
+        markDirty();
+      });
+    });
     bind('#catalog-back-products', () => { if (context.canLeave()) action(products); });
     bind('#catalog-reload-product', () => { if (context.canLeave()) action(() => api.fetchOwnerProduct(product.id), p => editProduct(p)); });
 
@@ -958,7 +1151,17 @@ export function mountCatalogSection(section, container, context) {
     node.innerHTML = links.length ? links.map((link, index) => `<article class="catalog-media-card" data-link-index="${index}">
       ${preview(link.asset)}<div><strong>${esc(link.role.replaceAll('_', ' '))}</strong>${field('alt_text', 'Alt text', link.alt_text, { max: 1000 })}
       <label>Variant association<select name="media_variant" ${link.role !== 'gallery' ? 'disabled' : ''}>${options([['', 'All variants'], ...(currentProduct.variants || []).map(v => [v.id, v.sku])], link.variant_id)}</select></label>
-      <div class="catalog-toolbar">${button('Move up', '', `data-link-up="${index}" ${index === 0 ? 'disabled' : ''}`)}${button('Move down', '', `data-link-down="${index}" ${index === links.length-1 ? 'disabled' : ''}`)}${button('Detach', '', `data-link-remove="${index}"`)}</div>
+      <div class="media-card-actions">
+        <button type="button" class="btn btn-secondary btn-icon-only" data-link-up="${index}" ${index === 0 ? 'disabled' : ''} title="Move up" aria-label="Move up">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        </button>
+        <button type="button" class="btn btn-secondary btn-icon-only" data-link-down="${index}" ${index === links.length-1 ? 'disabled' : ''} title="Move down" aria-label="Move down">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <button type="button" class="btn btn-secondary btn-icon-only" data-link-remove="${index}" title="Detach media" aria-label="Detach media" style="color: #f87171;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        </button>
+      </div>
       ${link.asset.kind === 'video' ? `
         <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #344b3c;">
           <label>Video poster image (required for publish)
@@ -1201,8 +1404,29 @@ export function mountCatalogSection(section, container, context) {
 
   function mountUploadBox(onAccepted) {
     const box = query('#catalog-upload-box'); if (!box) return;
-    box.innerHTML = `<label>Upload local images or videos<input type="file" id="catalog-file-input" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple></label>
-      <p>JPEG / PNG / WebP: 10 MiB and 40 megapixels. H.264 MP4 / VP8 or VP9 WebM: 100 MiB, 120 seconds. Videos need an image poster.</p><div id="catalog-upload-queue"></div>`;
+    box.innerHTML = `
+      <div class="custom-file-upload-wrap">
+        <label class="custom-file-upload-box" for="catalog-file-input" tabindex="0">
+          <svg class="upload-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <div class="upload-text-group">
+            <span class="upload-main-title">Click to choose image or video files</span>
+            <span class="upload-sub-desc">JPEG, PNG, WebP (up to 10 MB) · MP4, WebM (up to 100 MB)</span>
+          </div>
+          <input type="file" id="catalog-file-input" class="visually-hidden-file-input" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple>
+        </label>
+      </div>
+      <div id="catalog-upload-queue"></div>`;
+    const uploadBoxLabel = box.querySelector('.custom-file-upload-box');
+    uploadBoxLabel?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        query('#catalog-file-input')?.click();
+      }
+    });
     query('#catalog-file-input').addEventListener('change', event => {
       const files = [...(event.target.files || [])]; event.target.value = '';
       for (const file of files) {
