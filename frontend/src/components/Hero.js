@@ -24,6 +24,33 @@ export function createHero(onProductClick) {
   let generation = 0;
   let alive = true;
   let intersectionObserver = null;
+  let autoDismissTimer = null;
+
+  function toggleOverlay(forceState) {
+    const active = typeof forceState === 'boolean'
+      ? forceState
+      : !section.classList.contains('is-overlay-active');
+    section.classList.toggle('is-overlay-active', active);
+    if (autoDismissTimer) {
+      clearTimeout(autoDismissTimer);
+      autoDismissTimer = null;
+    }
+    if (active) {
+      autoDismissTimer = setTimeout(() => {
+        if (alive) {
+          section.classList.remove('is-overlay-active');
+        }
+      }, 6000);
+    }
+  }
+
+  // Tap-to-toggle overlay on touch or click on banner background
+  section.addEventListener('click', (e) => {
+    if (e.target.closest('a, button, input, [role="button"]')) {
+      return;
+    }
+    toggleOverlay();
+  });
 
   const prefersReducedMotion = typeof window !== 'undefined' &&
     window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -525,6 +552,10 @@ export function createHero(onProductClick) {
     alive = false;
     generation++;
     clearImageTimer();
+    if (autoDismissTimer) {
+      clearTimeout(autoDismissTimer);
+      autoDismissTimer = null;
+    }
     if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     }

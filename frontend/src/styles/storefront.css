@@ -122,15 +122,16 @@
   height: 100%;
   object-fit: cover;
   object-position: center;
-  filter: none;
-  transform: none;
-  will-change: auto;
+  filter: blur(0px) brightness(1);
+  transform: scale(1);
+  transition: filter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: filter, transform;
   background: #000;
   display: block;
   opacity: 1;
 }
 
-/* Scrim overlay: Deep gradient on left to guarantee crisp text readability over any video/image, while allowing media to shine on right */
+/* Scrim overlay: Deep gradient on left to guarantee crisp text readability over any video/image */
 .storefront .hero-overlay {
   display: block !important;
   position: absolute;
@@ -138,6 +139,8 @@
   z-index: 2;
   pointer-events: none;
   background: linear-gradient(90deg, rgba(8, 14, 11, 0.88) 0%, rgba(8, 14, 11, 0.65) 44%, rgba(8, 14, 11, 0.25) 75%, rgba(8, 14, 11, 0.12) 100%);
+  opacity: 0;
+  transition: opacity 0.45s ease;
 }
 
 .storefront .hero-motif {
@@ -148,11 +151,40 @@
   position: relative;
   z-index: 3;
   width: 100%;
-  max-width: var(--container-max-width, 1360px);
-  margin: 0 auto;
-  padding: clamp(48px, 6vw, 88px) clamp(24px, 5vw, 64px);
+  max-width: min(100%, 1440px);
+  margin-left: 0;
+  margin-right: auto;
+  padding: clamp(48px, 6vw, 88px) clamp(24px, 3.5vw, 48px);
   min-width: 0;
   overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-16px);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Interactive Hover-to-Blur & Reveal:
+   Default: Pure crystal-clear video/photo running with 0 blur and 0 text.
+   Hovered / Focus / Active: Media smoothly blurs (8px), scrim appears, text & CTAs slide in. */
+.storefront .hero-section:hover .hero-bg-media,
+.storefront .hero-section:focus-within .hero-bg-media,
+.storefront .hero-section.is-overlay-active .hero-bg-media {
+  filter: blur(8px) brightness(0.70);
+  transform: scale(1.03);
+}
+
+.storefront .hero-section:hover .hero-overlay,
+.storefront .hero-section:focus-within .hero-overlay,
+.storefront .hero-section.is-overlay-active .hero-overlay {
+  opacity: 1;
+}
+
+.storefront .hero-section:hover .hero-content-wrapper,
+.storefront .hero-section:focus-within .hero-content-wrapper,
+.storefront .hero-section.is-overlay-active .hero-content-wrapper {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 .storefront .hero-slides-track {
