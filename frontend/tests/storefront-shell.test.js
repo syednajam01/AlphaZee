@@ -9,7 +9,9 @@ test('offline storefront mounts, closed overlays are inert, and shell controls r
   installDom();
   globalThis.fetch = async () => { throw new Error('SAMPLE offline API'); };
   let application;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   await act(async () => { application = initApp(); });
+  globalThis.IS_REACT_ACT_ENVIRONMENT = false;
   await new Promise(resolve => setTimeout(resolve, 60));
   for (const id of ['product-modal', 'checkout-modal', 'tracking-modal', 'cart-drawer', 'mobile-nav-drawer']) {
     const root = document.getElementById(id);
@@ -109,7 +111,9 @@ test('clicking brand logo sends user to main page /', async () => {
   };
   globalThis.fetch = async () => { throw new Error('offline'); };
   let application;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   await act(async () => { application = initApp(); });
+  globalThis.IS_REACT_ACT_ENVIRONMENT = false;
   await new Promise(resolve => setTimeout(resolve, 60));
 
   const logo = document.querySelector('#header-logo-slot .brand-logo-link');

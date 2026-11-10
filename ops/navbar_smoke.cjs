@@ -138,7 +138,7 @@ const collection = { id: 'sample-nav', slug: 'sample-nav', name: 'SAMPLE collect
         await page.screenshot({ path: `${process.env.NAVBAR_ARTIFACTS}/${width}-expanded.png` });
       }
       assert.deepEqual(errors, []);
-      console.log(`PASS: navbar ${process.env.NAVBAR_ENGINE || 'chromium'} ${width}px, five routes and announcement variants`);
+      console.log(`PASS: navbar ${process.env.NAVBAR_ENGINE || 'chromium'} ${width}px, ${results.filter(item => item.width === width).length} routes and announcement variants`);
       await context.close();
     }
     console.log(JSON.stringify({ engine: process.env.NAVBAR_ENGINE || 'chromium', scenarios: results.length, results }, null, 2));

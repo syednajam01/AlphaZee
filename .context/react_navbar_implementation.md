@@ -26,7 +26,7 @@ Implemented the approved navbar plan in an isolated worktree, excluding ongoing 
 | Production preflight, unsafe-config rejection, exact migration CLI | Passed on disposable Compose project; temporary DB/volume removed |
 | Production storefront browser smoke | Passed desktop/mobile catalog, product deep reload, admin/vendor entry |
 | Production admin mobile browser smoke | Passed layout, logo, scrolling and bottom reachability |
-| Navbar | Chrome/WebKit at 360/390/768/1440px, five storefront routes, long/disabled announcements, normal/reduced animation, keyboard, dialogs, position and hit testing |
+| Navbar | Chrome/WebKit at 360/390/768/1440px, five storefront routes, long/disabled announcements, normal/reduced animation, keyboard, dialogs, position and hit testing; Chrome trusted touch swipes and wheel input passed |
 | Lab frontend container | Navbar route/width checks passed with the persistent SAMPLE notice enabled |
 
 Browser scenarios use explicit SAMPLE responses and no application writes. No production orders, stock changes or account resets were created. Evidence is under `.local/navbar-*.log` and `.local/navbar-evidence*/`; private settings are excluded from Git.
@@ -34,3 +34,11 @@ Browser scenarios use explicit SAMPLE responses and no application writes. No pr
 Extended browser checks found and fixed an invisible header container intercepting clicks; the regression assertion is permanent. The harness waits for async measurements and requests to settle. `ops/navbar_smoke.cjs` joins the packaging CI job. Existing mock-DOM tests remain; header/shell checks use a real DOM through the JSX-enabled `npm test` command.
 
 React currently owns the navbar, not every portal. Browser engines were checked on this workstation; physical phones were unavailable. GitHub checks/live deployment must be confirmed after push; local results cannot guarantee Azure availability or future failures.
+
+## Collections deployment blocker found before push
+
+While this work was isolated, the IDE agent published `0c2a099`, including collection hover-media migration `d3f8a1c9e2b4`. Its frontend/backend/operations/packaging checks passed, but deployment run `42801220417` failed because the new migration lacked a reviewed compatibility entry. The navbar branch was rebased onto that commit; its Collections UI and product-isolation behavior were preserved. Full backend/frontend and migration/packaging checks were repeated on the combined source.
+
+Reviewed upgrade: two nullable columns, with a nullable media foreign key; no existing column is renamed/removed or made mandatory. A rebuilt previous API image from `a1b260c` (schema code `c7f1e2a3b4d5`) successfully created, read, updated and deleted a SAMPLE collection against a freshly migrated `d3f8a1c9e2b4` database. New fields remained NULL when inserted by the previous code. The scratch database was removed afterward. On this evidence, `ops/migration-policy.json` now explicitly includes `d3f8a1c9e2b4`; the deployment guard remains active.
+
+Before push, public production readiness still returned ready/database connected. The previously authorized SSH address timed out, so no private VM preflight result is claimed. Actual release status must be checked through Actions and the live revision markers.

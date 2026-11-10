@@ -1,6 +1,6 @@
 # AlphaZee: agent operating guide
 
-Owner: Syed Najam. Updated: 2026-11-08.
+Owner: Syed Najam. Updated: 2026-11-10.
 Canonical guide. Read before each task. Keep under 1,200 words; put details in `.context/`.
 
 ## Authority and working rules
