@@ -253,3 +253,56 @@ def test_hero_slide_admin_and_public_lifecycle(admin_client, client, db_session,
     })
     assert del_res.status_code == 200
     assert del_res.json()['deleted'] is True
+
+
+def test_media_rename_and_library_filtering(admin_client, isolated_media):
+    # 1. Upload an image
+    img = upload(admin_client)
+    assert img['original_name'] == 'SAMPLE.png'
+    asset_id = img['id']
+    version = img['edit_version']
+
+    # 2. Rename the image
+    rename_res = admin_client.post(f'/api/v1/admin/media/{asset_id}/rename', json={
+        'expected_version': version,
+        'name': 'summer_lookbook_hero.png',
+    })
+    assert rename_res.status_code == 200, rename_res.text
+    renamed = rename_res.json()
+    assert renamed['original_name'] == 'summer_lookbook_hero.png'
+    assert renamed['edit_version'] == version + 1
+    assert 'usage' in renamed
+
+    # 3. Reject blank name or wrong version
+    bad_res = admin_client.post(f'/api/v1/admin/media/{asset_id}/rename', json={
+        'expected_version': version,  # old version
+        'name': 'another_name.png',
+    })
+    assert bad_res.status_code in (409, 422)
+
+    blank_res = admin_client.post(f'/api/v1/admin/media/{asset_id}/rename', json={
+        'expected_version': renamed['edit_version'],
+        'name': '   ',
+    })
+    assert blank_res.status_code == 422
+
+    # 4. Filter by q in library
+    search_res = admin_client.get('/api/v1/admin/media?q=lookbook')
+    assert search_res.status_code == 200
+    results = search_res.json()
+    assert results['page_size'] == 10
+    assert any(a['id'] == asset_id and 'lookbook' in a['original_name'] for a in results['assets'])
+
+    nomatch_res = admin_client.get('/api/v1/admin/media?q=nonexistent_xyz_query')
+    assert nomatch_res.status_code == 200
+    assert not any(a['id'] == asset_id for a in nomatch_res.json()['assets'])
+
+    # 5. Filter by kind
+    kind_img_res = admin_client.get('/api/v1/admin/media?kind=image')
+    assert kind_img_res.status_code == 200
+    assert any(a['id'] == asset_id for a in kind_img_res.json()['assets'])
+
+    kind_vid_res = admin_client.get('/api/v1/admin/media?kind=video')
+    assert kind_vid_res.status_code == 200
+    assert not any(a['id'] == asset_id for a in kind_vid_res.json()['assets'])
+

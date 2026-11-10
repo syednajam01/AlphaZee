@@ -458,6 +458,20 @@ def set_poster(db, identifier, command):
     return asset
 
 
+def rename_asset(db, identifier, command):
+    reference_lock(db)
+    asset = locked(db, MediaAsset, identifier, command.expected_version)
+    if asset.state != 'ready':
+        raise CatalogError('media_not_ready', 'Media asset is not available')
+    new_name = command.name.strip()
+    if not new_name:
+        raise CatalogError('invalid_name', 'File name cannot be blank', 422)
+    asset.original_name = new_name[:200]
+    asset.edit_version += 1
+    db.flush()
+    return asset
+
+
 def delete_asset(db, identifier, command):
     reference_lock(db)
     asset = locked(db, MediaAsset, identifier, command.expected_version)

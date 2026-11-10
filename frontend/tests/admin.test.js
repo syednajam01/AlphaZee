@@ -36,6 +36,8 @@ import {
   fetchOrderEconomics,
   getOrderEconomicsCsvUrl,
   getPeriodReportCsvUrl,
+  fetchOwnerMedia,
+  renameOwnerMedia,
 } from '../src/utils/api.js';
 
 describe('Admin API Client Methods', () => {
@@ -500,6 +502,54 @@ describe('Admin API Client Methods', () => {
     const ordersCsvUrl = getOrderEconomicsCsvUrl({ start_date: '2026-10-01' });
     assert.ok(ordersCsvUrl.includes('/admin/reports/orders/export'));
     assert.ok(ordersCsvUrl.includes('start_date=2026-10-01'));
+  });
+
+  it('handles media library search and rename API methods', async () => {
+    let capturedUrl = null;
+    let capturedOptions = null;
+
+    global.fetch = async (url, options) => {
+      capturedUrl = url;
+      capturedOptions = options;
+      if (url.includes('/admin/media/asset123/rename')) {
+        const body = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({
+            id: 'asset123',
+            original_name: body.name,
+            edit_version: body.expected_version + 1,
+          }),
+        };
+      }
+      if (url.includes('/admin/media?')) {
+        return {
+          ok: true,
+          json: async () => ({
+            assets: [{ id: 'asset123', original_name: 'test.png', kind: 'image' }],
+            total: 1,
+            page: 1,
+            page_size: 10,
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const mediaList = await fetchOwnerMedia({ page: 1, page_size: 10, q: 'test', kind: 'image' });
+    assert.ok(capturedUrl.includes('/admin/media?'));
+    assert.ok(capturedUrl.includes('page=1'));
+    assert.ok(capturedUrl.includes('page_size=10'));
+    assert.ok(capturedUrl.includes('q=test'));
+    assert.ok(capturedUrl.includes('kind=image'));
+    assert.equal(mediaList.assets.length, 1);
+
+    const renamed = await renameOwnerMedia('asset123', { name: 'brand_hero.png', expected_version: 2 });
+    assert.ok(capturedUrl.includes('/admin/media/asset123/rename'));
+    assert.equal(capturedOptions.method, 'POST');
+    assert.deepEqual(JSON.parse(capturedOptions.body), { name: 'brand_hero.png', expected_version: 2 });
+    assert.equal(renamed.original_name, 'brand_hero.png');
+    assert.equal(renamed.edit_version, 3);
   });
 });
 

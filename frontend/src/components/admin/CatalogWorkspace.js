@@ -60,6 +60,12 @@ export function mountCatalogSection(section, container, context) {
   let stockViews = [];
   let alive = true, busy = false, currentProduct = null, currentCollection = null;
   let mediaPage = 1, assets = [], assetTotal = 0, collections = [], links = [];
+  let mediaLibraryPage = 1, libraryAssets = [], mediaLibraryTotal = 0;
+  let mediaSearch = '', mediaKind = '';
+  let searchDebounceTimer = null;
+  let editingAssetId = null;
+  let editingName = '';
+  let posterEditingAssetId = null;
   const knownAssets = new Map();
   const posterDrafts = new Map();
   let productsPage = 1, productFilter = { search: '', status: '', collection_id: '' };
@@ -1666,34 +1672,483 @@ export function mountCatalogSection(section, container, context) {
     } finally { uploading = false; if (current() && section === 'media' && queue.every(item => item.state === 'accepted')) context.setDirty(posterDrafts.size > 0); }
   }
 
-  async function mediaLibrary() {
-    await loadAssets(); if (!current()) return;
-    shell(`<p>Public catalog files only. Payment evidence belongs to orders and must not be uploaded here.</p><div id="catalog-upload-box"></div><div id="catalog-library-cards"></div>
-      <div class="catalog-toolbar">${button('Previous', 'catalog-media-prev', mediaPage === 1 ? 'disabled' : '')}<span>Page ${mediaPage} · ${assetTotal} files</span>${button('Next', 'catalog-media-next', mediaPage * 100 >= assetTotal ? 'disabled' : '')}</div>`);
-    mountUploadBox(async () => { await loadAssets(); renderLibraryCards(); }); renderLibraryCards();
-    bind('#catalog-media-prev', () => { if (context.canLeave()) { mediaPage--; action(mediaLibrary); } });
-    bind('#catalog-media-next', () => { if (context.canLeave()) { mediaPage++; action(mediaLibrary); } });
+  async function loadLibraryAssets() {
+    const params = { page: mediaLibraryPage, page_size: 10 };
+    if (mediaSearch.trim()) params.q = mediaSearch.trim();
+    if (mediaKind) params.kind = mediaKind;
+    const data = await api.fetchOwnerMedia(params);
+    if (!current()) return;
+    libraryAssets = data.assets || [];
+    mediaLibraryTotal = data.total || 0;
+    libraryAssets.forEach(a => knownAssets.set(a.id, a));
   }
+
+  function formatBytes(bytes) {
+    if (!bytes && bytes !== 0) return '0 B';
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1) return `${mb.toFixed(2)} MB`;
+    const kb = bytes / 1024;
+    return `${kb.toFixed(1)} KB`;
+  }
+
+  function renderMediaThumbnail(asset) {
+    if (asset.kind === 'video') {
+      const posterUrl = asset.poster_id ? `/api/v1/media/${esc(asset.poster_id)}/content` : null;
+      const durationText = asset.duration_ms ? `${(asset.duration_ms / 1000).toFixed(1)}s` : 'Video';
+      if (posterUrl) {
+        return `
+          <div class="media-thumb-box">
+            <img loading="lazy" decoding="async" src="${posterUrl}" alt="${esc(asset.original_name)}" class="media-thumb-img" />
+            <span class="media-video-badge" title="Duration: ${durationText}">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span>${durationText}</span>
+            </span>
+          </div>`;
+      }
+      return `
+        <div class="media-thumb-box media-thumb-video-placeholder">
+          <svg class="media-placeholder-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span class="media-video-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <span>${durationText}</span>
+          </span>
+        </div>`;
+    }
+    return `
+      <div class="media-thumb-box">
+        <img loading="lazy" decoding="async" src="${esc(sanitizeMediaUrl(asset.url))}" alt="${esc(asset.original_name || 'Media image')}" class="media-thumb-img" />
+      </div>`;
+  }
+
+  function getMediaUsageInfo(asset) {
+    const pCount = asset.usage?.products?.length || 0;
+    const cCount = asset.usage?.collections?.length || 0;
+    const posterCount = asset.usage?.posters_for?.length || 0;
+    const total = pCount + cCount + posterCount;
+    if (total === 0) {
+      return { isUsed: false, total: 0, label: 'Unused', tooltip: 'Not used in any products, collections or posters' };
+    }
+    const details = [];
+    if (pCount > 0) details.push(`${pCount} product${pCount === 1 ? '' : 's'}`);
+    if (cCount > 0) details.push(`${cCount} collection${cCount === 1 ? '' : 's'}`);
+    if (posterCount > 0) details.push(`${posterCount} video poster${posterCount === 1 ? '' : 's'}`);
+    return {
+      isUsed: true,
+      total,
+      label: `Used in ${total}`,
+      tooltip: details.join(' · '),
+    };
+  }
+
+  async function mediaLibrary() {
+    await loadLibraryAssets();
+    if (!current()) return;
+    context.setDirty(false);
+    shell(`
+      <div class="media-library-container">
+        <!-- Top Control Bar -->
+        <div class="media-control-bar">
+          <div class="media-control-left">
+            <button type="button" class="btn btn-primary btn-media-upload" id="catalog-media-upload-btn" title="Upload new images or videos" aria-label="Upload files">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Upload</span>
+            </button>
+            <input type="file" id="catalog-media-file-input" class="visually-hidden-file-input" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple>
+          </div>
+
+          <div class="media-control-search">
+            <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="catalog-media-search" class="media-search-input" placeholder="Search files by name..." value="${esc(mediaSearch)}" autocomplete="off" />
+            ${mediaSearch ? `<button type="button" class="media-search-clear" id="catalog-media-search-clear" title="Clear search" aria-label="Clear search">×</button>` : ''}
+          </div>
+
+          <div class="media-control-filter">
+            <select id="catalog-media-kind" class="media-filter-select" aria-label="Filter media by type">
+              <option value="" ${mediaKind === '' ? 'selected' : ''}>All Formats</option>
+              <option value="image" ${mediaKind === 'image' ? 'selected' : ''}>Images Only</option>
+              <option value="video" ${mediaKind === 'video' ? 'selected' : ''}>Videos Only</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="catalog-upload-box" style="display:none;"></div>
+        <div id="catalog-upload-queue"></div>
+
+        <div id="catalog-library-cards"></div>
+      </div>
+    `);
+
+    const uploadBtn = query('#catalog-media-upload-btn');
+    const fileInput = query('#catalog-media-file-input');
+    uploadBtn?.addEventListener('click', () => fileInput?.click());
+    fileInput?.addEventListener('change', event => {
+      const files = [...(event.target.files || [])];
+      event.target.value = '';
+      for (const file of files) {
+        let url = '';
+        try { url = URL.createObjectURL(file); objectUrls.add(url); } catch {}
+        queue.push({ file, url, state: 'queued', progress: 0, controller: null, message: '' });
+      }
+      renderQueue();
+      processQueue(async () => {
+        await loadLibraryAssets();
+        renderLibraryCards();
+      });
+    });
+
+    const searchInput = query('#catalog-media-search');
+    searchInput?.addEventListener('input', e => {
+      mediaSearch = e.target.value;
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(async () => {
+        mediaLibraryPage = 1;
+        await loadLibraryAssets();
+        renderLibraryCards();
+      }, 250);
+    });
+
+    query('#catalog-media-search-clear')?.addEventListener('click', async () => {
+      mediaSearch = '';
+      mediaLibraryPage = 1;
+      await loadLibraryAssets();
+      mediaLibrary();
+    });
+
+    query('#catalog-media-kind')?.addEventListener('change', async e => {
+      mediaKind = e.target.value;
+      mediaLibraryPage = 1;
+      await loadLibraryAssets();
+      renderLibraryCards();
+    });
+
+    renderLibraryCards();
+  }
+
   function renderLibraryCards() {
-    const node = query('#catalog-library-cards'); if (!node || !current()) return;
-    node.innerHTML = `<div class="catalog-grid">${assets.map(asset => `<article class="catalog-card" data-library-asset="${asset.id}">${preview(asset)}<h3>${esc(asset.original_name)}</h3>
-      <p>${asset.width} × ${asset.height} · ${(asset.byte_size / 1024 / 1024).toFixed(2)} MiB${asset.duration_ms ? ` · ${(asset.duration_ms / 1000).toFixed(1)} seconds` : ''}</p>
-      <p>Usage: ${asset.usage?.products?.length || 0} product roles, ${asset.usage?.collections?.length || 0} collections, ${asset.usage?.posters_for?.length || 0} posters.</p>
-      ${asset.usage?.products?.map(x => `<p>${esc(x.product_title || 'Product')} · ${esc(x.role.replaceAll('_', ' '))}${x.variant_id ? ' · variant image' : ''}</p>`).join('') || ''}
-      ${asset.kind === 'video' ? `<label>Poster image<select name="poster_id">${options(imageChoices(), posterDrafts.has(asset.id) ? posterDrafts.get(asset.id) : asset.poster_id)}</select></label>${button('Save poster', '', `data-save-poster="${asset.id}"`)}` : ''}
-      ${button('Delete unused file', '', `data-delete-asset="${asset.id}"`)}</article>`).join('') || '<p>No files uploaded yet.</p>'}</div>`;
-    node.querySelectorAll('[data-save-poster]').forEach(control => control.addEventListener('click', () => {
-      const asset = assets.find(a => a.id === control.dataset.savePoster), card = control.closest('[data-library-asset]');
-      action(() => api.saveMediaPoster(asset.id, { expected_version: asset.edit_version, poster_id: card.querySelector('[name="poster_id"]').value || null }), async () => { posterDrafts.delete(asset.id); await loadAssets(); renderLibraryCards(); status('Video poster saved.'); context.setDirty(posterDrafts.size > 0); });
-    }));
-    node.querySelectorAll('[name="poster_id"]').forEach(control => control.addEventListener('change', () => {
-      posterDrafts.set(control.closest('[data-library-asset]').dataset.libraryAsset, control.value); markDirty();
-    }));
-    node.querySelectorAll('[data-delete-asset]').forEach(control => control.addEventListener('click', () => {
-      const asset = assets.find(a => a.id === control.dataset.deleteAsset);
-      if (!window.confirm('Delete this unused public file? Attached files cannot be deleted.')) return;
-      action(() => api.deleteOwnerMedia(asset.id, asset.edit_version), async () => { knownAssets.delete(asset.id); posterDrafts.delete(asset.id); await loadAssets(); renderLibraryCards(); status('Unused file deleted.'); });
-    }));
+    const node = query('#catalog-library-cards');
+    if (!node || !current()) return;
+
+    const totalPages = Math.max(1, Math.ceil(mediaLibraryTotal / 10));
+
+    if (libraryAssets.length === 0) {
+      node.innerHTML = `
+        <div class="media-table-wrap">
+          <div class="media-empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <p>${mediaSearch ? `No media files matching "${esc(mediaSearch)}".` : 'No media files uploaded yet.'}</p>
+            ${mediaSearch ? `<button type="button" class="btn btn-secondary btn-sm" id="empty-clear-search">Clear search</button>` : ''}
+          </div>
+        </div>
+      `;
+      query('#empty-clear-search')?.addEventListener('click', async () => {
+        mediaSearch = '';
+        mediaLibraryPage = 1;
+        await loadLibraryAssets();
+        mediaLibrary();
+      });
+      return;
+    }
+
+    const rowsHtml = libraryAssets.map(asset => {
+      const isEditing = editingAssetId === asset.id;
+      const isEditingPoster = posterEditingAssetId === asset.id;
+      const usageInfo = getMediaUsageInfo(asset);
+      const isVideo = asset.kind === 'video';
+      const ext = asset.original_name.split('.').pop()?.toUpperCase() || (isVideo ? 'MP4' : 'IMAGE');
+      const sizeStr = formatBytes(asset.byte_size);
+      const dimsStr = `${asset.width} × ${asset.height}`;
+
+      return `
+        <article class="media-row" data-library-asset="${asset.id}">
+          <!-- Preview -->
+          <div class="media-cell-preview">
+            ${renderMediaThumbnail(asset)}
+          </div>
+
+          <!-- File Name & Details -->
+          <div class="media-cell-details">
+            ${isEditing ? `
+              <div class="media-name-edit">
+                <input type="text" class="media-rename-input" id="rename-input-${asset.id}" value="${esc(editingName)}" maxlength="200" autocomplete="off" />
+                <button type="button" class="btn btn-secondary btn-icon-only btn-save-name" data-save-rename="${asset.id}" title="Save file name (Enter)" aria-label="Save name">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button type="button" class="btn btn-secondary btn-icon-only btn-cancel-name" data-cancel-rename title="Cancel (Esc)" aria-label="Cancel rename">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            ` : `
+              <div class="media-name-view">
+                <span class="media-name-text" title="${esc(asset.original_name)}">${esc(asset.original_name)}</span>
+                <button type="button" class="btn-edit-icon" data-start-rename="${asset.id}" title="Rename file" aria-label="Rename file">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+              </div>
+            `}
+            <div class="media-mobile-meta">
+              <span>${dimsStr} · ${sizeStr} · ${ext}</span>
+            </div>
+          </div>
+
+          <!-- Format & Dimensions (Desktop) -->
+          <div class="media-cell-meta">
+            <span class="media-meta-dim">${dimsStr}</span>
+            <span class="media-meta-format">${sizeStr} · ${ext}</span>
+          </div>
+
+          <!-- Usage Status -->
+          <div class="media-cell-usage">
+            <span class="media-usage-badge ${usageInfo.isUsed ? 'is-used' : 'is-unused'}" title="${esc(usageInfo.tooltip)}">
+              ${usageInfo.label}
+            </span>
+          </div>
+
+          <!-- Actions -->
+          <div class="media-cell-actions">
+            <button type="button" class="btn btn-secondary btn-icon-only btn-row-action" data-start-rename="${asset.id}" title="Rename file" aria-label="Rename file">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+
+            ${isVideo ? `
+              <button type="button" class="btn btn-secondary btn-icon-only btn-row-action ${isEditingPoster ? 'is-active' : ''}" data-toggle-poster="${asset.id}" title="${asset.poster_id ? 'Change video poster' : 'Choose video poster'}" aria-label="Video poster">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </button>
+            ` : ''}
+
+            ${usageInfo.isUsed ? `
+              <button type="button" class="btn btn-secondary btn-icon-only btn-row-action is-disabled" disabled title="Cannot delete: file is in use" aria-label="Cannot delete file in use">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            ` : `
+              <button type="button" class="btn btn-secondary btn-icon-only btn-row-action btn-action-delete" data-delete-asset="${asset.id}" title="Delete unused file" aria-label="Delete unused file">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            `}
+          </div>
+
+          ${isEditingPoster ? `
+            <div class="media-poster-row">
+              <label class="media-poster-label">
+                <span>Poster image:</span>
+                <select name="poster_id" class="media-filter-select" style="min-width: 220px;">
+                  ${options(imageChoices(), posterDrafts.has(asset.id) ? posterDrafts.get(asset.id) : asset.poster_id)}
+                </select>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-primary btn-sm" data-save-poster="${asset.id}">Save</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-cancel-poster>Cancel</button>
+              </div>
+            </div>
+          ` : ''}
+        </article>
+      `;
+    }).join('');
+
+    node.innerHTML = `
+      <div class="media-table-wrap">
+        <!-- Table Header (Desktop) -->
+        <div class="media-table-header">
+          <span>Preview</span>
+          <span>File Name</span>
+          <span>Format & Size</span>
+          <span>Usage</span>
+          <span style="text-align: right;">Actions</span>
+        </div>
+
+        <div class="media-table-body">
+          ${rowsHtml}
+        </div>
+
+        <!-- Pagination Bar -->
+        <div class="media-pagination-bar">
+          <button type="button" class="btn btn-secondary btn-icon-only" id="catalog-media-prev" ${mediaLibraryPage === 1 ? 'disabled' : ''} title="Previous page" aria-label="Previous page">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <span class="media-page-indicator">Page <strong>${mediaLibraryPage}</strong> of <strong>${totalPages}</strong> · <span class="media-total-count">${mediaLibraryTotal} file${mediaLibraryTotal === 1 ? '' : 's'}</span></span>
+          <button type="button" class="btn btn-secondary btn-icon-only" id="catalog-media-next" ${mediaLibraryPage >= totalPages ? 'disabled' : ''} title="Next page" aria-label="Next page">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Wire pagination
+    bind('#catalog-media-prev', () => {
+      if (mediaLibraryPage > 1 && context.canLeave()) {
+        mediaLibraryPage--;
+        action(loadLibraryAssets, renderLibraryCards);
+      }
+    });
+
+    bind('#catalog-media-next', () => {
+      if (mediaLibraryPage < totalPages && context.canLeave()) {
+        mediaLibraryPage++;
+        action(loadLibraryAssets, renderLibraryCards);
+      }
+    });
+
+    // Wire rename start
+    node.querySelectorAll('[data-start-rename]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.startRename;
+        const asset = libraryAssets.find(a => a.id === id);
+        if (!asset) return;
+        editingAssetId = id;
+        editingName = asset.original_name;
+        renderLibraryCards();
+        const input = query(`#rename-input-${id}`);
+        if (input) {
+          input.focus();
+          const dotIndex = input.value.lastIndexOf('.');
+          if (dotIndex > 0) input.setSelectionRange(0, dotIndex);
+          else input.select();
+        }
+      });
+    });
+
+    // Wire rename input key events
+    if (editingAssetId) {
+      const input = query(`#rename-input-${editingAssetId}`);
+      input?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          query(`[data-save-rename="${editingAssetId}"]`)?.click();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          editingAssetId = null;
+          renderLibraryCards();
+        }
+      });
+    }
+
+    // Wire rename save
+    node.querySelectorAll('[data-save-rename]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.saveRename;
+        const asset = libraryAssets.find(a => a.id === id);
+        if (!asset) return;
+        const input = query(`#rename-input-${id}`);
+        const newName = input ? input.value.trim() : '';
+        if (!newName) {
+          status('File name cannot be blank', true);
+          return;
+        }
+        if (newName === asset.original_name) {
+          editingAssetId = null;
+          renderLibraryCards();
+          return;
+        }
+        action(
+          () => api.renameOwnerMedia(asset.id, { expected_version: asset.edit_version, name: newName }),
+          async updated => {
+            asset.original_name = updated.original_name;
+            asset.edit_version = updated.edit_version;
+            editingAssetId = null;
+            renderLibraryCards();
+            status(`Renamed to "${updated.original_name}".`);
+          }
+        );
+      });
+    });
+
+    // Wire rename cancel
+    node.querySelectorAll('[data-cancel-rename]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        editingAssetId = null;
+        renderLibraryCards();
+      });
+    });
+
+    // Wire poster toggle
+    node.querySelectorAll('[data-toggle-poster]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.togglePoster;
+        posterEditingAssetId = posterEditingAssetId === id ? null : id;
+        renderLibraryCards();
+      });
+    });
+
+    // Wire poster save
+    node.querySelectorAll('[data-save-poster]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.savePoster;
+        const asset = libraryAssets.find(a => a.id === id);
+        if (!asset) return;
+        const card = btn.closest('[data-library-asset]');
+        const posterId = card?.querySelector('[name="poster_id"]')?.value || null;
+        action(
+          () => api.saveMediaPoster(asset.id, { expected_version: asset.edit_version, poster_id: posterId }),
+          async updated => {
+            posterDrafts.delete(asset.id);
+            posterEditingAssetId = null;
+            asset.poster_id = updated.poster_id;
+            asset.edit_version = updated.edit_version;
+            await loadLibraryAssets();
+            renderLibraryCards();
+            status('Video poster saved.');
+          }
+        );
+      });
+    });
+
+    // Wire poster cancel
+    node.querySelectorAll('[data-cancel-poster]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        posterEditingAssetId = null;
+        renderLibraryCards();
+      });
+    });
+
+    // Wire delete
+    node.querySelectorAll('[data-delete-asset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const asset = libraryAssets.find(a => a.id === btn.dataset.deleteAsset);
+        if (!asset) return;
+        if (!window.confirm(`Delete "${asset.original_name}"? Attached files cannot be deleted.`)) return;
+        action(
+          () => api.deleteOwnerMedia(asset.id, asset.edit_version),
+          async () => {
+            knownAssets.delete(asset.id);
+            posterDrafts.delete(asset.id);
+            await loadLibraryAssets();
+            if (libraryAssets.length === 0 && mediaLibraryPage > 1) {
+              mediaLibraryPage--;
+              await loadLibraryAssets();
+            }
+            renderLibraryCards();
+            status('Unused file deleted.');
+          }
+        );
+      });
+    });
   }
 
   async function heroPlaylist() {

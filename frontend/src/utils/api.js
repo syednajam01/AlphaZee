@@ -187,6 +187,7 @@ export function reorderProductMedia(id, payload) { return ownerCatalogWrite(`/ad
 export function setProductRoles(id, payload) { return ownerCatalogWrite(`/admin/media/products/${encodeURIComponent(id)}/roles`, payload); }
 export function saveCollectionMedia(id, payload) { return ownerCatalogWrite(`/admin/media/collections/${encodeURIComponent(id)}`, payload); }
 export function saveMediaPoster(id, payload) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/poster`, payload); }
+export function renameOwnerMedia(id, payload) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/rename`, payload); }
 export function deleteOwnerMedia(id, expectedVersion) { return ownerCatalogWrite(`/admin/media/${encodeURIComponent(id)}/delete`, { expected_version: expectedVersion }); }
 
 export function fetchHeroSlides({ signal = null } = {}) {

@@ -14,7 +14,8 @@ from app.models.media import MediaAsset
 from app.schemas.media import (
     ProductMediaCommand, CollectionMediaCommand, PosterCommand, StrictCommand,
     AttachMediaCommand, DetachMediaCommand, ReorderMediaCommand, SetRolesCommand,
-    HeroSlideCreateCommand, HeroSlideUpdateCommand, HeroSlideReorderCommand
+    HeroSlideCreateCommand, HeroSlideUpdateCommand, HeroSlideReorderCommand,
+    MediaRenameCommand
 )
 from app.services import media as service
 from app.services import media_storage as storage
@@ -65,8 +66,18 @@ async def upload(request: Request, principal: OwnerPrincipal = Depends(require_o
 
 
 @router.get('')
-def library(db: Session = Depends(get_db), page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
+def library(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    q: str | None = Query(None),
+    kind: str | None = Query(None),
+):
     statement = select(MediaAsset).where(MediaAsset.state == 'ready')
+    if q and q.strip():
+        statement = statement.where(MediaAsset.original_name.ilike(f'%{q.strip()}%'))
+    if kind and kind in ('image', 'video'):
+        statement = statement.where(MediaAsset.kind == kind)
     total = db.scalar(select(func.count()).select_from(statement.subquery()))
     rows = db.scalars(statement.order_by(MediaAsset.created_at.desc(), MediaAsset.id).offset((page-1)*page_size).limit(page_size))
     return {'assets': [service.owner_asset(a, db) for a in rows], 'total': total, 'page': page, 'page_size': page_size}
@@ -130,6 +141,11 @@ def collection_media(collection_id: str, payload: CollectionMediaCommand, db: Se
 @router.post('/{asset_id}/poster')
 def poster(asset_id: str, payload: PosterCommand, db: Session = Depends(get_db)):
     return persist(db, lambda: service.set_poster(db, asset_id, payload), service.owner_asset)
+
+
+@router.post('/{asset_id}/rename')
+def rename(asset_id: str, payload: MediaRenameCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.rename_asset(db, asset_id, payload), lambda a: service.owner_asset(a, db))
 
 
 @router.post('/{asset_id}/delete')
