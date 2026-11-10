@@ -27,6 +27,10 @@ export function collectVariant(row) {
   const price = value('price');
   const price_minor = price === '' ? null : parseCatalogPkr(price);
   if (price !== '' && price_minor === null) throw new Error('Variant price must be a nonnegative PKR amount with at most two decimal places.');
+  const costInput = row.querySelector('[name="cost_price"]');
+  const costPrice = (costInput && costInput.value !== undefined) ? String(costInput.value).trim() : '';
+  const cost_price_minor = costPrice === '' ? null : parseCatalogPkr(costPrice);
+  if (costPrice !== '' && cost_price_minor === null) throw new Error('Wholesale cost price must be a nonnegative PKR amount with at most two decimal places.');
   const sku = value('sku');
   if (!sku) throw new Error('Every saved variant needs a unique SKU. Remove an unfinished new row to save a draft without it.');
   const color = value('color');
@@ -34,7 +38,7 @@ export function collectVariant(row) {
   const is_active = row.querySelector('[name="variant_active"]').checked;
   if (is_active && price_minor === null) throw new Error('Enter a price before activating this variant.');
   const stockInput = row.querySelector('[name="initial_stock"]');
-  const rawStock = stockInput ? stockInput.value.trim() : '';
+  const rawStock = (stockInput && stockInput.value !== undefined) ? String(stockInput.value).trim() : '';
   let initial_stock = undefined;
   if (rawStock !== '') {
     const parsed = Number(rawStock);
@@ -42,7 +46,9 @@ export function collectVariant(row) {
     initial_stock = parsed;
   }
   return { ...(row.dataset.variantId ? { id: Number(row.dataset.variantId) } : {}), sku,
-    size: value('size') || null, color: color || null, price_minor, is_active, availability: value('availability'),
+    size: value('size') || null, color: color || null, price_minor,
+    ...(costInput ? { cost_price_minor } : {}),
+    is_active, availability: value('availability'),
     ...(initial_stock !== undefined ? { initial_stock } : {}) };
 }
 
@@ -305,6 +311,7 @@ export function mountCatalogSection(section, container, context) {
 
   function variantRowMarkup(v, colorName) {
     const price = v.price_minor === null || v.price_minor === undefined ? '' : `${Math.floor(v.price_minor / 100)}.${String(v.price_minor % 100).padStart(2, '0')}`;
+    const costPrice = v.cost_price_minor === null || v.cost_price_minor === undefined ? '' : `${Math.floor(v.cost_price_minor / 100)}.${String(v.cost_price_minor % 100).padStart(2, '0')}`;
     const size = v.size || '';
     const stock = v.stock_on_hand !== undefined ? v.stock_on_hand : '';
     const held = v.held_reservations || 0;
@@ -319,6 +326,7 @@ export function mountCatalogSection(section, container, context) {
       <div class="catalog-fields variant-fields-row">
         ${field('sku', 'SKU (required)', v.sku || '', { max: 100 })}
         ${field('price', 'Retail price PKR', price, { max: 20 })}
+        ${field('cost_price', 'Wholesale cost PKR', costPrice, { max: 20 })}
         <label>Stock (units)
           <input type="number" name="initial_stock" min="0" step="1" placeholder="e.g. 10" value="${esc(String(stock !== '' ? stock : ''))}">
         </label>
@@ -352,13 +360,19 @@ export function mountCatalogSection(section, container, context) {
         </div>
         <div class="color-group-batch-wrap">
           <div class="batch-price-box">
-            <input type="text" class="color-batch-price" placeholder="Batch price (PKR)" maxlength="20">
-            <button type="button" class="btn-card-action btn-apply-batch-price" title="Apply price to all sizes of this color" aria-label="Apply price to all sizes">
+            <input type="text" class="color-batch-price" placeholder="Batch price (PKR)" maxlength="20" title="Retail selling price for all sizes">
+            <button type="button" class="btn-card-action btn-apply-batch-price" title="Apply retail price to all sizes of this color" aria-label="Apply retail price to all sizes">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+          </div>
+          <div class="batch-cost-box">
+            <input type="text" class="color-batch-cost" placeholder="Batch cost (PKR)" maxlength="20" title="Wholesale cost for all sizes">
+            <button type="button" class="btn-card-action btn-apply-batch-cost" title="Apply wholesale cost to all sizes of this color" aria-label="Apply wholesale cost to all sizes">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
             </button>
           </div>
           <div class="batch-stock-box">
-            <input type="number" min="0" step="1" class="color-batch-stock" placeholder="Batch stock">
+            <input type="number" min="0" step="1" class="color-batch-stock" placeholder="Batch stock" title="Stock units for all sizes">
             <button type="button" class="btn-card-action btn-apply-batch-stock" title="Apply stock to all sizes of this color" aria-label="Apply stock to all sizes">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
             </button>
@@ -424,6 +438,10 @@ export function mountCatalogSection(section, container, context) {
           const cName = nameInput ? nameInput.value.trim() : '';
           const batchPrice = card.querySelector('.color-batch-price')?.value?.trim();
           const pMinor = batchPrice ? parseCatalogPkr(batchPrice) : null;
+          const batchCost = card.querySelector('.color-batch-cost')?.value?.trim();
+          const cMinor = batchCost ? parseCatalogPkr(batchCost) : null;
+          const batchStock = card.querySelector('.color-batch-stock')?.value?.trim();
+          const sUnits = batchStock && !isNaN(Number(batchStock)) && Number(batchStock) >= 0 ? parseInt(batchStock, 10) : undefined;
           const suggestedSku = generateSkuSuggestion(cName, sz);
           const wrapper = document.createElement('div');
           wrapper.innerHTML = variantRowMarkup({
@@ -431,6 +449,8 @@ export function mountCatalogSection(section, container, context) {
             size: sz,
             color: cName,
             price_minor: pMinor,
+            cost_price_minor: cMinor,
+            stock_on_hand: sUnits,
             is_active: false,
             availability: 'available',
           }, cName);
@@ -499,6 +519,27 @@ export function mountCatalogSection(section, container, context) {
       });
       markDirty();
       status(`Applied PKR ${formatted} to sizes in this color.`);
+    });
+
+    const batchCostBtn = card.querySelector('.btn-apply-batch-cost');
+    batchCostBtn?.addEventListener('click', () => {
+      const batchInput = card.querySelector('.color-batch-cost');
+      const batchVal = batchInput.value.trim();
+      if (!batchVal) {
+        status('Enter a wholesale cost amount in PKR first.', true);
+        return;
+      }
+      const cMinor = parseCatalogPkr(batchVal);
+      if (cMinor === null) {
+        status('Wholesale cost must be a nonnegative PKR amount with at most two decimal places.', true);
+        return;
+      }
+      const formatted = `${Math.floor(cMinor / 100)}.${String(cMinor % 100).padStart(2, '0')}`;
+      variantsList.querySelectorAll('.catalog-variant input[name="cost_price"]').forEach(inp => {
+        inp.value = formatted;
+      });
+      markDirty();
+      status(`Applied wholesale cost PKR ${formatted} to sizes in this color.`);
     });
 
     const batchStockBtn = card.querySelector('.btn-apply-batch-stock');

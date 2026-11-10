@@ -18,6 +18,7 @@ class VariantEdit(Command):
     size: str | None = Field(default=None, max_length=50)
     color: str | None = Field(default=None, max_length=100)
     price_minor: Minor | None = None
+    cost_price_minor: Minor | None = None
     is_active: bool = False
     availability: Literal['available', 'unavailable', 'unknown'] = 'unknown'
     initial_stock: int | None = Field(default=None, ge=0, le=2147483647)

@@ -321,10 +321,14 @@ def test_vendor_stock_list_multi_tenant_isolation(db, client):
     # Must NOT see Vendor B variant
     assert ctx["var_b1"].sku not in skus
 
-    # ZERO LEAKAGE: Verify sensitive fields are not present in response items
+    # ZERO LEAKAGE: Verify retail price, customer and margin fields are not present in response items
     first_item = items[0]
-    for sensitive_key in ["supplier_cost_minor", "cost_minor", "price_minor", "margin", "customer_name"]:
+    for sensitive_key in ["price_minor", "margin", "retail_price", "customer_name"]:
         assert sensitive_key not in first_item, f"Leaked sensitive field '{sensitive_key}' to vendor!"
+
+    # Vendor sees agreed supplier cost for their assigned items
+    assert "supplier_cost_minor" in first_item
+    assert first_item["supplier_cost_minor"] == 200000
 
     # Verify quantities exposed
     assert first_item["allocated_on_hand"] == 3

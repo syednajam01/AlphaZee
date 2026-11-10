@@ -18,6 +18,7 @@ import {
 } from '../utils/api.js';
 
 import { sanitizeMediaUrl } from '../utils/dom.js';
+import { formatPkr } from '../utils/money.js';
 
 export function initVendorPortal() {
   const root = document.getElementById('app');
@@ -441,6 +442,7 @@ export function initVendorPortal() {
             <span class="vp-badge vp-badge-sku">${escapeHtml(item.variant_sku)}</span>
             ${item.size ? `<span class="vp-badge vp-badge-opt">Size: ${escapeHtml(item.size)}</span>` : ''}
             ${item.color ? `<span class="vp-badge vp-badge-opt">Color: ${escapeHtml(item.color)}</span>` : ''}
+            ${item.supplier_cost_minor !== undefined && item.supplier_cost_minor !== null ? `<span class="vp-badge vp-badge-cost" title="Your agreed supply rate">Unit Cost: ${formatPkr(item.supplier_cost_minor)}</span>` : ''}
           </div>
         </div>
         ${hasShortageRisk ? '<span class="vp-tag vp-tag-danger">Count needs review</span>' : isOutOfStock ? '<span class="vp-tag vp-tag-muted">Unavailable online</span>' : '<span class="vp-tag vp-tag-active">Available</span>'}

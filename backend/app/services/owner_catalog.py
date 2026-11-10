@@ -66,7 +66,7 @@ def product_response(product):
         vids = [v.id for v in product.variants if v.id]
         if vids:
             sv_rows = sess.execute(
-                select(SupplierVariant.variant_id, SupplierVariant.id, InventoryBalance.on_hand, InventoryBalance.version)
+                select(SupplierVariant.variant_id, SupplierVariant.id, InventoryBalance.on_hand, InventoryBalance.version, SupplierVariant.supplier_cost_minor)
                 .outerjoin(InventoryBalance, InventoryBalance.supplier_variant_id == SupplierVariant.id)
                 .where(SupplierVariant.variant_id.in_(vids), SupplierVariant.active.is_(True))
             ).all()
@@ -79,7 +79,7 @@ def product_response(product):
                     .group_by(StockReservation.supplier_variant_id)
                 ).all()
                 held_by_sv = {row[0]: (row[1] or 0) for row in held_res}
-            for vid, sv_id, on_hand, ver in sv_rows:
+            for vid, sv_id, on_hand, ver, cost_minor in sv_rows:
                 physical = on_hand or 0
                 held = held_by_sv.get(sv_id, 0)
                 stock_by_variant[vid] = {
@@ -88,6 +88,7 @@ def product_response(product):
                     'available_to_sell': max(0, physical - held),
                     'supplier_variant_id': str(sv_id) if sv_id else None,
                     'inventory_version': ver,
+                    'cost_price_minor': cost_minor,
                 }
 
     return {field: getattr(product, field) for field in (
@@ -106,6 +107,7 @@ def product_response(product):
             'size': v.size,
             'color': v.color,
             'price_minor': v.price_minor,
+            'cost_price_minor': stock_by_variant.get(v.id, {}).get('cost_price_minor'),
             'is_active': v.is_active,
             'availability': v.availability.value,
             'stock_on_hand': stock_by_variant.get(v.id, {}).get('stock_on_hand', 0),
@@ -217,10 +219,12 @@ def apply_product(db: Session, product, data):
     for key, value in data.items(): setattr(product, key, value)
     seen_ids = set()
     initial_stock_by_variant = {}
+    cost_price_by_variant = {}
     for item in variants or []:
         fields = item.model_dump(exclude_unset=True) if hasattr(item, 'model_dump') else dict(item)
         identifier = fields.pop('id', None)
         initial_stock = fields.pop('initial_stock', None)
+        cost_price_minor = fields.pop('cost_price_minor', None)
         if identifier is None:
             if not fields.get('sku'): raise CatalogError('invalid_variant', 'New variants require a SKU')
             variant = Variant(product_id=product.id, is_active=False, availability=AvailabilityStatus.UNKNOWN)
@@ -232,6 +236,8 @@ def apply_product(db: Session, product, data):
             if variant is None: raise CatalogError('invalid_variant', 'Variant does not belong to this product')
         if initial_stock is not None:
             initial_stock_by_variant[variant] = initial_stock
+        if cost_price_minor is not None:
+            cost_price_by_variant[variant] = cost_price_minor
         for key, value in fields.items():
             setattr(variant, key, AvailabilityStatus(value) if key == 'availability' else value)
         if not variant.sku: raise CatalogError('invalid_variant', 'SKU cannot be cleared')
@@ -255,16 +261,18 @@ def apply_product(db: Session, product, data):
         for v in product.variants:
             if not v.id:
                 continue
+            desired_cost = cost_price_by_variant.get(v)
             active_sv = db.scalar(select(SupplierVariant).where(
                 SupplierVariant.variant_id == v.id,
                 SupplierVariant.active.is_(True)
             ))
             if not active_sv:
+                initial_cost = desired_cost if desired_cost is not None else default_cost
                 sv = SupplierVariant(
                     supplier_id=target_supplier_id,
                     variant_id=v.id,
                     active=True,
-                    supplier_cost_minor=default_cost
+                    supplier_cost_minor=initial_cost
                 )
                 db.add(sv)
                 db.flush()
@@ -279,15 +287,18 @@ def apply_product(db: Session, product, data):
                     SupplierVariant.variant_id == v.id,
                     SupplierVariant.supplier_id == target_supplier_id
                 ))
+                initial_cost = desired_cost if desired_cost is not None else default_cost
                 if new_sv:
                     new_sv.active = True
+                    if desired_cost is not None:
+                        new_sv.supplier_cost_minor = desired_cost
                     active_sv = new_sv
                 else:
                     new_sv = SupplierVariant(
                         supplier_id=target_supplier_id,
                         variant_id=v.id,
                         active=True,
-                        supplier_cost_minor=default_cost
+                        supplier_cost_minor=initial_cost
                     )
                     db.add(new_sv)
                     db.flush()
@@ -295,6 +306,10 @@ def apply_product(db: Session, product, data):
                     db.add(balance)
                     db.flush()
                     active_sv = new_sv
+            else:
+                if desired_cost is not None and active_sv.supplier_cost_minor != desired_cost:
+                    active_sv.supplier_cost_minor = desired_cost
+                    db.flush()
 
             # If an explicit initial / updated stock count was provided
             desired_stock = initial_stock_by_variant.get(v)
@@ -312,13 +327,27 @@ def apply_product(db: Session, product, data):
                     db.add(StockEvent(
                         supplier_variant_id=active_sv.id,
                         actor_user_id=None,
-                        quantity_delta=desired_stock - old_on_hand,
-                        physical_on_hand_after=desired_stock,
+                        previous_on_hand=old_on_hand,
+                        new_on_hand=desired_stock,
+                        delta=desired_stock - old_on_hand,
                         reason='manual_count',
                         notes='Product catalog stock update',
                     ))
                 if desired_stock > 0 and v.availability == AvailabilityStatus.UNKNOWN and v.price_minor is not None:
                     v.availability = AvailabilityStatus.AVAILABLE
+    else:
+        for v in product.variants:
+            if not v.id:
+                continue
+            desired_cost = cost_price_by_variant.get(v)
+            if desired_cost is not None:
+                active_sv = db.scalar(select(SupplierVariant).where(
+                    SupplierVariant.variant_id == v.id,
+                    SupplierVariant.active.is_(True)
+                ))
+                if active_sv and active_sv.supplier_cost_minor != desired_cost:
+                    active_sv.supplier_cost_minor = desired_cost
+                    db.flush()
 
     gaps = publication_requirements(product) if product.status == 'published' else []
     new_gaps = [item for item in gaps if item['field'] not in existing_gaps]

@@ -62,6 +62,7 @@ class VendorStockItem(BaseModel):
     available_quantity: int
     version: int
     last_updated_at: Optional[datetime] = None
+    supplier_cost_minor: Optional[int] = None
 
 
 class VendorStockListResponse(BaseModel):

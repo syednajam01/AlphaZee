@@ -297,3 +297,78 @@ def test_delete_collection_unlinks_products_and_preserves_multiple_memberships(a
     assert any(p['id'] == p2['id'] for p in prods_all)
 
 
+def test_variant_cost_price_and_initial_stock_synchronization(admin_client, db_session):
+    from app.models.inventory import SupplierVariant, InventoryBalance, StockEvent
+    # 1. Create a draft product with retail price, wholesale cost, and initial stock
+    p = create_draft(
+        admin_client,
+        title='Cost & Stock Test Shirt',
+        slug='cost-stock-test-shirt',
+        stock_management_source='alphazee_managed',
+        variants=[{
+            'sku': 'CST-BLK-M',
+            'color': 'Black',
+            'size': 'M',
+            'price_minor': 200000,
+            'cost_price_minor': 95000,
+            'initial_stock': 15,
+            'is_active': False
+        }]
+    )
+    v = p['variants'][0]
+    assert v['price_minor'] == 200000
+    assert v['cost_price_minor'] == 95000
+    assert v['stock_on_hand'] == 15
+
+    # 2. Verify backend inventory tables
+    sv = db_session.scalar(select(SupplierVariant).where(SupplierVariant.variant_id == v['id'], SupplierVariant.active.is_(True)))
+    assert sv is not None
+    assert sv.supplier_cost_minor == 95000
+
+    bal = db_session.scalar(select(InventoryBalance).where(InventoryBalance.supplier_variant_id == sv.id))
+    assert bal is not None
+    assert bal.on_hand == 15
+
+    event = db_session.scalar(select(StockEvent).where(StockEvent.supplier_variant_id == sv.id).order_by(StockEvent.occurred_at.desc()))
+    assert event is not None
+    assert event.delta == 15
+    assert event.previous_on_hand == 0
+    assert event.new_on_hand == 15
+    assert event.reason == 'manual_count'
+
+    # 3. Update wholesale cost and initial stock
+    update_res = admin_client.post(
+        f"/api/v1/admin/products/{p['id']}",
+        json={
+            'expected_version': p['edit_version'],
+            'variants': [{
+                'id': v['id'],
+                'sku': 'CST-BLK-M',
+                'color': 'Black',
+                'size': 'M',
+                'price_minor': 220000,
+                'cost_price_minor': 105000,
+                'initial_stock': 25,
+                'is_active': False
+            }]
+        }
+    )
+    assert update_res.status_code == 200
+    v_updated = update_res.json()['variants'][0]
+    assert v_updated['price_minor'] == 220000
+    assert v_updated['cost_price_minor'] == 105000
+    assert v_updated['stock_on_hand'] == 25
+
+    db_session.expire_all()
+    sv_updated = db_session.scalar(select(SupplierVariant).where(SupplierVariant.variant_id == v['id'], SupplierVariant.active.is_(True)))
+    assert sv_updated.supplier_cost_minor == 105000
+    bal_updated = db_session.scalar(select(InventoryBalance).where(InventoryBalance.supplier_variant_id == sv.id))
+    assert bal_updated.on_hand == 25
+
+    # 4. Verify storefront public isolation: wholesale cost must never leak
+    pub_res = admin_client.get('/api/v1/products')
+    assert 'cost_price_minor' not in pub_res.text
+    assert 'supplier_cost_minor' not in pub_res.text
+
+
+

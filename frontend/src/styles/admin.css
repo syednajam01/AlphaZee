@@ -849,7 +849,7 @@ body.admin-body-lock {
 }
 .admin-order-evidence { min-width: 190px; max-width: 340px; color: var(--admin-text-secondary); font-weight: 400; margin-top: 8px; }
 .admin-order-evidence li { margin: 8px 0; }
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .admin-page .admin-report-summary,
   .admin-page .admin-report-secondary { grid-template-columns: minmax(0, 1fr) !important; }
 }
@@ -1243,23 +1243,26 @@ body.admin-body-lock {
 }
 
 .batch-price-box,
+.batch-cost-box,
 .batch-stock-box {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.color-batch-price {
-  width: 150px !important;
+.color-batch-price,
+.color-batch-cost {
+  width: 135px !important;
   height: 34px !important;
 }
 
 .color-batch-stock {
-  width: 120px !important;
+  width: 105px !important;
   height: 34px !important;
 }
 
 .btn-apply-batch-price,
+.btn-apply-batch-cost,
 .btn-apply-batch-stock,
 .btn-remove-color-group {
   display: inline-flex;
@@ -1383,9 +1386,9 @@ body.admin-body-lock {
 
 .variant-fields-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 1fr) minmax(130px, 1fr) auto auto;
+  grid-template-columns: minmax(130px, 1.2fr) minmax(105px, 1fr) minmax(105px, 1fr) minmax(90px, 0.8fr) minmax(110px, 1fr) auto auto;
   align-items: end;
-  gap: 12px;
+  gap: 10px;
 }
 
 .variant-active-label {
@@ -1407,7 +1410,7 @@ body.admin-body-lock {
   color: var(--admin-text-muted);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .color-group-header {
     flex-direction: column !important;
     align-items: stretch !important;

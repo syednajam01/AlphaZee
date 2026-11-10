@@ -249,6 +249,7 @@ def get_vendor_stock_list(
             "available_quantity": available,
             "version": version,
             "last_updated_at": last_updated,
+            "supplier_cost_minor": sv.supplier_cost_minor,
         })
 
     return items, total_count
