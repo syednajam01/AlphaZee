@@ -181,8 +181,8 @@ export function mountCatalogSection(section, container, context) {
               </div>
               <div class="catalog-card-info">
                 <div class="catalog-card-top-row">
-                  <span class="catalog-status-badge ${statusClass}" title="Status: ${statusLabel}">${statusLabel}</span>
-                  <span class="catalog-variants-count" title="${p.variants?.length || 0} variant${(p.variants?.length || 0) === 1 ? '' : 's'}">${p.variants?.length || 0} variant${(p.variants?.length || 0) === 1 ? '' : 's'}</span>
+                  <span class="catalog-status-badge ${statusClass}">${statusLabel}</span>
+                  <span class="catalog-variants-count">${p.variants?.length || 0} variant${(p.variants?.length || 0) === 1 ? '' : 's'}</span>
                 </div>
                 <h3 class="catalog-card-title" title="${esc(displayTitle)}">${esc(displayTitle)}</h3>
                 <p class="catalog-card-slug" title="/${esc(displaySlug)}">/${esc(displaySlug)}</p>
@@ -263,7 +263,6 @@ export function mountCatalogSection(section, container, context) {
       event.preventDefault();
       triggerSearch();
     });
-    searchForm.querySelector('[name="search"]')?.addEventListener('change', triggerSearch);
     searchForm.querySelector('[name="status"]')?.addEventListener('change', triggerSearch);
     searchForm.querySelector('[name="collection_id"]')?.addEventListener('change', triggerSearch);
 

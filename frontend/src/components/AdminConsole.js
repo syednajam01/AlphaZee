@@ -2031,6 +2031,11 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     selectTab,
     canLeave,
     destroy() {
+      if (page) {
+        document.documentElement?.classList?.remove('admin-body-lock');
+        document.body?.classList?.remove('admin-body-lock');
+        document.getElementById?.('app')?.classList?.remove('admin-app-lock');
+      }
       stockHoldViews.forEach(v => v.destroy()); stockHoldViews = [];
       catalogView?.destroy(); catalogView = null;
       close(); unsubscribeSession();

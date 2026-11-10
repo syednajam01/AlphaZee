@@ -12,6 +12,9 @@ export function adminSection(pathname) {
 
 export function initAdminDashboard() {
   const root = document.getElementById('app');
+  document.documentElement?.classList?.add('admin-body-lock');
+  document.body?.classList?.add('admin-body-lock');
+  root?.classList?.add('admin-app-lock');
   let currentPath = window.location.pathname + (window.location.search || '');
   let index = 0;
   let restoringHistory = false;
@@ -48,6 +51,12 @@ export function initAdminDashboard() {
   window.addEventListener('popstate', popstate);
   dashboard.ready = dashboard.open();
   const destroy = dashboard.destroy;
-  dashboard.destroy = () => { window.removeEventListener('popstate', popstate); destroy(); };
+  dashboard.destroy = () => {
+    document.documentElement?.classList?.remove('admin-body-lock');
+    document.body?.classList?.remove('admin-body-lock');
+    root?.classList?.remove('admin-app-lock');
+    window.removeEventListener('popstate', popstate);
+    destroy();
+  };
   return dashboard;
 }

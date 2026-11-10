@@ -24,8 +24,32 @@
 }
 
 /* Admin Page Layout & Viewport Lock */
+html:has(.admin-page),
+body:has(.admin-page),
+html:has(#admin-modal),
+body:has(#admin-modal),
+html.admin-body-lock,
+body.admin-body-lock {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  background-color: var(--admin-bg-base, #141415) !important;
+}
+
+#app:has(.admin-page),
+#app:has(#admin-modal),
+#app.admin-app-lock {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  background-color: var(--admin-bg-base, #141415) !important;
+}
+
 .admin-page {
   --admin-viewport-height: calc(100vh - var(--lab-notice-height, 0px));
+  position: relative !important;
+  width: 100% !important;
   height: var(--admin-viewport-height) !important;
   max-height: var(--admin-viewport-height) !important;
   overflow: hidden !important;
@@ -271,7 +295,12 @@
   outline: 2px solid var(--admin-accent-bright);
   outline-offset: 2px;
 }
-.catalog-workspace { display: grid; gap: 20px; max-width: 1280px; }
+.catalog-workspace {
+  position: relative;
+  display: grid;
+  gap: 20px;
+  max-width: 1280px;
+}
 .catalog-workspace form:not(.catalog-search-form), .catalog-workspace fieldset { display: grid; gap: 16px; min-width: 0; }
 .catalog-workspace fieldset {
   padding: 16px;
@@ -2239,6 +2268,7 @@
 }
 
 .custom-file-upload-box {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -2281,6 +2311,8 @@
 
 .visually-hidden-file-input {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   padding: 0;
