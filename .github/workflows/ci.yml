@@ -29,7 +29,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Inspect disk, Docker cache and deployment state without changing them
         run: |
-          az vm run-command invoke --resource-group alphazee-staging --name alphazee-vm --command-id RunShellScript --scripts 'set -eu; echo DISK_USAGE; df -h /; echo DOCKER_STORAGE; docker system df; echo CACHE_OPTIONS; docker builder prune --help; echo DIRECTORY_TOTALS; du -sh /var/lib/docker /var/lib/alphazee-cicd /var/cache/apt/archives; echo IMAGE_INVENTORY; docker image ls --digests --no-trunc; echo RUNNING_CONTAINERS; docker ps --format "{{.Names}} {{.Image}}"' --output json > /tmp/alphazee-disk-report.json
+          az vm run-command invoke --resource-group alphazee-staging --name alphazee-vm --command-id RunShellScript --scripts 'set -eu; echo DIRECTORY_TOTALS; du -sh /var/lib/docker /var/lib/containerd /var/lib/alphazee-cicd /var/cache/apt/archives 2>/dev/null || true; echo RELEASE_FIELDS; python3 -c "import json,pathlib; root=pathlib.Path(\"/var/lib/alphazee-cicd\"); names=[\"current.json\",\"previous.json\",\"releases/1f92c72a0b4ccc085f02c9f19ebdba5c01306234/manifest.json\"]; [(print(name,json.dumps({k:v for k,v in json.loads((root/name).read_text()).items() if k in [\"sha\",\"head\",\"api\",\"web\",\"images\",\"api_id\",\"web_id\"]}))) for name in names if (root/name).exists()]"; echo DOCKER_STORAGE; docker system df; echo DISK_USAGE; df -h /' --output json > /tmp/alphazee-disk-report.json
           python3 - <<'PY'
           import json
           with open('/tmp/alphazee-disk-report.json') as stream:
