@@ -64,7 +64,7 @@ Storefront design: `.context/frontend_design_implementation_guide.md`; progress:
 
 Historical browser evidence limitations: `.context/browser_acceptance_v2_review.md`. Preserve reports and distinguish recorded claims from independently verified outcomes; local acceptance is not production certification.
 
-Azure: live CI/CD verified at alphazee.tech, revision `ae8340e` (migration head `c7f1e2a3b4d5`). See `.context/cicd_deployment_repair.md`. Genuine Blob restore verified 42 tables/4 assets. Target `alphazee-staging/alphazee-vm`, project `alphazee-prod`. Checkout on, COD; temporary All Pakistan shipping PKR 200, no free threshold. Preserve data/volume identities.
+Azure: live CI/CD verified at alphazee.tech, revision `dfd33c2` (migration head `c7f1e2a3b4d5`). See `.context/cicd_deployment_repair.md`. Genuine Blob restore verified 42 tables/4 assets. Target `alphazee-staging/alphazee-vm`, project `alphazee-prod`. Checkout on, COD; temporary All Pakistan shipping PKR 200, no free threshold. Preserve data/volume identities.
 
 `.context/next_priorities_and_browser_testing.md` covers acceptance planning; it is not fresh evidence.
 
