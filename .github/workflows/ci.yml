@@ -56,7 +56,11 @@ jobs:
           python-version: '3.13'
           cache: pip
           cache-dependency-path: backend/requirements*.txt
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg with reliable mirrors
+        run: |
+          sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install -y --no-install-recommends ffmpeg
       - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
       - run: python backend/scripts/run_isolated_verification.py
       - run: python ops/ci_migrations.py
@@ -96,7 +100,7 @@ jobs:
         run: |
           docker run -d --name ci-web -p 8080:80 -e SITE_DOMAIN=:80 alphazee-ci-web
           npm install --prefix /tmp/browser-ci --no-package-lock playwright@1.58.2
-          /tmp/browser-ci/node_modules/.bin/playwright install --with-deps chromium
+          /tmp/browser-ci/node_modules/.bin/playwright install chromium
           NODE_PATH=/tmp/browser-ci/node_modules node ops/browser_smoke.cjs
           NODE_PATH=/tmp/browser-ci/node_modules node ops/admin_mobile_smoke.cjs
           NODE_PATH=/tmp/browser-ci/node_modules node ops/navbar_smoke.cjs
