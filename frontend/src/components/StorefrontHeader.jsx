@@ -21,7 +21,28 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const panel = useRef(null), announcement = useRef(null);
   const controller = useRef(createHeaderScroll());
+  const idleTimer = useRef(null);
   const compact = mode === 'compact';
+
+  const startIdleCountdown = () => {
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(() => {
+      const locked = typeof document !== 'undefined' && (
+        document.body.classList.contains('has-overlay') ||
+        (host.contains(document.activeElement) && document.activeElement.matches(':focus-visible'))
+      );
+      if (!locked) {
+        setMode('compact');
+      }
+    }, 4500);
+  };
+
+  const cancelIdleCountdown = () => {
+    if (idleTimer.current) {
+      clearTimeout(idleTimer.current);
+      idleTimer.current = null;
+    }
+  };
 
   useEffect(() => cart.subscribe(state => setCount(state.count)), []);
   useEffect(() => capabilities.subscribe(setCaps), []);
@@ -84,6 +105,28 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
   }, [host]);
 
   useEffect(() => {
+    if (mode === 'compact') {
+      cancelIdleCountdown();
+      return;
+    }
+    startIdleCountdown();
+    const onActivity = () => {
+      if (host.dataset.navState !== 'compact') {
+        startIdleCountdown();
+      }
+    };
+    window.addEventListener('pointermove', onActivity, { passive: true });
+    window.addEventListener('keydown', onActivity, { passive: true });
+    window.addEventListener('touchstart', onActivity, { passive: true });
+    return () => {
+      cancelIdleCountdown();
+      window.removeEventListener('pointermove', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('touchstart', onActivity);
+    };
+  }, [mode, host]);
+
+  useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(entries => {
       if (window.location.pathname !== '/') return;
@@ -108,7 +151,24 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
   const bannerText = caps.testMode ? `AlphaZee SAMPLE / TEST: ${banner || 'no real orders'}` : banner;
   return <>
     <div id="header-logo-slot" className="brand-logo-container">
-      <a href="/" data-nav="/" className="brand-logo-link storefront-header-logo" aria-label="AlphaZee home" title="AlphaZee home" onClick={() => { if (typeof window !== 'undefined' && window.scrollY > 0) { window.scrollTo({ top: 0, behavior: 'smooth' }); } }}>
+      <a
+        href="/"
+        data-nav="/"
+        className="brand-logo-link storefront-header-logo"
+        aria-label="AlphaZee home"
+        title="AlphaZee home"
+        onClick={event => {
+          if (mode === 'compact') {
+            event.preventDefault();
+            setMode(controller.current.reset(typeof window !== 'undefined' ? window.scrollY : 0));
+            startIdleCountdown();
+            return;
+          }
+          if (typeof window !== 'undefined' && window.scrollY > 0) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }}
+      >
         <img className="brand-logo-img logo-variant-wordmark" src={LOGO_ASSETS.wordmark} width="125" height="42" alt=""/>
         <img className="brand-logo-img logo-variant-combined" src={LOGO_ASSETS.combined} width="165" height="55" alt=""/>
         <img className="brand-logo-img logo-variant-compact" src={LOGO_ASSETS.symbol} width="36" height="36" alt=""/>
