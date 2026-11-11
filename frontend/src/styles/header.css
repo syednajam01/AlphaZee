@@ -1,5 +1,8 @@
 .site-header {
   --nav-gutter: var(--gutter-mobile);
+  --nav-pill-max-width: 1140px;
+  --nav-pill-height: 56px;
+  --nav-floating-top: 14px;
   position: sticky;
   top: var(--lab-notice-height, 0px);
   left: 0;
@@ -12,72 +15,170 @@
   color: var(--color-text);
 }
 
+/* Floating "In Air" Island Navbar */
 .site-header .header-panel {
   pointer-events: auto;
   position: absolute;
-  inset: 0 0 auto;
+  top: calc(var(--lab-notice-height, 0px) + var(--nav-floating-top));
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  width: min(var(--nav-pill-max-width), calc(100% - 32px));
   background: #fffefa;
-  border-bottom: 1px solid rgba(36, 40, 34, .12);
-  box-shadow: 0 4px 18px rgba(25, 35, 25, .04);
-  transition: transform 220ms ease, opacity 180ms ease, visibility 220ms;
+  border: 1px solid rgba(36, 40, 34, .08);
+  border-radius: 9999px;
+  box-shadow: 0 12px 32px -4px rgba(20, 35, 25, 0.08), 0 4px 12px -2px rgba(20, 35, 25, 0.04);
+  overflow: hidden;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 260ms ease,
+              visibility 300ms,
+              box-shadow 260ms ease;
 }
+
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .site-header .header-panel {
     background: rgba(255, 254, 250, .88);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(180%);
   }
 }
+
+/* Smooth Morph on Scroll: Collapse into Background-less AZ Logo */
 .site-header[data-nav-state="compact"] .header-panel {
-  transform: translateY(calc(-100% - var(--lab-notice-height, 0px)));
+  transform: translateX(-50%) translateY(-10px) scale(0.96);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
-.site-header .header-brand-space { width: 125px; flex-shrink: 0; }
+
+.site-header .header-brand-space {
+  width: 125px;
+  flex-shrink: 0;
+}
+
+/* Brand Logo Positioning: Anchored inside the floating pill */
 .site-header #header-logo-slot {
   pointer-events: auto;
-  z-index: 1;
+  z-index: 2;
   position: absolute;
-  left: max(var(--nav-gutter), calc((100% - var(--container-max-width, 1280px)) / 2 + var(--nav-gutter)));
-  top: calc(var(--nav-announcement-height, 0px) + (var(--header-height) - 44px) / 2);
-  transition: top 220ms ease, left 220ms ease;
+  left: calc(50% - min(var(--nav-pill-max-width), calc(100% - 32px)) / 2 + 18px);
+  top: calc(var(--lab-notice-height, 0px) + var(--nav-floating-top) + var(--nav-announcement-height, 0px) + (var(--nav-pill-height) - 44px) / 2);
+  transition: top 320ms cubic-bezier(0.16, 1, 0.3, 1),
+              left 320ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.site-header .storefront-header-logo { height: 44px; }
-.site-header .logo-variant-compact { display: none; }
+
+.site-header .storefront-header-logo {
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-header .logo-variant-compact {
+  display: none;
+}
+
+/* Scrolled Compact State: Standalone AZ Logo with NO BACKGROUND */
 .site-header[data-nav-state="compact"] #header-logo-slot {
-  top: max(8px, env(safe-area-inset-top, 0px));
+  top: calc(var(--lab-notice-height, 0px) + max(8px, env(safe-area-inset-top, 0px)));
   left: max(16px, env(safe-area-inset-left, 0px));
 }
+
 .site-header[data-nav-state="compact"] .storefront-header-logo {
-  width: 48px;
-  height: 48px;
-  padding: 6px;
-  background: #fffefa;
-  border: 1px solid rgba(36, 40, 34, .14);
-  border-radius: 8px;
-  box-shadow: 0 3px 12px rgba(25, 35, 25, .09);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: transform 180ms ease;
 }
+
+.site-header[data-nav-state="compact"] .storefront-header-logo:hover {
+  transform: scale(1.08);
+}
+
 .site-header[data-nav-state="compact"] .logo-variant-wordmark,
-.site-header[data-nav-state="compact"] .logo-variant-combined { display: none; }
-.site-header[data-nav-state="compact"] .logo-variant-compact { display: block; width: 36px; height: 36px; }
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .site-header[data-nav-state="compact"] .storefront-header-logo { background: rgba(255, 254, 250, .94); }
+.site-header[data-nav-state="compact"] .logo-variant-combined {
+  display: none;
 }
-@media (min-width: 768px) { .site-header .header-brand-space { width: 165px; } }
-@media (min-width: 600px) { .site-header { --nav-gutter: var(--gutter-tablet); } }
-@media (min-width: 1024px) { .site-header { --nav-gutter: var(--gutter-desktop); } }
+
+.site-header[data-nav-state="compact"] .logo-variant-compact {
+  display: block;
+  width: 36px;
+  height: 36px;
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.85)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+}
+
+@media (min-width: 768px) {
+  .site-header .header-brand-space {
+    width: 165px;
+  }
+}
+
+@media (max-width: 600px) {
+  .site-header {
+    --nav-pill-height: 50px;
+    --nav-floating-top: 10px;
+  }
+  .site-header .header-panel {
+    width: calc(100% - 24px);
+  }
+  .site-header #header-logo-slot {
+    left: calc(50% - (100% - 24px) / 2 + 12px);
+    top: calc(var(--lab-notice-height, 0px) + var(--nav-floating-top) + var(--nav-announcement-height, 0px) + (var(--nav-pill-height) - 44px) / 2);
+  }
+  .site-header .container {
+    padding-left: 12px;
+    padding-right: 10px;
+  }
+}
+
+@media (min-width: 600px) {
+  .site-header {
+    --nav-gutter: var(--gutter-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .site-header {
+    --nav-gutter: var(--gutter-desktop);
+  }
+}
+
 @media (max-width: 1099px) {
-  .site-header .nav-desktop { display: none; }
-  .site-header .menu-toggle-btn { display: inline-flex; }
+  .site-header .nav-desktop {
+    display: none;
+  }
+  .site-header .menu-toggle-btn {
+    display: inline-flex;
+  }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .site-header .header-panel, .site-header #header-logo-slot { transition: none; }
+  .site-header .header-panel,
+  .site-header #header-logo-slot,
+  .site-header .storefront-header-logo {
+    transition: none;
+  }
 }
+
 @media (forced-colors: active) {
-  .site-header .header-panel, .site-header[data-nav-state="compact"] .storefront-header-logo { background: Canvas; border: 1px solid CanvasText; backdrop-filter: none; }
+  .site-header .header-panel {
+    background: Canvas;
+    border: 1px solid CanvasText;
+    backdrop-filter: none;
+  }
+  .site-header[data-nav-state="compact"] .storefront-header-logo {
+    background: transparent;
+    border: none;
+    backdrop-filter: none;
+  }
 }
 
 .announcement-bar {
@@ -91,11 +192,18 @@
   letter-spacing: 0.03em;
 }
 
+.site-header .container {
+  width: 100%;
+  max-width: 100%;
+  padding-left: 20px;
+  padding-right: 16px;
+}
+
 .header-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--header-height);
+  height: var(--nav-pill-height, 56px);
 }
 
 /* Brand Logo Link Container */

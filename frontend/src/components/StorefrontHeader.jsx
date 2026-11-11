@@ -108,7 +108,7 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
   const bannerText = caps.testMode ? `AlphaZee SAMPLE / TEST: ${banner || 'no real orders'}` : banner;
   return <>
     <div id="header-logo-slot" className="brand-logo-container">
-      <a href="/" data-nav="/" className="brand-logo-link storefront-header-logo" aria-label="AlphaZee home" title="AlphaZee home">
+      <a href="/" data-nav="/" className="brand-logo-link storefront-header-logo" aria-label="AlphaZee home" title="AlphaZee home" onClick={() => { if (typeof window !== 'undefined' && window.scrollY > 0) { window.scrollTo({ top: 0, behavior: 'smooth' }); } }}>
         <img className="brand-logo-img logo-variant-wordmark" src={LOGO_ASSETS.wordmark} width="125" height="42" alt=""/>
         <img className="brand-logo-img logo-variant-combined" src={LOGO_ASSETS.combined} width="165" height="55" alt=""/>
         <img className="brand-logo-img logo-variant-compact" src={LOGO_ASSETS.symbol} width="36" height="36" alt=""/>
