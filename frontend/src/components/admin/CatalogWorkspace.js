@@ -1,6 +1,7 @@
 import * as api from '../../utils/api.js';
 import { escapeHtml as esc, sanitizeMediaUrl } from '../../utils/dom.js';
 import { parseCatalogPkr } from '../../utils/money.js';
+import { generateSku } from '../../utils/sku.js';
 import { mountVariantStock } from './VariantStock.js';
 
 const button = (label, id = '', extra = '') => `<button type="button" class="btn btn-secondary" ${id ? `id="${id}"` : ''} ${extra}>${esc(label)}</button>`;
@@ -296,24 +297,10 @@ export function mountCatalogSection(section, container, context) {
   const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'One Size'];
 
   function generateSkuSuggestion(colorName, size) {
-    const slugInput = query('#catalog-product-form [name="slug"]')?.value?.trim();
     const titleInput = query('#catalog-product-form [name="title"]')?.value?.trim();
-    const rawBase = slugInput || titleInput || currentProduct?.slug || currentProduct?.title || 'PROD';
-    const basePart = String(rawBase)
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 14) || 'PROD';
-    const colPart = String(colorName || 'COL')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 8) || 'COL';
-    const sizePart = String(size || 'SZ')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 8) || 'SZ';
-    return `${basePart}-${colPart}-${sizePart}`;
+    const slugInput = query('#catalog-product-form [name="slug"]')?.value?.trim();
+    const rawTitle = titleInput || currentProduct?.title || slugInput || currentProduct?.slug || 'Product';
+    return generateSku(rawTitle, colorName, size);
   }
 
   function variantRowMarkup(v, colorName) {
