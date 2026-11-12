@@ -104,18 +104,26 @@ body.admin-body-lock {
 .admin-return-link { color: var(--admin-text-secondary); padding: 8px; font-size: .85rem; text-decoration: underline; }
 .admin-return-link:hover { color: var(--admin-text-primary); }
 
-/* Independent Scroll Areas & Scroll Containment */
+/* Independent Scroll Areas & Scroll Containment (Zero Visible Scrollbars) */
 .admin-page #admin-tab-content,
 #admin-modal #admin-tab-content {
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow-y: auto !important;
-  overflow-x: auto !important;
+  overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch !important;
-  touch-action: pan-x pan-y !important;
+  touch-action: pan-y !important;
   overscroll-behavior: contain !important;
   padding: 24px;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.admin-page #admin-tab-content::-webkit-scrollbar,
+#admin-modal #admin-tab-content::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 .admin-page #admin-session-message { padding: 0 24px; }
 
@@ -752,27 +760,14 @@ body.admin-body-lock {
     -webkit-overflow-scrolling: touch !important;
     touch-action: pan-x !important;
     overscroll-behavior-x: contain !important;
-    scrollbar-width: thin !important;
-    scrollbar-color: rgba(255, 255, 255, 0.25) transparent !important;
-    -ms-overflow-style: auto;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
   }
   .admin-page #admin-sidebar nav::-webkit-scrollbar,
   #admin-modal #admin-sidebar nav::-webkit-scrollbar {
-    display: block !important;
-    height: 4px !important;
-  }
-  .admin-page #admin-sidebar nav::-webkit-scrollbar-track,
-  #admin-modal #admin-sidebar nav::-webkit-scrollbar-track {
-    background: transparent !important;
-  }
-  .admin-page #admin-sidebar nav::-webkit-scrollbar-thumb,
-  #admin-modal #admin-sidebar nav::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.25) !important;
-    border-radius: 4px !important;
-  }
-  .admin-page #admin-sidebar nav::-webkit-scrollbar-thumb:hover,
-  #admin-modal #admin-sidebar nav::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.5) !important;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
   .admin-page .admin-tab-btn,
   #admin-modal .admin-tab-btn {
@@ -817,13 +812,21 @@ body.admin-body-lock {
     min-width: 0 !important;
     max-width: 100% !important;
     min-height: 0 !important;
-    overflow-x: auto !important;
+    overflow-x: hidden !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-x pan-y !important;
+    touch-action: pan-y !important;
     overscroll-behavior: contain !important;
     padding: 16px !important;
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  .admin-page #admin-tab-content::-webkit-scrollbar,
+  #admin-modal #admin-tab-content::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
   .admin-page header,
   #admin-modal header {
@@ -3172,10 +3175,19 @@ body.admin-body-lock {
   flex-direction: column;
   gap: 16px;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
   flex: 1;
-  overflow-y: auto;
+  overflow: visible;
   padding-bottom: 32px;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.inv-workspace::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* 1. Header Metrics Banner */
@@ -3298,13 +3310,23 @@ body.admin-body-lock {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.inv-filter-group::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .inv-filter-pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 6px 12px;
   border-radius: 9999px;
   background: var(--admin-bg-base, #141415);
   border: 1px solid var(--admin-border-subtle, rgba(255, 255, 255, 0.12));
@@ -3314,18 +3336,76 @@ body.admin-body-lock {
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .inv-filter-pill:hover {
   background: var(--admin-bg-raised, #232325);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .inv-filter-pill.is-active {
   background: rgba(20, 92, 68, 0.35);
   border-color: var(--admin-accent-bright, #4cc38a);
   color: #FFFFFF;
+}
+
+/* Floating Hover & Focus Tooltip */
+.inv-filter-pill[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: #1e1e20;
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  display: none;
+  opacity: 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 100;
+}
+
+.inv-filter-pill[data-tooltip]::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  border-width: 6px 5px 0 5px;
+  border-style: solid;
+  border-color: #1e1e20 transparent transparent transparent;
+  pointer-events: none;
+  display: none;
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 101;
+}
+
+.inv-filter-pill[data-tooltip]:hover::after,
+.inv-filter-pill[data-tooltip]:hover::before,
+.inv-filter-pill[data-tooltip]:focus::after,
+.inv-filter-pill[data-tooltip]:focus::before,
+.inv-filter-pill[data-tooltip]:focus-visible::after,
+.inv-filter-pill[data-tooltip]:focus-visible::before {
+  display: block;
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.inv-pill-icon {
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .inv-pill-count {
@@ -3343,6 +3423,10 @@ body.admin-body-lock {
   background: rgba(76, 195, 138, 0.25);
   color: #4cc38a;
 }
+
+.inv-pill-count.is-warn { color: #FBBF24; }
+.inv-pill-count.is-alert { color: #F87171; }
+.inv-pill-count.is-success { color: #4ADE80; }
 
 .inv-pill-dot {
   width: 7px;
@@ -3629,14 +3713,31 @@ body.admin-body-lock {
   .inv-toolbar {
     flex-direction: column;
     align-items: stretch;
+    padding: 12px;
+    box-sizing: border-box;
+    max-width: 100%;
   }
   .inv-search-wrapper {
     max-width: 100%;
   }
   .inv-filter-group {
-    overflow-x: auto;
-    padding-bottom: 4px;
-    flex-wrap: nowrap;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 2px;
+    overflow-x: visible;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  .inv-filter-group::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  .inv-filter-pill {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    gap: 5px;
   }
   .inv-stepper-btn {
     width: 38px;
@@ -3653,6 +3754,37 @@ body.admin-body-lock {
     font-size: 0.8125rem;
   }
 }
+
+/* Universal Admin Zero-Scrollbars Guard (Golden Rule 1) */
+#admin-root,
+#admin-root *,
+.admin-page,
+.admin-page *,
+#admin-modal,
+#admin-modal *,
+#admin-tab-content,
+#admin-tab-content *,
+.inv-workspace,
+.inv-workspace * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+#admin-root::-webkit-scrollbar,
+#admin-root *::-webkit-scrollbar,
+.admin-page::-webkit-scrollbar,
+.admin-page *::-webkit-scrollbar,
+#admin-modal::-webkit-scrollbar,
+#admin-modal *::-webkit-scrollbar,
+#admin-tab-content::-webkit-scrollbar,
+#admin-tab-content *::-webkit-scrollbar,
+.inv-workspace::-webkit-scrollbar,
+.inv-workspace *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 
 
 

@@ -52,6 +52,8 @@ The owner authorizes React or another suitable frontend framework, styling/compo
 
 Handle loading, empty, failure, retry, stale responses and unavailable products honestly. Escape dynamic text, validate URLs and reconcile stored carts against authoritative backend data. Owner APIs enforce sessions, Origin and CSRF server-side.
 
+Frontend UI invariants (memorized rules): 1) Zero visible scrollbars anywhere across all portals and viewports (`scrollbar-width: none !important; ::-webkit-scrollbar { display: none !important; }`, with `overflow-x: hidden` on root containers so mobile screens never slide sideways). 2) Always use compact semantic icons with count badges instead of verbose explanatory button text, paired with explanatory tooltips on hover and focus (`data-tooltip`, `title`, `aria-label`).
+
 Use `rg` first for searches and `npm.cmd` in PowerShell. Native frontend work requires Node 20.19+ or 22.12+; Docker uses Node 22. Run meaningful focused tests, relevant regressions and builds. Use a fresh workspace `.local/` pytest basetemp when old temp directories have ACL problems; do not delete protected artifacts. Report actual checks and material limitations.
 
 ## Project memory

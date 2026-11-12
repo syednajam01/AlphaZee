@@ -1421,17 +1421,21 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
             </div>
 
             <div class="inv-filter-group" role="tablist" aria-label="Stock status filters">
-              <button type="button" class="inv-filter-pill ${activeFilter === 'all' ? 'is-active' : ''}" data-filter="all">
-                All <span class="inv-pill-count">${totalSkus}</span>
+              <button type="button" class="inv-filter-pill ${activeFilter === 'all' ? 'is-active' : ''}" data-filter="all" data-tooltip="All Items (${totalSkus})" title="All Items (${totalSkus})" aria-label="All Items (${totalSkus})">
+                <svg class="inv-pill-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                <span class="inv-pill-count">${totalSkus}</span>
               </button>
-              <button type="button" class="inv-filter-pill ${activeFilter === 'low' ? 'is-active' : ''}" data-filter="low">
-                <span class="inv-pill-dot is-warn"></span>< 3 Remaining <span class="inv-pill-count">${lowCount}</span>
+              <button type="button" class="inv-filter-pill ${activeFilter === 'low' ? 'is-active' : ''}" data-filter="low" data-tooltip="Low Stock: < 3 Remaining (${lowCount})" title="Low Stock: < 3 Remaining (${lowCount})" aria-label="Low Stock: < 3 Remaining (${lowCount})">
+                <svg class="inv-pill-icon is-warn" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FBBF24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span class="inv-pill-count is-warn">${lowCount}</span>
               </button>
-              <button type="button" class="inv-filter-pill ${activeFilter === 'zero' ? 'is-active' : ''}" data-filter="zero">
-                <span class="inv-pill-dot is-alert"></span>0 Out of Stock <span class="inv-pill-count">${zeroCount}</span>
+              <button type="button" class="inv-filter-pill ${activeFilter === 'zero' ? 'is-active' : ''}" data-filter="zero" data-tooltip="Out of Stock: 0 Available (${zeroCount})" title="Out of Stock: 0 Available (${zeroCount})" aria-label="Out of Stock: 0 Available (${zeroCount})">
+                <svg class="inv-pill-icon is-alert" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                <span class="inv-pill-count is-alert">${zeroCount}</span>
               </button>
-              <button type="button" class="inv-filter-pill ${activeFilter === 'normal' ? 'is-active' : ''}" data-filter="normal">
-                <span class="inv-pill-dot is-success"></span>Normal Stock <span class="inv-pill-count">${normalCount}</span>
+              <button type="button" class="inv-filter-pill ${activeFilter === 'normal' ? 'is-active' : ''}" data-filter="normal" data-tooltip="In Stock: 3+ Available (${normalCount})" title="In Stock: 3+ Available (${normalCount})" aria-label="In Stock: 3+ Available (${normalCount})">
+                <svg class="inv-pill-icon is-success" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span class="inv-pill-count is-success">${normalCount}</span>
               </button>
             </div>
           </div>
