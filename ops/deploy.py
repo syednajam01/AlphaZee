@@ -340,6 +340,11 @@ class Deployer:
         if manifest['sequence'] <= previous['sequence']:
             raise DeploymentError('Stale or already applied workflow sequence')
         if shutil.disk_usage(self.state).free < self.config.get('minimum_free_bytes', 3 * 1024**3):
+            try:
+                run(['docker', 'image', 'prune', '-f'])
+            except Exception:
+                pass
+        if shutil.disk_usage(self.state).free < self.config.get('minimum_free_bytes', 3 * 1024**3):
             raise DeploymentError('Insufficient disk space before image pull/backup')
         recent_restore_proof(self.config['restore_proof'])
         for image in (manifest['api'], manifest['web']):
@@ -366,6 +371,10 @@ class Deployer:
         atomic_json(self.state / 'previous.json', previous)
         atomic_json(self.state / 'current.json', release)
         atomic_json(directory / 'success.json', release)
+        try:
+            run(['docker', 'image', 'prune', '-f'])
+        except Exception:
+            pass
 
 
 def main():
