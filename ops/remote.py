@@ -85,6 +85,16 @@ def main():
                                 text=True, capture_output=True)
         marker = 'ALPHAZEE_REMOTE_OK:' + os.environ['GITHUB_SHA'] if operation == 'deploy' else 'ALPHAZEE_ROLLBACK_OK'
         if result.returncode:
+            summary = os.environ.get('GITHUB_STEP_SUMMARY')
+            if summary:
+                try:
+                    with open(summary, 'a', encoding='utf-8') as stream:
+                        clean_err = re.sub(r'[\r\n]+', ' ', result.stderr)[:500]
+                        stream.write(f'Azure command invocation failed (code {result.returncode}): {clean_err}\n')
+                except Exception:
+                    pass
+            clean_msg = re.sub(r'[\r\n]+', ' ', result.stderr)[:300] if result.stderr else f'exit {result.returncode}'
+            print(f'::error title=Azure Command Failed::{clean_msg}')
             raise RuntimeError('Azure command failed; inspect the workflow identity and VM agent')
         # Azure may report a successful control-plane invocation despite a failed guest script.
         messages = '\n'.join(value.get('message', '') for value in json.loads(result.stdout).get('value', []))
@@ -93,6 +103,7 @@ def main():
             for match in re.finditer(r'ALPHAZEE_DEPLOY_ERROR:(\{.*?\})', messages):
                 try:
                     detail = json.loads(match.group(1))['message']
+                    print(f'::error title=Guest Deployment Failed::{detail}')
                     raise RuntimeError('Guest deployment failed: ' + str(detail)[:1800])
                 except (ValueError, KeyError, TypeError):
                     continue
@@ -101,9 +112,19 @@ def main():
                 if line.startswith('ALPHAZEE_DEPLOY_ERROR:'):
                     try:
                         detail = json.loads(line.split(':', 1)[1])['message']
+                        print(f'::error title=Guest Deployment Failed::{detail}')
                         raise RuntimeError('Guest deployment failed: ' + str(detail)[:1800])
                     except (ValueError, KeyError, TypeError):
                         continue
+            summary = os.environ.get('GITHUB_STEP_SUMMARY')
+            if summary:
+                try:
+                    with open(summary, 'a', encoding='utf-8') as stream:
+                        stream.write(f'Guest deployment messages (marker missing):\n```\n{messages[:1200]}\n```\n')
+                except Exception:
+                    pass
+            clean_preview = re.sub(r'[\r\n]+', ' ', messages)[:300]
+            print(f'::error title=Guest Missing Marker::{clean_preview}')
             raise RuntimeError('Guest deployment did not confirm success; inspect the VM privately')
         print(marker)
         summary = os.environ.get('GITHUB_STEP_SUMMARY')

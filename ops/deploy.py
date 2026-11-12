@@ -344,8 +344,15 @@ class Deployer:
                 run(['docker', 'image', 'prune', '-f'])
             except Exception:
                 pass
+            if shutil.disk_usage(self.state).free < self.config.get('minimum_free_bytes', 3 * 1024**3):
+                try:
+                    run(['docker', 'image', 'prune', '-a', '--force', '--filter', 'until=12h'])
+                except Exception:
+                    pass
         if shutil.disk_usage(self.state).free < self.config.get('minimum_free_bytes', 3 * 1024**3):
-            raise DeploymentError('Insufficient disk space before image pull/backup')
+            free_mb = shutil.disk_usage(self.state).free // (1024 * 1024)
+            min_mb = self.config.get('minimum_free_bytes', 3 * 1024**3) // (1024 * 1024)
+            raise DeploymentError(f'Insufficient disk space before image pull/backup (free: {free_mb}MB, required: {min_mb}MB)')
         recent_restore_proof(self.config['restore_proof'])
         for image in (manifest['api'], manifest['web']):
             run(['docker', 'pull', image])
