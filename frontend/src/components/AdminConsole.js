@@ -833,7 +833,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
 
     const isCurrent = () => authenticated && view === viewGeneration;
 
-    const rowsHtml = orders.map(o => {
+    function renderOrderActionsHtml(o) {
       const isBank = o.payment_method === 'bank_transfer';
       const isPaid = o.payment_status === 'verified';
       const isDelivered = o.order_status === 'delivered';
@@ -842,117 +842,326 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       const hasShipment = Boolean(shipment);
 
       return `
-        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-          <td style="padding: 12px 8px; font-weight: 700; color: #4ADE80;">${escapeHtml(o.order_number)}${orderEvidence(o)}</td>
-          <td style="padding: 12px 8px;">
-            <div>${escapeHtml(o.customer_name)}</div>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.5);">${escapeHtml(o.customer_phone)} • ${escapeHtml(o.shipping_city)}</div>
+        <div class="ord-action-group">
+          <button class="ord-action-btn is-sky btn-recover-order-access" data-order-id="${o.id}" data-tooltip="Recover customer access code" aria-label="Recover customer access code" title="Recover customer access code">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>
+          </button>
+          <button class="ord-action-btn btn-revoke-order-access" data-order-id="${o.id}" data-tooltip="Revoke customer access session" aria-label="Revoke customer access session" title="Revoke customer access session">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m4.93 4.93 14.14 14.14"/></svg>
+          </button>
+          ${!isPaid && isBank && !isCancelled && o.payment_review_status !== 'required' ? `
+            <button class="ord-action-btn is-green btn-verify-payment" data-order-id="${o.id}" data-tooltip="Review & verify bank transfer" aria-label="Review & verify bank transfer" title="Review & verify bank transfer">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+            </button>
+          ` : ''}
+          ${o.order_status === 'placed' && !isCancelled ? `
+            <button class="ord-action-btn is-green btn-confirm-supplier" data-order-id="${o.id}" data-tooltip="Confirm supplier fulfillment" aria-label="Confirm supplier fulfillment" title="Confirm supplier fulfillment">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
+            </button>
+          ` : ''}
+          ${o.order_status === 'confirmed' && !o.supplier_picked_up_at ? `
+            <button class="ord-action-btn is-sky btn-confirm-pickup" data-order-id="${o.id}" data-tooltip="Record physical stock pickup" aria-label="Record physical stock pickup" title="Record physical stock pickup">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 16h6"/><path d="M19 13v6"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" x2="12" y1="22" y2="12"/></svg>
+            </button>
+          ` : ''}
+          ${isBank && o.order_status === 'confirmed' && !isPaid && !o.payment_instructions_sent_at && o.payment_review_status !== 'required' ? `
+            <button class="ord-action-btn is-amber btn-prepare-instructions" data-order-id="${o.id}" data-tooltip="Prepare bank payment instructions" aria-label="Prepare bank payment instructions" title="Prepare bank payment instructions">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            </button>
+          ` : ''}
+          ${isBank && o.payment_review_status === 'required' ? `
+            <button class="ord-action-btn is-amber btn-resolve-payment" data-order-id="${o.id}" data-tooltip="Resolve expired bank review" aria-label="Resolve expired bank review" title="Resolve expired bank review">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+            </button>
+          ` : ''}
+          ${shipment?.stock_reconciliation_status === 'legacy_review' ? `
+            <button class="ord-action-btn is-amber btn-reconcile-stock" data-shipment-id="${shipment.id}" data-tooltip="Review legacy stock allocations" aria-label="Review legacy stock allocations" title="Review legacy stock allocations">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+            </button>
+          ` : ''}
+          ${o.order_status === 'confirmed' && !hasShipment && !isCancelled && (!isBank || isPaid) ? `
+            <button class="ord-action-btn is-sky btn-dispatch-order" data-order-id="${o.id}" data-tooltip="Dispatch courier" aria-label="Dispatch courier" title="Dispatch courier">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>
+            </button>
+          ` : ''}
+          ${o.order_status === 'dispatched' && shipment?.stock_reconciliation_status !== 'legacy_review' ? `
+            ${shipment?.status === 'dispatched' ? `
+              <button class="ord-action-btn is-indigo btn-update-shipment" data-shipment-id="${shipment.id}" data-next="in_transit" data-tooltip="Mark in transit" aria-label="Mark in transit" title="Mark in transit">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 16 16 12 12 8"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
+              </button>
+            ` : ''}
+            ${['dispatched', 'in_transit'].includes(shipment?.status) ? `
+              <button class="ord-action-btn is-indigo btn-update-shipment" data-shipment-id="${shipment.id}" data-next="out_for_delivery" data-tooltip="Mark out for delivery" aria-label="Mark out for delivery" title="Mark out for delivery">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+              </button>
+            ` : ''}
+            <button class="ord-action-btn is-green btn-mark-delivered" data-shipment-id="${shipment?.id || ''}" data-tooltip="Mark delivered & collected" aria-label="Mark delivered & collected" title="Mark delivered & collected">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </button>
+            <button class="ord-action-btn is-amber btn-rto-order" data-order-id="${o.id}" data-tooltip="Initiate RTO (Return to Origin)" aria-label="Initiate RTO (Return to Origin)" title="Initiate RTO (Return to Origin)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </button>
+          ` : ''}
+          ${shipment?.cod_amount_minor > 0 && (shipment.status === 'delivered' || shipment.delivered_at) ? `
+            <button class="ord-action-btn is-green btn-remit-order" data-shipment-id="${shipment.id}" data-tooltip="COD Settlement (${formatPkr(shipment.settlement_outstanding_minor)})" aria-label="COD Settlement" title="COD Settlement">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
+            </button>
+          ` : ''}
+          ${o.order_status === 'rto' && shipment?.status === 'rto_initiated' && shipment.stock_reconciliation_status !== 'legacy_review' ? `
+            <button class="ord-action-btn is-rose btn-rto-receive" data-order-id="${o.id}" data-tooltip="Confirm RTO parcel in quarantine" aria-label="Confirm RTO parcel in quarantine" title="Confirm RTO parcel in quarantine">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </button>
+          ` : ''}
+          ${o.order_status === 'rto' && shipment && shipment.status === 'rto_delivered' && shipment.stock_reconciliation_status !== 'legacy_review' && !shipment.rto_restocked_at ? `
+            <button class="ord-action-btn is-cyan btn-rto-inspect" data-order-id="${o.id}" data-tooltip="Inspect & restock RTO units" aria-label="Inspect & restock RTO units" title="Inspect & restock RTO units">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+            </button>
+          ` : ''}
+          ${!isCancelled && !isDelivered && o.order_status !== 'dispatched' && o.order_status !== 'rto' && !(isBank && (isPaid || o.payment_review_status === 'required' || (o.payment_deadline_at && new Date(o.payment_deadline_at) <= new Date()))) ? `
+            <button class="ord-action-btn is-rose btn-cancel-order" data-order-id="${o.id}" data-tooltip="Cancel order & release stock" aria-label="Cancel order & release stock" title="Cancel order & release stock">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+            </button>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    const rowsHtml = orders.map(o => {
+      const isBank = o.payment_method === 'bank_transfer';
+      const isPaid = o.payment_status === 'verified';
+
+      return `
+        <tr>
+          <td>
+            <div class="ord-id-num">${escapeHtml(o.order_number)}</div>
+            ${orderEvidence(o)}
           </td>
-          <td style="padding: 12px 8px; font-weight: 600;">
-            ${o.total.formatted}
-            ${o.discount_amount && o.discount_amount.minor > 0 ? `<div style="font-size: 0.7rem; color: #4ADE80;">-${o.discount_amount.formatted} (${escapeHtml(o.coupon_code || 'Promo')})</div>` : ''}
+          <td>
+            <div class="ord-customer-name">${escapeHtml(o.customer_name)}</div>
+            <div class="ord-customer-meta">${escapeHtml(o.customer_phone)} • ${escapeHtml(o.shipping_city)}</div>
           </td>
-          <td style="padding: 12px 8px;">
-            <span style="font-size: 0.7rem; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: ${o.order_status === 'delivered' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255, 255, 255, 0.1)'}; color: ${o.order_status === 'delivered' ? '#4ADE80' : '#FFF'};">
+          <td>
+            <div class="ord-total-val">${o.total?.formatted || ''}</div>
+            ${o.discount_amount && o.discount_amount.minor > 0 ? `<div class="ord-discount-val">-${o.discount_amount.formatted} (${escapeHtml(o.coupon_code || 'Promo')})</div>` : ''}
+          </td>
+          <td>
+            <span class="ord-status-badge is-${escapeHtml(o.order_status)}">
+              <span class="ord-pill-dot ord-dot-${escapeHtml(o.order_status)}"></span>
               ${escapeHtml(o.order_status)}
             </span>
           </td>
-          <td style="padding: 12px 8px;">
-            <span style="font-size: 0.7rem; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: ${isPaid ? 'rgba(74, 222, 128, 0.2)' : 'rgba(251, 191, 36, 0.2)'}; color: ${isPaid ? '#4ADE80' : '#FBBF24'};">
+          <td>
+            <span class="ord-pay-badge is-${isPaid ? 'verified' : 'pending'}">
               ${escapeHtml(o.payment_method)} (${escapeHtml(o.payment_status)})
             </span>
-            ${isBank && o.payment_review_status === 'required' ? '<div style="color: #FBBF24; font-size: 0.7rem;">Payment review required; stock reserved</div>' : ''}
-            ${isBank && o.payment_instructions_sent_at ? `<div style="font-size: 0.7rem;">Instructions sent ${escapeHtml(new Date(o.payment_instructions_sent_at).toLocaleString())}${o.payment_instructions_channel ? ` via ${escapeHtml(o.payment_instructions_channel)}` : ''}</div>` : ''}
-            ${isBank && o.payment_deadline_at ? `<div style="font-size: 0.7rem;">Deadline ${escapeHtml(new Date(o.payment_deadline_at).toLocaleString())}</div>` : ''}
+            ${isBank && o.payment_review_status === 'required' ? '<div style="color: #FBBF24; font-size: 0.6875rem; margin-top: 2px;">Payment review required; stock reserved</div>' : ''}
+            ${isBank && o.payment_instructions_sent_at ? `<div style="font-size: 0.6875rem; color: rgba(255,255,255,0.5); margin-top: 2px;">Sent ${escapeHtml(new Date(o.payment_instructions_sent_at).toLocaleDateString())}${o.payment_instructions_channel ? ` via ${escapeHtml(o.payment_instructions_channel)}` : ''}</div>` : ''}
+            ${isBank && o.payment_deadline_at ? `<div style="font-size: 0.6875rem; color: #FBBF24; margin-top: 2px;">Deadline ${escapeHtml(new Date(o.payment_deadline_at).toLocaleDateString())}</div>` : ''}
           </td>
-          <td style="padding: 12px 8px; text-align: right;">
-            <button class="btn btn-secondary btn-recover-order-access" data-order-id="${o.id}" style="padding: 4px 8px; font-size: .7rem;">Recover Access</button>
-            <button class="btn btn-secondary btn-revoke-order-access" data-order-id="${o.id}" style="padding: 4px 8px; font-size: .7rem;">Revoke Access</button>
-            ${!isPaid && isBank && !isCancelled && o.payment_review_status !== 'required' ? `
-              <button class="btn btn-primary btn-verify-payment" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
-                Review Bank Transfer
-              </button>
-            ` : ''}
-            ${o.order_status === 'placed' && !isCancelled ? `
-              <button class="btn btn-secondary btn-confirm-supplier" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; border-color: rgba(74, 222, 128, 0.4); color: #4ADE80;">
-                Confirm Supplier
-              </button>
-            ` : ''}
-            ${o.order_status === 'confirmed' && !o.supplier_picked_up_at ? `<button class="btn btn-secondary btn-confirm-pickup" data-order-id="${o.id}">Record physical pickup</button>` : ''}
-            ${isBank && o.order_status === 'confirmed' && !isPaid && !o.payment_instructions_sent_at && o.payment_review_status !== 'required' ? `
-              <button class="btn btn-secondary btn-prepare-instructions" data-order-id="${o.id}">Prepare Instructions</button>
-            ` : ''}
-            ${isBank && o.payment_review_status === 'required' ? `
-              <button class="btn btn-secondary btn-resolve-payment" data-order-id="${o.id}">Resolve Payment Review</button>
-            ` : ''}
-            ${shipment?.stock_reconciliation_status === 'legacy_review' ? `<button class="btn btn-secondary btn-reconcile-stock" data-shipment-id="${shipment.id}" style="padding: 4px 8px; font-size: .7rem; color: #FBBF24;">Review Legacy Stock</button>` : ''}
-            ${o.order_status === 'confirmed' && !hasShipment && !isCancelled && (!isBank || isPaid) ? `
-              <button class="btn btn-secondary btn-dispatch-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px;">
-                Dispatch Courier
-              </button>
-            ` : ''}
-            ${o.order_status === 'dispatched' && shipment?.stock_reconciliation_status !== 'legacy_review' ? `
-              ${shipment?.status === 'dispatched' ? `<button class="btn btn-secondary btn-update-shipment" data-shipment-id="${shipment.id}" data-next="in_transit" style="padding: 4px 8px; font-size: .7rem;">In Transit</button>` : ''}
-              ${['dispatched', 'in_transit'].includes(shipment?.status) ? `<button class="btn btn-secondary btn-update-shipment" data-shipment-id="${shipment.id}" data-next="out_for_delivery" style="padding: 4px 8px; font-size: .7rem;">Out for Delivery</button>` : ''}
-              <button class="btn btn-primary btn-mark-delivered" data-shipment-id="${shipment?.id || ''}" style="padding: 4px 8px; font-size: .7rem;">Mark Delivered</button>
-              <button class="btn btn-secondary btn-rto-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; color: #FBBF24; border-color: rgba(251, 191, 36, 0.4);">
-                Initiate RTO
-              </button>
-            ` : ''}
-            ${shipment?.cod_amount_minor > 0 && (shipment.status === 'delivered' || shipment.delivered_at) ? `
-              <button class="btn btn-secondary btn-remit-order" data-shipment-id="${shipment.id}" style="padding: 4px 8px; font-size: .7rem;">COD Settlement (${formatPkr(shipment.settlement_outstanding_minor)})</button>
-            ` : ''}
-            ${o.order_status === 'rto' && shipment?.status === 'rto_initiated' && shipment.stock_reconciliation_status !== 'legacy_review' ? `
-              <button class="btn btn-primary btn-rto-receive" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; background: #E11D48; border-color: #E11D48;">
-                Confirm RTO Received
-              </button>
-            ` : ''}
-            ${o.order_status === 'rto' && shipment && shipment.status === 'rto_delivered' && shipment.stock_reconciliation_status !== 'legacy_review' && !shipment.rto_restocked_at ? `
-              <button class="btn btn-secondary btn-rto-inspect" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; margin-right: 4px; color: #38BDF8; border-color: rgba(56, 189, 248, 0.4);">
-                Inspect & Restock
-              </button>
-            ` : ''}
-            ${!isCancelled && !isDelivered && o.order_status !== 'dispatched' && o.order_status !== 'rto' && !(isBank && (isPaid || o.payment_review_status === 'required' || (o.payment_deadline_at && new Date(o.payment_deadline_at) <= new Date()))) ? `
-              <button class="btn btn-secondary btn-cancel-order" data-order-id="${o.id}" style="padding: 4px 8px; font-size: 0.7rem; color: #F87171; border-color: rgba(248, 113, 113, 0.3);">
-                Cancel
-              </button>
-            ` : ''}
+          <td style="text-align: right;">
+            ${renderOrderActionsHtml(o)}
           </td>
         </tr>
       `;
     }).join('');
 
+    const cardsHtml = orders.map(o => {
+      const isBank = o.payment_method === 'bank_transfer';
+      const isPaid = o.payment_status === 'verified';
+
+      return `
+        <div class="ord-card">
+          <div class="ord-card-top">
+            <div>
+              <div class="ord-id-num">${escapeHtml(o.order_number)}</div>
+              <div class="ord-customer-meta">${escapeHtml(o.shipping_city)}</div>
+            </div>
+            <div style="text-align: right;">
+              <span class="ord-status-badge is-${escapeHtml(o.order_status)}">
+                <span class="ord-pill-dot ord-dot-${escapeHtml(o.order_status)}"></span>
+                ${escapeHtml(o.order_status)}
+              </span>
+              <div class="ord-total-val" style="margin-top: 4px;">${o.total?.formatted || ''}</div>
+            </div>
+          </div>
+          <div class="ord-card-meta">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <span class="ord-customer-name">${escapeHtml(o.customer_name)}</span>
+              <span class="ord-pay-badge is-${isPaid ? 'verified' : 'pending'}">${escapeHtml(o.payment_method)} (${escapeHtml(o.payment_status)})</span>
+            </div>
+            <div class="ord-customer-meta">📞 ${escapeHtml(o.customer_phone)}</div>
+            ${isBank && o.payment_review_status === 'required' ? '<div style="color: #FBBF24; font-size: 0.6875rem;">Payment review required; stock reserved</div>' : ''}
+          </div>
+          <div>
+            ${orderEvidence(o)}
+          </div>
+          <div class="ord-card-actions">
+            ${renderOrderActionsHtml(o)}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const statusList = [
+      { id: '', label: 'All', dot: 'ord-dot-all' },
+      { id: 'placed', label: 'Placed', dot: 'ord-dot-placed' },
+      { id: 'confirmed', label: 'Confirmed', dot: 'ord-dot-confirmed' },
+      { id: 'dispatched', label: 'Dispatched', dot: 'ord-dot-dispatched' },
+      { id: 'delivered', label: 'Delivered', dot: 'ord-dot-delivered' },
+      { id: 'rto', label: 'RTO', dot: 'ord-dot-rto' },
+      { id: 'cancelled', label: 'Cancelled', dot: 'ord-dot-cancelled' }
+    ];
+    const statusCounts = orders.reduce((acc, o) => {
+      acc[o.order_status] = (acc[o.order_status] || 0) + 1;
+      return acc;
+    }, {});
+
     container.innerHTML = `
-      <form id="admin-order-filters" class="catalog-toolbar"><label>Order number or phone<input name="search" class="admin-input" maxlength="100" value="${escapeHtml(ordersSearch)}"></label>
-        <label>Order status<select name="status" class="admin-input"><option value="">All statuses</option>${['placed','confirmed','dispatched','delivered','rto','cancelled'].map(s=>`<option value="${s}" ${s===ordersStatus?'selected':''}>${s}</option>`).join('')}</select></label>
-        <button type="submit" class="btn btn-secondary">Apply order filters</button>${orderId ? '<a class="admin-return-link" href="/admin/orders">Show all orders</a>' : ''}</form>
-      <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
-        <button id="btn-review-expired-orders" class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">
-          Check Expired Bank Transfers
-        </button>
+      <div class="ord-workspace">
+        <form id="admin-order-filters" style="display: none;">
+          <input name="search" value="${escapeHtml(ordersSearch)}">
+          <select name="status">
+            <option value="">All statuses</option>
+            ${['placed','confirmed','dispatched','delivered','rto','cancelled'].map(s=>`<option value="${s}" ${s===ordersStatus?'selected':''}>${s}</option>`).join('')}
+          </select>
+          <button type="submit">Apply order filters</button>
+        </form>
+
+        <div class="ord-header-actions">
+          ${orderId ? '<a class="admin-return-link" href="/admin/orders">Show all orders</a>' : ''}
+          <button id="btn-review-expired-orders" class="ord-header-btn" data-tooltip="Check & flag expired bank transfers" aria-label="Check & flag expired bank transfers" title="Check & flag expired bank transfers">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>Check Expired Bank</span>
+          </button>
+        </div>
+
+        <div class="ord-toolbar">
+          <div class="ord-search-wrapper">
+            <svg class="ord-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="ord-visible-search" class="ord-search-input" placeholder="Search order #, customer, phone..." value="${escapeHtml(ordersSearch)}" maxlength="100">
+            ${ordersSearch ? '<button type="button" class="ord-search-clear" id="ord-clear-search" aria-label="Clear search">✕</button>' : ''}
+          </div>
+          <div class="ord-filter-group">
+            ${statusList.map(st => `
+              <button type="button" class="ord-filter-pill ${ordersStatus === st.id ? 'is-active' : ''}" data-status="${st.id}" data-tooltip="Filter by ${st.label}" title="Filter by ${st.label}">
+                <span class="ord-pill-dot ${st.dot}"></span>
+                <span>${st.label}</span>
+                ${st.id === '' ? `<span class="ord-pill-count">${res.total ?? orders.length}</span>` : (statusCounts[st.id] ? `<span class="ord-pill-count">${statusCounts[st.id]}</span>` : '')}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="ord-table-desktop">
+          <table class="ord-table">
+            <thead>
+              <tr>
+                <th style="width: 22%;">Order #</th>
+                <th style="width: 20%;">Customer</th>
+                <th style="width: 14%;">Total</th>
+                <th style="width: 14%;">Status</th>
+                <th style="width: 15%;">Payment</th>
+                <th style="width: 15%; text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml || '<tr><td colspan="6" style="padding: 24px; text-align: center; color: rgba(255,255,255,0.4);">No orders match this view. Clear filters to see other orders.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="ord-cards-mobile">
+          ${cardsHtml || '<div style="padding: 24px; text-align: center; color: rgba(255,255,255,0.4); background: var(--admin-bg-card); border-radius: 12px;">No orders match this view. Clear filters to see other orders.</div>'}
+        </div>
+
+        <div class="ord-pagination-bar">
+          <button type="button" class="btn btn-secondary" data-orders-prev ${ordersPage<=1?'disabled':''} style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; padding: 6px 12px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span>Previous</span>
+          </button>
+          <span class="ord-page-info">Page ${ordersPage} · ${res.total ?? orders.length} orders</span>
+          <button type="button" class="btn btn-secondary" data-orders-next ${ordersPage*(res.page_size || 20)>=(res.total ?? orders.length)?'disabled':''} style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; padding: 6px 12px;">
+            <span>Next</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+
+        <div id="payment-workflow-panel" role="region" aria-live="polite"></div>
       </div>
-      <div style="overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-          <thead>
-            <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
-              <th style="padding: 8px;">Order #</th>
-              <th style="padding: 8px;">Customer</th>
-              <th style="padding: 8px;">Total</th>
-              <th style="padding: 8px;">Status</th>
-              <th style="padding: 8px;">Payment</th>
-              <th style="padding: 8px; text-align: right;">Actions</th>
-            </tr>
-          </thead>
-          <tbody>${rowsHtml || '<tr><td colspan="6">No orders match this view. Clear filters to see other orders.</td></tr>'}</tbody>
-        </table>
-      </div>
-      <div class="catalog-toolbar"><button type="button" class="btn btn-secondary" data-orders-prev ${ordersPage<=1?'disabled':''}>Previous orders</button><span>Page ${ordersPage} · ${res.total ?? orders.length} orders</span><button type="button" class="btn btn-secondary" data-orders-next ${ordersPage*(res.page_size || 20)>=(res.total ?? orders.length)?'disabled':''}>Next orders</button></div>
-      <div id="payment-workflow-panel" role="region" aria-live="polite"></div>
     `;
 
     const filter = container.querySelector('#admin-order-filters');
-    filter.addEventListener('submit',event=>{event.preventDefault();if(!isCurrent() || !canLeave())return;ordersSearch=filter.querySelector('[name="search"]').value.trim();ordersStatus=filter.querySelector('[name="status"]').value;ordersPage=1;loadActiveTabData();});
-    for (const [selector,delta] of [['[data-orders-prev]',-1],['[data-orders-next]',1]]) container.querySelector(selector).addEventListener('click',event=>{if(event.currentTarget?.disabled || !isCurrent() || !canLeave())return;ordersPage+=delta;loadActiveTabData();});
+    if (filter) {
+      filter.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!isCurrent() || !canLeave()) return;
+        ordersSearch = filter.querySelector('[name="search"]').value.trim();
+        ordersStatus = filter.querySelector('[name="status"]').value;
+        ordersPage = 1;
+        loadActiveTabData();
+      });
+    }
+
+    container.querySelectorAll('.ord-filter-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        if (!isCurrent() || !canLeave()) return;
+        ordersStatus = pill.getAttribute('data-status') || '';
+        ordersPage = 1;
+        const formStatus = filter?.querySelector('[name="status"]');
+        if (formStatus) formStatus.value = ordersStatus;
+        loadActiveTabData();
+      });
+    });
+
+    const visibleSearch = container.querySelector('#ord-visible-search');
+    let searchDebounceTimer = null;
+    if (visibleSearch) {
+      visibleSearch.addEventListener('input', () => {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => {
+          if (!isCurrent() || !canLeave()) return;
+          ordersSearch = visibleSearch.value.trim();
+          ordersPage = 1;
+          const formSearch = filter?.querySelector('[name="search"]');
+          if (formSearch) formSearch.value = ordersSearch;
+          loadActiveTabData();
+        }, 300);
+      });
+      visibleSearch.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          clearTimeout(searchDebounceTimer);
+          if (!isCurrent() || !canLeave()) return;
+          ordersSearch = visibleSearch.value.trim();
+          ordersPage = 1;
+          const formSearch = filter?.querySelector('[name="search"]');
+          if (formSearch) formSearch.value = ordersSearch;
+          loadActiveTabData();
+        }
+      });
+    }
+
+    const clearBtn = container.querySelector('#ord-clear-search');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (!isCurrent() || !canLeave()) return;
+        ordersSearch = '';
+        ordersPage = 1;
+        const formSearch = filter?.querySelector('[name="search"]');
+        if (formSearch) formSearch.value = '';
+        loadActiveTabData();
+      });
+    }
+
+    for (const [selector, delta] of [['[data-orders-prev]', -1], ['[data-orders-next]', 1]]) {
+      container.querySelectorAll(selector).forEach(btn => {
+        btn.addEventListener('click', event => {
+          if (event.currentTarget?.disabled || !isCurrent() || !canLeave()) return;
+          ordersPage += delta;
+          loadActiveTabData();
+        });
+      });
+    }
 
     container.querySelectorAll('.btn-recover-order-access').forEach(b => b.addEventListener('click', async () => {
       if(!isCurrent() || !canLeave())return;
