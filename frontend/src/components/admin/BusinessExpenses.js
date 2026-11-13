@@ -57,8 +57,8 @@ export async function renderBusinessExpenses(container, viewGenerationRef) {
       render();
     } catch (err) {
       container.innerHTML = `
-        <div style="padding: 16px; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 6px; color: #FCA5A5; font-size: 0.875rem;">
-          Failed to load business expenses: ${escapeHtml(err.message || 'Unknown error')}
+        <div style="padding: 16px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #F87171; font-size: 0.8125rem;">
+          <strong>Failed to load business expenses:</strong> ${escapeHtml(err.message || 'Unknown error')}
         </div>
       `;
     }
@@ -76,6 +76,7 @@ export async function renderBusinessExpenses(container, viewGenerationRef) {
     const outboundMinor = catTotals.outbound_delivery || summary.categories?.outbound_delivery?.incurred_minor || 0;
     const totalFreightMinor = rtoMinor + returnMinor + outboundMinor;
 
+    // Desktop Table Rows
     const rowsHtml = expenses.map(e => {
       const isPaid = !!e.paid_date;
       const catLabel = CATEGORY_LABELS[e.category] || e.category;
@@ -83,147 +84,185 @@ export async function renderBusinessExpenses(container, viewGenerationRef) {
       const isDeduction = e.payment_method === 'courier_deduction';
 
       return `
-        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-          <td style="padding: 12px 8px; font-family: monospace; color: rgba(255, 255, 255, 0.85); white-space: nowrap;">
+        <tr>
+          <td style="font-family: monospace; white-space: nowrap; color: rgba(255, 255, 255, 0.75);">
             ${escapeHtml(e.incurred_date)}
           </td>
-          <td style="padding: 12px 8px;">
-            <span class="badge ${isTransport ? 'badge-accent' : 'badge-neutral'}" style="font-size: 0.7rem; font-weight: 600;">
+          <td>
+            <span class="exp-badge-pill ${isTransport ? 'exp-badge-freight' : 'exp-badge-neutral'}">
+              ${isTransport ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0;"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>' : ''}
               ${escapeHtml(catLabel)}
             </span>
           </td>
-          <td style="padding: 12px 8px; color: #FFFFFF;">
-            <strong>${escapeHtml(e.payee || '—')}</strong>
-            ${e.reference ? `<div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); font-family: monospace;">Ref: ${escapeHtml(e.reference)}</div>` : ''}
+          <td>
+            <div style="font-weight: 600; color: #FFFFFF;">${escapeHtml(e.payee || '—')}</div>
+            ${e.reference ? `<div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); font-family: monospace;">Ref: ${escapeHtml(e.reference)}</div>` : ''}
           </td>
-          <td style="padding: 12px 8px;">
-            <span style="font-size: 0.75rem; color: ${isDeduction ? '#60A5FA' : 'rgba(255, 255, 255, 0.7)'};">
+          <td>
+            <span style="color: ${isDeduction ? '#38BDF8' : 'rgba(255, 255, 255, 0.7)'};">
               ${escapeHtml(PAYMENT_METHOD_LABELS[e.payment_method] || e.payment_method)}
             </span>
           </td>
-          <td style="padding: 12px 8px;">
+          <td>
             ${isPaid
-              ? `<span style="display: inline-flex; align-items: center; gap: 4px; color: #4ade80; font-size: 0.75rem; font-weight: 500;">
-                  Paid (${escapeHtml(e.paid_date)})
-                 </span>`
-              : `<span style="display: inline-flex; align-items: center; gap: 4px; color: #facc15; font-size: 0.75rem; font-weight: 500;">
-                  Accrued / unpaid
-                 </span>`
+              ? `<span class="exp-status-paid">Paid (${escapeHtml(e.paid_date)})</span>`
+              : `<span class="exp-status-accrued">Accrued / Unpaid</span>`
             }
           </td>
-          <td style="padding: 12px 8px; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--admin-text-primary); font-size: 0.875rem;">
+          <td style="text-align: right; font-family: monospace; font-weight: 600; font-variant-numeric: tabular-nums; color: #FFFFFF; font-size: 0.8125rem;">
             ${escapeHtml(formatPkr(e.amount_minor))}
           </td>
-          <td style="padding: 12px 8px; color: var(--admin-text-secondary); max-width: 220px; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(e.notes || '')}">
+          <td style="color: rgba(255, 255, 255, 0.5); max-width: 220px; font-size: 0.6875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(e.notes || '')}">
             ${escapeHtml(e.notes || '—')}
           </td>
         </tr>
       `;
     }).join('');
 
+    // Mobile Responsive Cards (Rule 1: Zero Horizontal Scroll)
+    const cardsHtml = expenses.map(e => {
+      const isPaid = !!e.paid_date;
+      const catLabel = CATEGORY_LABELS[e.category] || e.category;
+      const isTransport = ['rto_transport', 'customer_return_transport'].includes(e.category);
+      const isDeduction = e.payment_method === 'courier_deduction';
+
+      return `
+        <div class="exp-card">
+          <div class="exp-card-top">
+            <span style="font-family: monospace; font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5);">${escapeHtml(e.incurred_date)}</span>
+            <span class="exp-badge-pill ${isTransport ? 'exp-badge-freight' : 'exp-badge-neutral'}">
+              ${escapeHtml(catLabel)}
+            </span>
+            <span class="${isPaid ? 'exp-status-paid' : 'exp-status-accrued'}" style="font-size: 0.6875rem;">
+              ${isPaid ? 'PAID' : 'ACCRUED'}
+            </span>
+          </div>
+          <div class="exp-card-mid">
+            <div>
+              <div style="font-weight: 600; color: #FFFFFF; font-size: 0.8125rem;">${escapeHtml(e.payee || '—')}</div>
+              ${e.reference ? `<div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); font-family: monospace;">Ref: ${escapeHtml(e.reference)}</div>` : ''}
+            </div>
+            <div style="text-align: right;">
+              <div style="font-family: monospace; font-weight: 700; color: #FFFFFF; font-size: 0.9375rem;">${escapeHtml(formatPkr(e.amount_minor))}</div>
+              <div style="font-size: 0.6875rem; color: ${isDeduction ? '#38BDF8' : 'rgba(255, 255, 255, 0.5)'};">${escapeHtml(PAYMENT_METHOD_LABELS[e.payment_method] || e.payment_method)}</div>
+            </div>
+          </div>
+          ${e.notes ? `<div class="exp-card-bot"><span>Note:</span> <span style="color: rgba(255, 255, 255, 0.65);">${escapeHtml(e.notes)}</span></div>` : ''}
+        </div>
+      `;
+    }).join('');
+
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 20px;">
-        <!-- Policy Banner -->
-        <div style="background: var(--admin-bg-card); border: 1px solid var(--admin-border-hairline); border-radius: var(--admin-radius-control); padding: 14px 18px; display: flex; align-items: center; gap: 14px;">
-          <div>
-            <div style="font-size: 0.875rem; font-weight: 500; color: var(--admin-text-primary); margin-bottom: 2px;">
-              AlphaZee transport & expense principle
-            </div>
-            <div style="font-size: 0.8125rem; color: var(--admin-text-secondary); line-height: 1.4;">
-              AlphaZee strictly bears all RTO (Return to Origin) and customer-return transport expenses. Courier deductions linked to recorded expenses prevent double-counting across settlements.
-            </div>
-          </div>
-        </div>
-
-        <!-- KPI Summary Cards -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-            <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.6); text-transform: uppercase; font-weight: 600;">Total Incurred Expenses</div>
-            <div id="kpi-total-incurred" style="font-size: 1.5rem; font-weight: 800; color: #FFFFFF; margin-top: 6px;">
-              ${escapeHtml(formatPkr(totalMinor))}
-            </div>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Operating, freight & marketing costs</div>
-          </div>
-
-          <div style="background: rgba(20, 92, 68, 0.15); border: 1px solid rgba(20, 92, 68, 0.3); border-radius: 8px; padding: 16px;">
-            <div style="font-size: 0.75rem; color: #34D399; text-transform: uppercase; font-weight: 600;">Paid Expenses</div>
-            <div id="kpi-total-paid" style="font-size: 1.5rem; font-weight: 800; color: #34D399; margin-top: 6px;">
-              ${escapeHtml(formatPkr(paidMinor))}
-            </div>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Disbursed via bank, cash, or courier</div>
-          </div>
-
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-            <div style="font-size: 0.75rem; color: #FBBF24; text-transform: uppercase; font-weight: 600;">Accrued / Unpaid</div>
-            <div id="kpi-total-accrued" style="font-size: 1.5rem; font-weight: 800; color: #FBBF24; margin-top: 6px;">
-              ${escapeHtml(formatPkr(unpaidMinor))}
-            </div>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">Incurred liabilities awaiting payment</div>
-          </div>
-
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-            <div style="font-size: 0.75rem; color: #60A5FA; text-transform: uppercase; font-weight: 600;">AlphaZee Freight & RTO</div>
-            <div id="kpi-total-freight" style="font-size: 1.5rem; font-weight: 800; color: #60A5FA; margin-top: 6px;">
-              ${escapeHtml(formatPkr(totalFreightMinor))}
-            </div>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">RTO + Return freight + Outbound</div>
-          </div>
-        </div>
-
-        <!-- Filter & Action Toolbar -->
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <div>
-              <select id="expense-filter-category" style="padding: 6px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;">
-                <option value="">All Categories</option>
-                ${Object.entries(CATEGORY_LABELS).map(([val, label]) => `<option value="${val}" ${filterCategory === val ? 'selected' : ''}>${label}</option>`).join('')}
-              </select>
+      <div class="business-expenses-view">
+        
+        <!-- Header & Quick Action Toolbar -->
+        <div class="exp-toolbar">
+          <div class="exp-title-group">
+            <div class="exp-title-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
             <div>
-              <select id="expense-filter-method" style="padding: 6px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;">
-                <option value="">All Payment Methods</option>
-                ${Object.entries(PAYMENT_METHOD_LABELS).map(([val, label]) => `<option value="${val}" ${filterPaymentMethod === val ? 'selected' : ''}>${label}</option>`).join('')}
-              </select>
-            </div>
-            <div>
-              <select id="expense-filter-paid" style="padding: 6px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;">
-                <option value="" ${filterIsPaid === '' ? 'selected' : ''}>All Statuses</option>
-                <option value="true" ${filterIsPaid === 'true' ? 'selected' : ''}>Paid</option>
-                <option value="false" ${filterIsPaid === 'false' ? 'selected' : ''}>Accrued / Unpaid</option>
-              </select>
+              <h2 class="exp-title">Operating Costs & Freight Ledger</h2>
+              <p class="exp-subtitle">Authoritative operating overhead, RTO freight absorption, & settlements.</p>
             </div>
           </div>
-
-          <button type="button" id="btn-open-record-expense" class="btn btn-primary" style="padding: 7px 16px; font-size: 0.8125rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
-            <span>+</span> Record Business Expense
+          <!-- Rule 2: Compact Semantic Icon Button with Micro-Tooltip -->
+          <button type="button" id="btn-open-record-expense" class="exp-icon-btn exp-icon-btn-accent" data-tooltip="Record business expense or freight" aria-label="Record business expense" title="Record Business Expense">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         </div>
 
-        <!-- Expenses Table -->
-        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; overflow: hidden;">
-          <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <!-- 4-Card Executive Treasury Grid -->
+        <div class="exp-kpis-grid">
+          <div class="exp-kpi-card">
+            <div class="exp-kpi-label">Total Incurred Expenses</div>
+            <div id="kpi-total-incurred" class="exp-kpi-val">${escapeHtml(formatPkr(totalMinor))}</div>
+            <div class="exp-kpi-sub">Operating, freight & marketing costs</div>
+          </div>
+
+          <div class="exp-kpi-card">
+            <div class="exp-kpi-label">Paid Expenses</div>
+            <div id="kpi-total-paid" class="exp-kpi-val" style="color: #34D399;">${escapeHtml(formatPkr(paidMinor))}</div>
+            <div class="exp-kpi-sub">Disbursed via bank, cash, or courier</div>
+          </div>
+
+          <div class="exp-kpi-card">
+            <div class="exp-kpi-label">Accrued / Unpaid</div>
+            <div id="kpi-total-accrued" class="exp-kpi-val" style="color: #FBBF24;">${escapeHtml(formatPkr(unpaidMinor))}</div>
+            <div class="exp-kpi-sub">Incurred liabilities awaiting payment</div>
+          </div>
+
+          <div class="exp-kpi-card">
+            <div class="exp-kpi-label">AlphaZee Freight & RTO</div>
+            <div id="kpi-total-freight" class="exp-kpi-val" style="color: #38BDF8;">${escapeHtml(formatPkr(totalFreightMinor))}</div>
+            <div class="exp-kpi-sub">100% borne RTO + return freight</div>
+          </div>
+        </div>
+
+        <!-- Statutory Absorption Notice -->
+        <div class="exp-policy-banner">
+          <div class="exp-policy-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+          </div>
+          <div class="exp-policy-text">
+            <strong>AlphaZee Transport & Expense Principle:</strong> AlphaZee strictly bears all RTO (Return to Origin) and customer-return transport expenses. Courier deductions linked to recorded expenses prevent double-counting across settlements.
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="exp-filters-bar">
+          <div class="exp-filters-group">
+            <select id="expense-filter-category" class="exp-select" aria-label="Filter by expense category">
+              <option value="">All Categories</option>
+              ${Object.entries(CATEGORY_LABELS).map(([val, label]) => `<option value="${val}" ${filterCategory === val ? 'selected' : ''}>${label}</option>`).join('')}
+            </select>
+            <select id="expense-filter-method" class="exp-select" aria-label="Filter by payment method">
+              <option value="">All Payment Methods</option>
+              ${Object.entries(PAYMENT_METHOD_LABELS).map(([val, label]) => `<option value="${val}" ${filterPaymentMethod === val ? 'selected' : ''}>${label}</option>`).join('')}
+            </select>
+            <select id="expense-filter-paid" class="exp-select" aria-label="Filter by payment status">
+              <option value="" ${filterIsPaid === '' ? 'selected' : ''}>All Statuses</option>
+              <option value="true" ${filterIsPaid === 'true' ? 'selected' : ''}>Paid</option>
+              <option value="false" ${filterIsPaid === 'false' ? 'selected' : ''}>Accrued / Unpaid</option>
+            </select>
+          </div>
+          <div class="exp-count-badge">
+            Showing ${expenses.length} record${expenses.length === 1 ? '' : 's'}
+          </div>
+        </div>
+
+        <!-- High-Density Ledger Card -->
+        <div class="exp-ledger-card">
+          <!-- Desktop Table (Rule 1: Hidden on Mobile) -->
+          <div class="exp-table-wrap">
+            <table class="exp-table">
               <thead>
-                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; background: rgba(0, 0, 0, 0.2);">
-                  <th style="padding: 10px 8px;">Date</th>
-                  <th style="padding: 10px 8px;">Category</th>
-                  <th style="padding: 10px 8px;">Payee / Reference</th>
-                  <th style="padding: 10px 8px;">Payment Method</th>
-                  <th style="padding: 10px 8px;">Status</th>
-                  <th style="padding: 10px 8px; text-align: right;">Amount (PKR)</th>
-                  <th style="padding: 10px 8px;">Notes</th>
+                <tr>
+                  <th>Date</th>
+                  <th>Category</th>
+                  <th>Payee / Reference</th>
+                  <th>Payment Method</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Amount (PKR)</th>
+                  <th>Notes</th>
                 </tr>
               </thead>
               <tbody id="expense-table-body">
-                ${rowsHtml.length ? rowsHtml : '<tr><td colspan="7" style="padding: 32px 8px; text-align: center; color: rgba(255,255,255,0.4);">No business expenses recorded matching the selected filters.</td></tr>'}
+                ${rowsHtml.length ? rowsHtml : '<tr><td colspan="7" style="padding: 32px 12px; text-align: center; color: rgba(255,255,255,0.4);">No business expenses recorded matching the selected filters.</td></tr>'}
               </tbody>
             </table>
           </div>
+
+          <!-- Mobile Cards List (Rule 1: Hidden on Desktop) -->
+          <div class="exp-cards-list">
+            ${cardsHtml.length ? cardsHtml : '<div style="padding: 24px 12px; text-align: center; color: rgba(255,255,255,0.4);">No business expenses recorded matching the selected filters.</div>'}
+          </div>
         </div>
+
       </div>
     `;
 
-    // Wire filter events
+    // Wire Filter Events
     container.querySelector('#expense-filter-category')?.addEventListener('change', e => {
       filterCategory = e.target.value;
       loadData();
@@ -239,7 +278,7 @@ export async function renderBusinessExpenses(container, viewGenerationRef) {
       loadData();
     });
 
-    // Wire Modal Open
+    // Wire Modal Trigger
     container.querySelector('#btn-open-record-expense')?.addEventListener('click', () => {
       openRecordExpenseModal({
         onSuccess: () => loadData(),
@@ -262,73 +301,79 @@ export function openRecordExpenseModal({ onSuccess = () => {} } = {}) {
   const todayStr = new Date().toISOString().split('T')[0];
 
   modal.innerHTML = `
-    <div class="drawer-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1051;"></div>
-    <div class="modal-content" style="z-index: 1052; max-width: 580px; width: 94%; max-height: 90vh; overflow-y: auto; background: #141715; color: #FFFFFF; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.15); padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8); position: relative;">
+    <div class="drawer-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); z-index: 1051;"></div>
+    <div class="record-expense-modal-box" style="z-index: 1052;">
       
       <!-- Header -->
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 12px; margin-bottom: 18px;">
-        <h3 style="font-size: 1.125rem; font-weight: 700; margin: 0; color: #FFFFFF;">
-          Record Business Expense
-        </h3>
-        <button id="btn-close-expense-modal" class="btn-icon" style="background: none; border: none; color: rgba(255, 255, 255, 0.7); font-size: 1.5rem; cursor: pointer; padding: 2px 6px;" aria-label="Close dialog">&times;</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <h3 style="font-size: 1rem; font-weight: 700; margin: 0; color: #FFFFFF;">
+            Record Business Expense
+          </h3>
+        </div>
+        <!-- Rule 2: Compact Semantic Close Button -->
+        <button id="btn-close-expense-modal" class="exp-icon-btn" data-tooltip="Close dialog" aria-label="Close dialog" title="Close dialog">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
 
       <!-- Expense Form -->
-      <form id="record-expense-form" style="display: flex; flex-direction: column; gap: 14px;">
-        <div>
-          <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Expense Category *</label>
-          <select id="exp-category" required style="width: 100%; padding: 8px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;">
+      <form id="record-expense-form" style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="exp-form-group">
+          <label class="exp-form-label">Expense Category *</label>
+          <select id="exp-category" class="exp-input" required>
             ${Object.entries(CATEGORY_LABELS).map(([val, label]) => `<option value="${val}">${label}</option>`).join('')}
           </select>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div>
-            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Amount (PKR) *</label>
-            <input type="number" id="exp-amount" min="0.01" step="0.01" required placeholder="1500.00" style="width: 100%; padding: 8px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+        <div class="exp-form-grid">
+          <div class="exp-form-group">
+            <label class="exp-form-label">Amount (PKR) *</label>
+            <input type="number" id="exp-amount" class="exp-input" min="0.01" step="0.01" required placeholder="1500.00" />
           </div>
-          <div>
-            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Incurred Date *</label>
-            <input type="date" id="exp-incurred-date" value="${todayStr}" required style="width: 100%; padding: 8px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+          <div class="exp-form-group">
+            <label class="exp-form-label">Incurred Date *</label>
+            <input type="date" id="exp-incurred-date" class="exp-input" value="${todayStr}" required />
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div>
-            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Payment Method *</label>
-            <select id="exp-payment-method" required style="width: 100%; padding: 8px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;">
+        <div class="exp-form-grid">
+          <div class="exp-form-group">
+            <label class="exp-form-label">Payment Method *</label>
+            <select id="exp-payment-method" class="exp-input" required>
               ${Object.entries(PAYMENT_METHOD_LABELS).map(([val, label]) => `<option value="${val}">${label}</option>`).join('')}
             </select>
           </div>
-          <div>
-            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Paid Date (Leave empty if unpaid)</label>
-            <input type="date" id="exp-paid-date" value="${todayStr}" style="width: 100%; padding: 8px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+          <div class="exp-form-group">
+            <label class="exp-form-label">Paid Date (Leave empty if unpaid)</label>
+            <input type="date" id="exp-paid-date" class="exp-input" value="${todayStr}" />
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div>
-            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Payee / Vendor Name</label>
-            <input type="text" id="exp-payee" placeholder="e.g. Trax Logistics, Packaging Depot" maxlength="200" style="width: 100%; padding: 8px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+        <div class="exp-form-grid">
+          <div class="exp-form-group">
+            <label class="exp-form-label">Payee / Vendor Name</label>
+            <input type="text" id="exp-payee" class="exp-input" placeholder="e.g. Trax Logistics, Packaging Depot" maxlength="200" />
           </div>
-          <div>
-            <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Invoice / Reference #</label>
-            <input type="text" id="exp-reference" placeholder="e.g. INV-2026-004, TRX-9923" maxlength="100" style="width: 100%; padding: 8px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+          <div class="exp-form-group">
+            <label class="exp-form-label">Invoice / Reference #</label>
+            <input type="text" id="exp-reference" class="exp-input" placeholder="e.g. INV-2026-004, TRX-9923" maxlength="100" />
           </div>
         </div>
 
-        <div>
-          <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 4px;">Description / Notes</label>
-          <textarea id="exp-notes" rows="2" placeholder="Details about this expense, batch size, or tracking link..." style="width: 100%; padding: 8px 10px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem; resize: vertical;"></textarea>
+        <div class="exp-form-group">
+          <label class="exp-form-label">Description / Notes</label>
+          <textarea id="exp-notes" class="exp-input" rows="2" placeholder="Details about this expense, batch size, or tracking link..." style="resize: vertical;"></textarea>
         </div>
 
         <div id="exp-error" style="display: none; color: #F87171; font-size: 0.75rem; font-weight: 600;"></div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px;">
-          <button type="button" id="btn-cancel-expense" class="btn btn-secondary" style="padding: 7px 14px; font-size: 0.8125rem;">
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px;">
+          <button type="button" id="btn-cancel-expense" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.75rem;">
             Cancel
           </button>
-          <button type="submit" id="btn-submit-expense" class="btn btn-primary" style="padding: 7px 18px; font-size: 0.8125rem;">
+          <button type="submit" id="btn-submit-expense" class="btn btn-primary" style="padding: 6px 18px; font-size: 0.75rem;">
             Save Expense
           </button>
         </div>

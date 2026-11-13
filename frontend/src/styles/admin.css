@@ -7177,3 +7177,456 @@ body.admin-body-lock {
     width: 100% !important;
   }
 }
+
+/* ==========================================================================
+   /unslop Business Expenses & Freight Ledger (/admin/expenses)
+   CC BY 4.0 Damir Sokolovsky - Swiss Banking Treasury Standard
+   ========================================================================== */
+
+.business-expenses-view,
+.business-expenses-view *,
+.exp-kpis-grid,
+.exp-table-wrap,
+.exp-cards-list,
+.record-expense-modal-box {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.business-expenses-view::-webkit-scrollbar,
+.business-expenses-view *::-webkit-scrollbar,
+.record-expense-modal-box::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.business-expenses-view {
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  overflow-x: hidden !important;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+/* Header & Quick Action Toolbar */
+.exp-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #14171D;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+
+.exp-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.exp-title-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #10B981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.exp-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.exp-subtitle {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 2px 0 0;
+}
+
+/* Rule 2: Compact Semantic Icon Buttons with Micro-Tooltips */
+.exp-icon-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  padding: 0;
+  outline: none;
+}
+
+.exp-icon-btn:hover,
+.exp-icon-btn.is-hover-sim {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.exp-icon-btn-accent {
+  background: #10B981;
+  border-color: #10B981;
+  color: #0c1015;
+}
+
+.exp-icon-btn-accent:hover,
+.exp-icon-btn-accent.is-hover-sim {
+  background: #059669;
+  border-color: #059669;
+  color: #FFFFFF;
+}
+
+.exp-icon-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 50%;
+  transform: translateX(50%);
+  background: #000000;
+  color: #FFFFFF;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.exp-icon-btn[data-tooltip]:hover::after,
+.exp-icon-btn[data-tooltip]:focus-visible::after,
+.exp-icon-btn[data-tooltip].is-hover-sim::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* 4-Card Executive Treasury Grid */
+.exp-kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.exp-kpi-card {
+  background: #14171D;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exp-kpi-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.exp-kpi-val {
+  font-size: 1.375rem;
+  font-weight: 700;
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+  color: #FFFFFF;
+}
+
+.exp-kpi-sub {
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Statutory Absorption Notice */
+.exp-policy-banner {
+  background: rgba(16, 185, 129, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 8px;
+  padding: 11px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.exp-policy-icon {
+  color: #10B981;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.exp-policy-text {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.45;
+}
+
+.exp-policy-text strong {
+  color: #FFFFFF;
+}
+
+/* Filter Bar */
+.exp-filters-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.exp-filters-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.exp-select {
+  background: #0e1117;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.exp-select:focus {
+  border-color: #10B981;
+}
+
+.exp-count-badge {
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* High-Density Ledger Table */
+.exp-ledger-card {
+  background: #14171D;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.exp-table-wrap {
+  width: 100%;
+  overflow-x: hidden !important;
+}
+
+.exp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.exp-table th {
+  padding: 10px 12px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.exp-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  vertical-align: middle;
+}
+
+.exp-table tr:last-child td {
+  border-bottom: none;
+}
+
+.exp-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.exp-badge-freight {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.25);
+  color: #38BDF8;
+}
+
+.exp-badge-neutral {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.exp-status-paid {
+  color: #34D399;
+  font-weight: 600;
+}
+
+.exp-status-accrued {
+  color: #FBBF24;
+  font-weight: 600;
+}
+
+/* Responsive Mobile Cards */
+.exp-cards-list {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  overflow-x: hidden !important;
+}
+
+.exp-card {
+  background: #101318;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exp-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.exp-card-mid {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 6px 0;
+}
+
+.exp-card-bot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Modal Form High-Density Styles */
+.record-expense-modal-box {
+  background: #14171D;
+  color: #FFFFFF;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 22px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+  position: relative;
+  max-width: 540px;
+  width: 94%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.exp-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.exp-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exp-form-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.exp-input {
+  background: #0e1117;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 0.75rem;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.exp-input:focus {
+  border-color: #10B981;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1024px) {
+  .exp-kpis-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 859px) {
+  .exp-table-wrap {
+    display: none !important;
+  }
+  .exp-cards-list {
+    display: flex !important;
+  }
+  .exp-kpis-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .exp-toolbar {
+    padding: 12px 14px !important;
+  }
+  .exp-filters-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  .exp-filters-group {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+  .exp-select {
+    width: 100% !important;
+  }
+  .exp-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
