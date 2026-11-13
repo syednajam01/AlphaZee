@@ -1895,99 +1895,356 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     const coupons = await fetchAdminCoupons();
     if (view !== viewGeneration) return;
 
-    const rowsHtml = coupons.map(c => `
-      <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-        <td style="padding: 12px 8px; font-family: monospace; font-weight: 700; color: #4ADE80;">${escapeHtml(c.code)}</td>
-        <td style="padding: 12px 8px; text-transform: capitalize;">${escapeHtml(c.discount_type)}</td>
-        <td style="padding: 12px 8px;">
-          ${c.discount_type === 'percentage' ? `${c.discount_value}%` : c.discount_type === 'fixed_amount' ? formatPkr(c.discount_value) : '100% Shipping'}
-        </td>
-        <td style="padding: 12px 8px;">${c.min_subtotal.formatted}</td>
-        <td style="padding: 12px 8px;">${c.times_used} ${c.usage_limit ? `/ ${c.usage_limit}` : 'uses'}</td>
-        <td style="padding: 12px 8px;">
-          <span class="badge ${c.is_active ? 'badge-accent' : 'badge-neutral'}" style="font-size: 0.65rem;">
-            ${c.is_active ? 'Active' : 'Inactive'}
-          </span>
-        </td>
-        <td style="padding: 12px 8px; text-align: right;">
-          <button class="btn btn-secondary btn-del-coupon" data-coupon-id="${c.id}" style="padding: 4px 8px; font-size: 0.7rem; color: #F87171; border-color: rgba(248, 113, 113, 0.3);">
-            Delete
-          </button>
-        </td>
-      </tr>
-    `).join('');
+    let couponSearch = '';
+    let couponFilter = 'all'; // 'all', 'active', 'inactive', 'percentage', 'fixed_amount', 'free_shipping'
+
+    const totalVouchers = coupons.length;
+    const activeVouchers = coupons.filter(c => c.is_active).length;
+    const totalRedemptions = coupons.reduce((sum, c) => sum + (c.times_used || 0), 0);
+    const countPct = coupons.filter(c => c.discount_type === 'percentage').length;
+    const countFixed = coupons.filter(c => c.discount_type === 'fixed_amount').length;
+    const countShip = coupons.filter(c => c.discount_type === 'free_shipping').length;
+
+    const filterPills = [
+      { id: 'all', label: 'All', dot: 'cpn-dot-all', count: totalVouchers },
+      { id: 'active', label: 'Active', dot: 'cpn-dot-active', count: activeVouchers },
+      { id: 'inactive', label: 'Inactive', dot: 'cpn-dot-inactive', count: totalVouchers - activeVouchers },
+      { id: 'percentage', label: 'Percentage', dot: 'cpn-dot-percentage', count: countPct },
+      { id: 'fixed_amount', label: 'Fixed PKR', dot: 'cpn-dot-fixed', count: countFixed },
+      { id: 'free_shipping', label: 'Free Shipping', dot: 'cpn-dot-shipping', count: countShip }
+    ];
+
+    function getFilteredCoupons() {
+      return coupons.filter(c => {
+        if (couponFilter === 'active' && !c.is_active) return false;
+        if (couponFilter === 'inactive' && c.is_active) return false;
+        if (['percentage', 'fixed_amount', 'free_shipping'].includes(couponFilter) && c.discount_type !== couponFilter) return false;
+        if (couponSearch) {
+          const q = couponSearch.toLowerCase();
+          const matchCode = (c.code || '').toLowerCase().includes(q);
+          const matchType = (c.discount_type || '').toLowerCase().includes(q);
+          if (!matchCode && !matchType) return false;
+        }
+        return true;
+      });
+    }
+
+    function renderCouponRows() {
+      const filtered = getFilteredCoupons();
+
+      const rowsHtml = filtered.map(c => {
+        const pct = c.usage_limit ? Math.min(100, Math.round((c.times_used / c.usage_limit) * 100)) : null;
+
+        return `
+          <tr>
+            <td>
+              <button type="button" class="cpn-code-badge btn-copy-coupon" data-code="${escapeHtml(c.code)}" data-tooltip="Click to copy voucher code" aria-label="Copy voucher code ${escapeHtml(c.code)}" title="Copy voucher code">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                <span>${escapeHtml(c.code)}</span>
+              </button>
+            </td>
+            <td>
+              <div class="cpn-val-tag">
+                ${c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : c.discount_type === 'fixed_amount' ? `${formatPkr(c.discount_value)} OFF` : '100% Free Shipping'}
+              </div>
+              <div class="cpn-type-sub">${escapeHtml(c.discount_type.replace('_', ' '))}</div>
+            </td>
+            <td>
+              <div style="font-weight: 600; color: #FFFFFF; font-variant-numeric: tabular-nums;">
+                ${c.min_subtotal?.formatted || formatPkr(c.min_subtotal_minor || 0)}
+              </div>
+              <div class="cpn-type-sub">Min order spend</div>
+            </td>
+            <td>
+              <div class="cpn-usage-wrap">
+                <div class="cpn-usage-meta">
+                  <span>${c.times_used} ${c.usage_limit ? `/ ${c.usage_limit}` : 'uses'}</span>
+                  <span>${c.usage_limit ? (c.times_used >= c.usage_limit ? 'Exhausted' : `${c.usage_limit - c.times_used} left`) : 'Unlimited'}</span>
+                </div>
+                ${c.usage_limit ? `
+                  <div class="cpn-progress-bar">
+                    <div class="cpn-progress-fill ${c.times_used >= c.usage_limit ? 'is-exhausted' : ''}" style="width: ${pct}%;"></div>
+                  </div>
+                ` : ''}
+              </div>
+            </td>
+            <td>
+              <span class="cpn-status-badge is-${c.is_active ? 'active' : 'inactive'}">
+                <span class="cpn-pill-dot cpn-dot-${c.is_active ? 'active' : 'inactive'}"></span>
+                ${c.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </td>
+            <td style="text-align: right;">
+              <div class="cpn-action-group">
+                <button type="button" class="cpn-action-btn is-copy btn-copy-coupon" data-code="${escapeHtml(c.code)}" data-tooltip="Copy voucher code" aria-label="Copy voucher code ${escapeHtml(c.code)}" title="Copy voucher code">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                </button>
+                <button type="button" class="cpn-action-btn is-del btn-del-coupon" data-coupon-id="${c.id}" data-tooltip="Delete voucher code" aria-label="Delete coupon ${escapeHtml(c.code)}" title="Delete voucher code">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      const cardsHtml = filtered.map(c => `
+        <div class="cpn-card">
+          <div class="cpn-card-top">
+            <button type="button" class="cpn-code-badge btn-copy-coupon" data-code="${escapeHtml(c.code)}" data-tooltip="Copy voucher code" title="Copy code">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              <span>${escapeHtml(c.code)}</span>
+            </button>
+            <span class="cpn-status-badge is-${c.is_active ? 'active' : 'inactive'}">
+              <span class="cpn-pill-dot cpn-dot-${c.is_active ? 'active' : 'inactive'}"></span>
+              ${c.is_active ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+          <div class="cpn-card-meta">
+            <div class="cpn-card-meta-row">
+              <span style="color: rgba(255,255,255,0.5);">Discount:</span>
+              <span class="cpn-val-tag">${c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : c.discount_type === 'fixed_amount' ? `${formatPkr(c.discount_value)} OFF` : '100% Free Shipping'}</span>
+            </div>
+            <div class="cpn-card-meta-row">
+              <span style="color: rgba(255,255,255,0.5);">Min Spend:</span>
+              <span style="font-weight: 600; color: #FFF;">${c.min_subtotal?.formatted || formatPkr(c.min_subtotal_minor || 0)}</span>
+            </div>
+            <div class="cpn-card-meta-row">
+              <span style="color: rgba(255,255,255,0.5);">Usage:</span>
+              <span style="color: #FFF; font-variant-numeric: tabular-nums;">${c.times_used} ${c.usage_limit ? `/ ${c.usage_limit} uses` : 'uses (Unlimited)'}</span>
+            </div>
+          </div>
+          <div class="cpn-card-actions">
+            <button type="button" class="cpn-action-btn is-copy btn-copy-coupon" data-code="${escapeHtml(c.code)}" data-tooltip="Copy voucher code" aria-label="Copy voucher code" title="Copy voucher code">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            </button>
+            <button type="button" class="cpn-action-btn is-del btn-del-coupon" data-coupon-id="${c.id}" data-tooltip="Delete voucher code" aria-label="Delete coupon" title="Delete voucher code">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      const tbody = container.querySelector('#cpn-table-body');
+      if (tbody) {
+        tbody.innerHTML = rowsHtml || '<tr><td colspan="6" style="padding: 24px; text-align: center; color: rgba(255,255,255,0.4);">No coupons match this filter.</td></tr>';
+      }
+
+      const mobileList = container.querySelector('#cpn-mobile-list');
+      if (mobileList) {
+        mobileList.innerHTML = cardsHtml || '<div style="padding: 24px; text-align: center; color: rgba(255,255,255,0.4); background: var(--admin-bg-card); border-radius: 12px;">No coupons match this filter.</div>';
+      }
+
+      attachRowListeners();
+    }
+
+    function attachRowListeners() {
+      container.querySelectorAll('.btn-del-coupon').forEach(b => {
+        b.addEventListener('click', async () => {
+          const id = b.getAttribute('data-coupon-id');
+          if (confirm('Delete this coupon code?')) {
+            b.disabled = true;
+            try { await deleteAdminCoupon(id); await loadActiveTabData(); }
+            catch (error) { alert(error.message || 'Unable to delete coupon.'); b.disabled = false; }
+          }
+        });
+      });
+
+      container.querySelectorAll('.btn-copy-coupon').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const code = btn.getAttribute('data-code');
+          if (code) {
+            try {
+              if (navigator.clipboard) await navigator.clipboard.writeText(code);
+            } catch (_) {}
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span style="color: #4ADE80; font-size: 0.75rem;">Copied!</span>`;
+            setTimeout(() => { btn.innerHTML = origHtml; }, 1500);
+          }
+        });
+      });
+    }
 
     container.innerHTML = `
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-        <div>
-          <h3 style="font-size: 0.9375rem; font-weight: 700; margin-bottom: 12px;">Active Discount Vouchers</h3>
-          <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; text-align: left;">
-              <thead>
-                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
-                  <th style="padding: 8px;">Code</th>
-                  <th style="padding: 8px;">Type</th>
-                  <th style="padding: 8px;">Value</th>
-                  <th style="padding: 8px;">Min Subtotal</th>
-                  <th style="padding: 8px;">Usage</th>
-                  <th style="padding: 8px;">Status</th>
-                  <th style="padding: 8px; text-align: right;">Action</th>
-                </tr>
-              </thead>
-              <tbody>${rowsHtml.length ? rowsHtml : '<tr><td colspan="7" style="padding: 20px 8px; text-align: center; color: rgba(255,255,255,0.4);">No coupons created yet.</td></tr>'}</tbody>
-            </table>
+      <div class="cpn-workspace">
+        <div class="cpn-header-row">
+          <h2 class="cpn-header-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            <span>Promotional Vouchers & Coupons</span>
+          </h2>
+          <button type="button" id="btn-open-create-coupon" class="cpn-btn-create" data-tooltip="Create new promotional voucher" aria-label="Create new coupon" title="Create new coupon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Create Voucher</span>
+          </button>
+        </div>
+
+        <div class="cpn-kpis">
+          <div class="cpn-kpi-card cpn-kpi-highlight">
+            <span class="cpn-kpi-label">
+              <span class="cpn-pill-dot cpn-dot-active"></span>
+              Active Campaigns
+            </span>
+            <span class="cpn-kpi-value is-green">${activeVouchers}</span>
+            <span class="cpn-kpi-sub">Currently redeemable</span>
+          </div>
+          <div class="cpn-kpi-card">
+            <span class="cpn-kpi-label">Total Vouchers</span>
+            <span class="cpn-kpi-value">${totalVouchers}</span>
+            <span class="cpn-kpi-sub">All-time promotional codes</span>
+          </div>
+          <div class="cpn-kpi-card">
+            <span class="cpn-kpi-label">Total Redemptions</span>
+            <span class="cpn-kpi-value">${totalRedemptions}</span>
+            <span class="cpn-kpi-sub">Customer orders discounted</span>
+          </div>
+          <div class="cpn-kpi-card">
+            <span class="cpn-kpi-label">Campaign Types</span>
+            <span class="cpn-kpi-value" style="font-size: 1rem; margin-top: 5px;">${countPct} % · ${countFixed} PKR · ${countShip} Ship</span>
+            <span class="cpn-kpi-sub">Multi-tier discounts</span>
           </div>
         </div>
 
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <h3 style="font-size: 0.9375rem; font-weight: 700; margin-bottom: 12px;">+ Create New Coupon</h3>
-          <form id="new-coupon-form" style="display: flex; flex-direction: column; gap: 10px;">
-            <div>
-              <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Coupon Code *</label>
-              <input type="text" id="cpn-code" required placeholder="e.g. FLASH20" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem; text-transform: uppercase;" />
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div class="cpn-toolbar">
+          <div class="cpn-search-wrapper">
+            <svg class="cpn-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="cpn-search-input" class="cpn-search-input" placeholder="Search voucher code, type..." value="" maxlength="100">
+            <button type="button" class="cpn-search-clear" id="cpn-search-clear" style="display: none;" aria-label="Clear search">✕</button>
+          </div>
+          <div class="cpn-filter-group">
+            ${filterPills.map(p => `
+              <button type="button" class="cpn-filter-pill ${couponFilter === p.id ? 'is-active' : ''}" data-filter="${p.id}" data-tooltip="Filter by ${p.label}" title="Filter by ${p.label}">
+                <span class="cpn-pill-dot ${p.dot}"></span>
+                <span>${p.label}</span>
+                <span class="cpn-pill-count">${p.count}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="cpn-table-desktop">
+          <table class="cpn-table">
+            <thead>
+              <tr>
+                <th style="width: 22%;">Voucher Code</th>
+                <th style="width: 18%;">Discount Value</th>
+                <th style="width: 16%;">Min Spend</th>
+                <th style="width: 20%;">Usage / Redemptions</th>
+                <th style="width: 12%;">Status</th>
+                <th style="width: 12%; text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="cpn-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="cpn-cards-mobile" id="cpn-mobile-list"></div>
+
+        <!-- Quick-Create Modal -->
+        <div id="cpn-create-modal" class="cpn-modal-backdrop" style="display: none;">
+          <div class="cpn-modal-card">
+            <div class="cpn-modal-header">
               <div>
-                <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Type *</label>
-                <select id="cpn-type" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;">
-                  <option value="percentage">Percentage (%)</option>
-                  <option value="fixed_amount">Fixed Amount (PKR)</option>
-                  <option value="free_shipping">Free Shipping</option>
-                </select>
+                <h3 style="margin: 0; font-size: 1.125rem; font-weight: 700; color: #FFF;">Create Promotional Voucher</h3>
+                <p style="margin: 4px 0 0 0; font-size: 0.75rem; color: rgba(255,255,255,0.5);">Configure discount value, order spend tiers, and redemption limits.</p>
               </div>
-              <div>
-                <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Value *</label>
-                <input type="number" id="cpn-val" required min="0" step="0.01" value="10" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
+              <button type="button" id="btn-close-cpn-modal" class="cpn-modal-close" aria-label="Close dialog">×</button>
+            </div>
+            <form id="new-coupon-form" style="display: flex; flex-direction: column; gap: 14px;">
+              <div class="cpn-form-field">
+                <label for="cpn-code">Coupon Code *</label>
+                <input type="text" id="cpn-code" required placeholder="e.g. FLASH20" style="text-transform: uppercase; font-family: monospace; font-weight: 700;" />
+                <span style="font-size: 0.6875rem; color: rgba(255,255,255,0.45);">Codes are automatically converted to uppercase for customers.</span>
               </div>
-            </div>
-            <div>
-              <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Min Subtotal (PKR)</label>
-              <input type="number" id="cpn-min-pkr" value="0" min="0" step="0.01" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
-            </div>
-            <div>
-              <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Usage Limit (Optional)</label>
-              <input type="number" id="cpn-limit" placeholder="Unlimited" min="1" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
-            </div>
-            <div id="cpn-error" style="display: none; color: #F87171; font-size: 0.75rem; font-weight: 600;"></div>
-            <button type="submit" id="btn-save-coupon" class="btn btn-primary" style="align-self: flex-start; padding: 6px 14px; font-size: 0.8125rem;">
-              Create Coupon
-            </button>
-          </form>
+              <div class="cpn-form-row">
+                <div class="cpn-form-field" style="flex: 1;">
+                  <label for="cpn-type">Discount Type *</label>
+                  <select id="cpn-type">
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed_amount">Fixed Amount (PKR)</option>
+                    <option value="free_shipping">Free Shipping</option>
+                  </select>
+                </div>
+                <div class="cpn-form-field" style="flex: 1;">
+                  <label for="cpn-val">Discount Value *</label>
+                  <input type="number" id="cpn-val" required min="0" step="0.01" value="10" />
+                </div>
+              </div>
+              <div class="cpn-form-row">
+                <div class="cpn-form-field" style="flex: 1;">
+                  <label for="cpn-min-pkr">Min Subtotal (PKR)</label>
+                  <input type="number" id="cpn-min-pkr" value="0" min="0" step="0.01" />
+                </div>
+                <div class="cpn-form-field" style="flex: 1;">
+                  <label for="cpn-limit">Usage Limit (Optional)</label>
+                  <input type="number" id="cpn-limit" placeholder="Unlimited" min="1" />
+                </div>
+              </div>
+              <div id="cpn-error" class="cpn-form-error" style="display: none;"></div>
+              <div class="cpn-modal-actions">
+                <button type="button" id="btn-cancel-cpn-modal" class="btn btn-secondary" style="font-size: 0.8125rem;">Cancel</button>
+                <button type="submit" id="btn-save-coupon" class="btn btn-primary" style="font-size: 0.8125rem;">Create Coupon</button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     `;
 
-    container.querySelectorAll('.btn-del-coupon').forEach(b => {
-      b.addEventListener('click', async () => {
-        const id = b.getAttribute('data-coupon-id');
-        if (confirm('Delete this coupon code?')) {
-          b.disabled = true;
-          try { await deleteAdminCoupon(id); await loadActiveTabData(); }
-          catch (error) { alert(error.message || 'Unable to delete coupon.'); b.disabled = false; }
-        }
+    renderCouponRows();
+
+    // 1-Click Status Filter Pills
+    container.querySelectorAll('.cpn-filter-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        couponFilter = pill.getAttribute('data-filter') || 'all';
+        container.querySelectorAll('.cpn-filter-pill').forEach(p => p.classList.toggle('is-active', p.getAttribute('data-filter') === couponFilter));
+        renderCouponRows();
       });
     });
 
+    // Instant Search
+    const searchInput = container.querySelector('#cpn-search-input');
+    const searchClear = container.querySelector('#cpn-search-clear');
+    searchInput?.addEventListener('input', () => {
+      couponSearch = searchInput.value.trim();
+      if (searchClear) searchClear.style.display = couponSearch ? 'block' : 'none';
+      renderCouponRows();
+    });
+    searchClear?.addEventListener('click', () => {
+      couponSearch = '';
+      if (searchInput) searchInput.value = '';
+      searchClear.style.display = 'none';
+      renderCouponRows();
+    });
+
+    // Modal open / close handlers
+    const openBtn = container.querySelector('#btn-open-create-coupon');
+    const modalEl = container.querySelector('#cpn-create-modal');
+    const closeBtn = container.querySelector('#btn-close-cpn-modal');
+    const cancelBtn = container.querySelector('#btn-cancel-cpn-modal');
+
+    const openModal = () => {
+      if (modalEl) {
+        modalEl.style.display = 'flex';
+        container.querySelector('#cpn-code')?.focus();
+      }
+    };
+    const closeModal = () => {
+      if (modalEl) {
+        modalEl.style.display = 'none';
+        const err = container.querySelector('#cpn-error');
+        if (err) err.style.display = 'none';
+      }
+    };
+
+    openBtn?.addEventListener('click', openModal);
+    closeBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', closeModal);
+    modalEl?.addEventListener('click', e => {
+      if (e.target === modalEl) closeModal();
+    });
+
+    // Form submission handler
     const form = container.querySelector('#new-coupon-form');
     const cpnError = container.querySelector('#cpn-error');
     const saveBtn = container.querySelector('#btn-save-coupon');
@@ -1996,13 +2253,17 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       e.preventDefault();
       const code = container.querySelector('#cpn-code').value.trim();
       const discountType = container.querySelector('#cpn-type').value;
-      if(saveBtn.disabled)return;
+      if (saveBtn.disabled) return;
       const rawValue = container.querySelector('#cpn-val').value.trim();
       const val = discountType === 'fixed_amount' ? parseCatalogPkr(rawValue) : discountType === 'free_shipping' ? 0 : Number(rawValue);
       const minimum = parseCatalogPkr(container.querySelector('#cpn-min-pkr').value || '0');
       const limitRaw = container.querySelector('#cpn-limit').value.trim();
       const usageLimit = limitRaw ? Number(limitRaw) : null;
-      if(val === null || minimum === null || (discountType === 'percentage' && (!Number.isInteger(val) || val<1 || val>100)) || (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit<1 || usageLimit>2147483647))){cpnError.textContent='Use exact PKR amounts, a whole percentage from 1–100 and a positive whole usage limit.';cpnError.style.display='block';return;}
+      if (val === null || minimum === null || (discountType === 'percentage' && (!Number.isInteger(val) || val < 1 || val > 100)) || (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit < 1 || usageLimit > 2147483647))) {
+        cpnError.textContent = 'Use exact PKR amounts, a whole percentage from 1–100 and a positive whole usage limit.';
+        cpnError.style.display = 'block';
+        return;
+      }
 
       saveBtn.disabled = true;
       saveBtn.textContent = 'Creating...';
@@ -2016,6 +2277,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           min_subtotal_minor: minimum,
           usage_limit: usageLimit,
         });
+        closeModal();
         await loadActiveTabData();
       } catch (err) {
         saveBtn.disabled = false;
