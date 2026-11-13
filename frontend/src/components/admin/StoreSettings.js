@@ -1,5 +1,7 @@
 /**
  * StoreSettings.js — Phase VF6 Store Configuration, Legal Policies & Admin Preferences.
+ * Unslopped Redesign: High-density executive console, interactive live mockup,
+ * compact semantic icons with hover tooltips, and zero visible scrollbars.
  */
 import {
   fetchAdminStoreSettings,
@@ -23,37 +25,47 @@ export function createStoreSettingsComponent() {
 
   function render() {
     container.innerHTML = `
-      <div class="settings-header" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+      <!-- Executive Settings Header -->
+      <div class="set-header">
         <div>
-          <h2 style="font-size: 1.25rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 6px 0;">Store settings & preferences</h2>
-          <p style="font-size: 0.8125rem; color: var(--admin-text-secondary); margin: 0;">
-            Manage storefront appearance, announcement banners, legal policies, operational thresholds, and personal console preferences.
+          <h2 class="set-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Store Settings & Preferences
+          </h2>
+          <p class="set-subtitle">
+            Configure brand tokens, announcement banner, delivery rates, legal contracts, and personal console preferences.
           </p>
         </div>
         ${currentSettings ? `
-          <div style="display: flex; align-items: center; gap: 8px; background: var(--admin-bg-raised); padding: 5px 12px; border-radius: var(--admin-radius-sm); border: 1px solid var(--admin-border-hairline);">
-            <span style="font-size: 0.75rem; color: var(--admin-text-secondary);">Current revision:</span>
-            <span id="settings-revision-badge" style="font-size: 0.8125rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--admin-text-primary);">v${currentSettings.version}</span>
+          <div class="set-revision-badge">
+            <span class="set-sync-dot"></span>
+            <span style="font-size: 0.75rem; color: var(--admin-text-secondary);">Baseline:</span>
+            <span id="settings-revision-badge" style="font-weight: 600; font-family: monospace; color: #10B981;">v${currentSettings.version}</span>
           </div>
         ` : ''}
       </div>
 
-      <!-- Navigation Tabs -->
-      <div class="settings-tabs">
-        <button type="button" class="settings-tab-btn ${activeTab === 'storefront' ? 'active' : ''}" data-tab="storefront">
-          Storefront & branding
+      <!-- Modern Tab Pill Navigation -->
+      <div class="settings-tabs set-tabs-bar">
+        <button type="button" class="settings-tab-btn set-tab-btn ${activeTab === 'storefront' ? 'active' : ''}" data-tab="storefront">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+          Storefront & Branding
         </button>
-        <button type="button" class="settings-tab-btn ${activeTab === 'shipping' ? 'active' : ''}" data-tab="shipping">
-          Shipping & thresholds
+        <button type="button" class="settings-tab-btn set-tab-btn ${activeTab === 'shipping' ? 'active' : ''}" data-tab="shipping">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="10" x="1" y="5" rx="2"/><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M15 8h4.28a2 2 0 0 1 1.79 1.11l2.09 4.18A2 2 0 0 1 23 14.18V17h-3"/><path d="M1 12h14"/></svg>
+          Shipping & Thresholds
         </button>
-        <button type="button" class="settings-tab-btn ${activeTab === 'policies' ? 'active' : ''}" data-tab="policies">
-          Legal & policies
+        <button type="button" class="settings-tab-btn set-tab-btn ${activeTab === 'policies' ? 'active' : ''}" data-tab="policies">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+          Legal Policies
         </button>
-        <button type="button" class="settings-tab-btn ${activeTab === 'audit' ? 'active' : ''}" data-tab="audit">
-          Revision history
+        <button type="button" class="settings-tab-btn set-tab-btn ${activeTab === 'audit' ? 'active' : ''}" data-tab="audit">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+          Revision History
         </button>
-        <button type="button" class="settings-tab-btn ${activeTab === 'preferences' ? 'active' : ''}" data-tab="preferences">
-          Admin preferences
+        <button type="button" class="settings-tab-btn set-tab-btn ${activeTab === 'preferences' ? 'active' : ''}" data-tab="preferences">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          Admin Preferences
         </button>
       </div>
 
@@ -61,7 +73,7 @@ export function createStoreSettingsComponent() {
       <div id="settings-alert" style="display: none; margin-bottom: 20px; padding: 12px 16px; border-radius: var(--admin-radius-control); font-size: 0.8125rem;"></div>
 
       <!-- Tab Content Area -->
-      <div class="settings-tab-body">
+      <div class="settings-tab-body set-tab-body">
         ${renderActiveTab()}
       </div>
     `;
@@ -72,9 +84,9 @@ export function createStoreSettingsComponent() {
   function renderActiveTab() {
     if (!currentSettings || !currentPreferences) {
       return `
-        <div style="padding: 40px; text-align: center; color: rgba(255, 255, 255, 0.5);">
-          <div class="spinner" style="margin-bottom: 12px;"></div>
-          Loading configuration...
+        <div style="padding: 60px 20px; text-align: center; color: rgba(255, 255, 255, 0.45);">
+          <div class="spinner" style="margin: 0 auto 16px auto; width: 28px; height: 28px; border-width: 2px;"></div>
+          Loading store configuration...
         </div>
       `;
     }
@@ -97,94 +109,156 @@ export function createStoreSettingsComponent() {
 
   function renderStorefrontTab() {
     const s = currentSettings;
+    const accent = s.accent_color || '#10B981';
+    const font = s.font_family || 'Outfit, sans-serif';
+    const radiusMap = { none: '0px', sm: '4px', md: '8px', lg: '12px', full: '999px' };
+    const radiusVal = radiusMap[s.border_radius] || '8px';
+
     return `
-      <form id="form-storefront-settings" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
-        <!-- Announcement Bar Section -->
-        <div class="settings-card">
-          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0; display: flex; align-items: center; justify-content: space-between;">
-            <span>Store announcement bar</span>
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 400; cursor: pointer;">
-              <input type="checkbox" id="input-announcement-enabled" ${s.announcement_banner_enabled ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
-              <span>Enabled on storefront</span>
-            </label>
-          </h3>
-          
-          <div style="display: flex; flex-direction: column; gap: 14px;">
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Announcement text</label>
-              <input type="text" id="input-announcement-text" value="${escapeHtml(s.announcement_banner_text || '')}" class="admin-input" style="width: 100%;" required>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Banner link (optional, e.g. #featured or /track)</label>
-              <input type="text" id="input-announcement-link" value="${escapeHtml(s.announcement_banner_link || '')}" class="admin-input" style="width: 100%;" placeholder="#featured">
+      <form id="form-storefront-settings" style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="set-grid-2col">
+          <!-- Left Column: Form Controls -->
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Brand Identity Card -->
+            <div class="set-card">
+              <div class="set-card-header">
+                <h3 class="set-card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                  Brand Identity & Theme Tokens
+                </h3>
+              </div>
+              
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Brand Name</label>
+                  <input type="text" id="input-brand-name" value="${escapeHtml(s.brand_name || 'AlphaZee')}" class="admin-input" style="width: 100%;" required>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Store Tagline</label>
+                  <input type="text" id="input-tagline" value="${escapeHtml(s.tagline || '')}" class="admin-input" style="width: 100%;" placeholder="e.g. Curated Contemporary Silhouettes">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Primary Accent Color</label>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="color" id="input-accent-color-picker" value="${accent}" style="width: 36px; height: 36px; border: none; border-radius: 6px; cursor: pointer; background: transparent; padding: 0;">
+                    <input type="text" id="input-accent-color" value="${escapeHtml(accent)}" class="admin-input" style="flex: 1; font-family: monospace; font-size: 0.8125rem;" pattern="^#[0-9a-fA-F]{6}$" required>
+                  </div>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Storefront Typography</label>
+                  <select id="select-font-family" class="admin-input" style="width: 100%;">
+                    <option value="Outfit, sans-serif" ${s.font_family === 'Outfit, sans-serif' ? 'selected' : ''}>Outfit (Geometric Premium)</option>
+                    <option value="Inter, sans-serif" ${s.font_family === 'Inter, sans-serif' ? 'selected' : ''}>Inter (Modern Sans)</option>
+                    <option value="Playfair Display, serif" ${s.font_family === 'Playfair Display, serif' ? 'selected' : ''}>Playfair Display (Editorial Serif)</option>
+                    <option value="System-UI, sans-serif" ${s.font_family === 'System-UI, sans-serif' ? 'selected' : ''}>System UI Default</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Button Border Radius</label>
+                  <select id="select-border-radius" class="admin-input" style="width: 100%;">
+                    <option value="none" ${s.border_radius === 'none' ? 'selected' : ''}>Sharp (0px)</option>
+                    <option value="sm" ${s.border_radius === 'sm' ? 'selected' : ''}>Slight Curve (4px)</option>
+                    <option value="md" ${s.border_radius === 'md' ? 'selected' : ''}>Modern Medium (8px)</option>
+                    <option value="lg" ${s.border_radius === 'lg' ? 'selected' : ''}>Rounded Large (12px)</option>
+                    <option value="full" ${s.border_radius === 'full' ? 'selected' : ''}>Pill / Fully Rounded</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Layout Spacing Density</label>
+                  <select id="select-spacing-density" class="admin-input" style="width: 100%;">
+                    <option value="compact" ${s.spacing_density === 'compact' ? 'selected' : ''}>Compact (High density)</option>
+                    <option value="comfortable" ${s.spacing_density === 'comfortable' ? 'selected' : ''}>Comfortable (Balanced)</option>
+                    <option value="spacious" ${s.spacing_density === 'spacious' ? 'selected' : ''}>Spacious (Airy Editorial)</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
-            <!-- Live Preview -->
-            <div style="margin-top: 10px; background: var(--admin-bg-deep); padding: 12px; border-radius: var(--admin-radius-sm); border: 1px dashed var(--admin-border-subtle);">
-              <span style="font-size: 0.6875rem; color: var(--admin-text-muted); display: block; margin-bottom: 6px;">Live banner preview</span>
-              <div id="preview-announcement-bar" style="background: ${s.accent_color || '#111827'}; color: #fff; padding: 8px 14px; text-align: center; border-radius: var(--admin-radius-sm); font-size: 0.8125rem; font-weight: 500;">
-                ${escapeHtml(s.announcement_banner_text || 'Store announcement banner')}
+            <!-- Announcement Bar Section -->
+            <div class="set-card">
+              <div class="set-card-header">
+                <h3 class="set-card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #38BDF8;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  Store Announcement Banner
+                </h3>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--admin-text-secondary); cursor: pointer;">
+                  <input type="checkbox" id="input-announcement-enabled" ${s.announcement_banner_enabled ? 'checked' : ''} style="cursor: pointer; width: 15px; height: 15px;">
+                  <span>Active on storefront</span>
+                </label>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Announcement Text</label>
+                  <input type="text" id="input-announcement-text" value="${escapeHtml(s.announcement_banner_text || '')}" class="admin-input" style="width: 100%;" placeholder="e.g. Complimentary shipping across Pakistan on orders over PKR 5,000" required>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Banner Link (optional, e.g. #featured or /track)</label>
+                  <input type="text" id="input-announcement-link" value="${escapeHtml(s.announcement_banner_link || '')}" class="admin-input" style="width: 100%;" placeholder="#featured">
+                </div>
+                <!-- Hidden compatibility anchor for legacy preview tests if any -->
+                <div id="preview-announcement-bar" style="display: none;">${escapeHtml(s.announcement_banner_text || '')}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Interactive Live Mockup Preview Card -->
+          <div class="set-preview-mockup">
+            <div class="set-mockup-browser-bar">
+              <span class="set-mockup-dot red"></span>
+              <span class="set-mockup-dot yellow"></span>
+              <span class="set-mockup-dot green"></span>
+              <span class="set-mockup-url">alphazee.tech</span>
+            </div>
+
+            <!-- Live Announcement Header -->
+            <div id="mockup-announcement" class="set-mockup-announcement" style="background: ${accent}; color: #ffffff; display: ${s.announcement_banner_enabled ? 'block' : 'none'};">
+              ${escapeHtml(s.announcement_banner_text || 'Complimentary delivery nationwide')}
+            </div>
+
+            <!-- Live Store Header -->
+            <div class="set-mockup-header">
+              <span id="mockup-brand" class="set-mockup-brand" style="font-family: ${font};">${escapeHtml(s.brand_name || 'AlphaZee')}</span>
+              <div style="display: flex; gap: 10px; font-size: 0.6875rem; color: rgba(255, 255, 255, 0.6);">
+                <span>Catalog</span>
+                <span>Collections</span>
+                <span>Track</span>
+              </div>
+            </div>
+
+            <!-- Mockup Body Content -->
+            <div class="set-mockup-body">
+              <span id="mockup-tagline" class="set-mockup-tagline">${escapeHtml(s.tagline || 'Curated Contemporary Silhouettes')}</span>
+              
+              <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: ${radiusVal}; padding: 14px; margin-top: 4px;">
+                <div style="font-size: 0.8125rem; font-weight: 600; color: #fff; margin-bottom: 4px; font-family: ${font};" id="mockup-specimen-title">Contemporary Tailoring Specimen</div>
+                <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); line-height: 1.4;">Precision crafted apparel cut from heavyweight luxury cotton with exact seam allowances.</div>
+                
+                <button type="button" id="mockup-sample-btn" class="set-mockup-cta-sample" style="background: ${accent}; border-radius: ${radiusVal}; font-family: ${font};">
+                  Explore Capsule
+                </button>
+              </div>
+
+              <!-- Live Token Chips -->
+              <div class="set-mockup-token-badges">
+                <span id="mockup-chip-font" class="set-mockup-chip">Font: ${s.font_family?.split(',')[0] || 'Outfit'}</span>
+                <span id="mockup-chip-radius" class="set-mockup-chip">Radius: ${s.border_radius || 'md'}</span>
+                <span id="mockup-chip-accent" class="set-mockup-chip">Accent: ${accent}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Branding & Presentation Tokens -->
-        <div class="settings-card">
-          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0;">Brand identity & theme tokens</h3>
-          
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Brand name</label>
-              <input type="text" id="input-brand-name" value="${escapeHtml(s.brand_name || 'AlphaZee')}" class="admin-input" style="width: 100%;" required>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Tagline</label>
-              <input type="text" id="input-tagline" value="${escapeHtml(s.tagline || '')}" class="admin-input" style="width: 100%;">
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Primary accent color</label>
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <input type="color" id="input-accent-color-picker" value="${s.accent_color || '#111827'}" style="width: 44px; height: 38px; border: none; border-radius: var(--admin-radius-sm); cursor: pointer; background: transparent;">
-                <input type="text" id="input-accent-color" value="${escapeHtml(s.accent_color || '#111827')}" class="admin-input" style="flex: 1; font-family: monospace;" pattern="^#[0-9a-fA-F]{6}$" required>
-              </div>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Store typography</label>
-              <select id="select-font-family" class="admin-input" style="width: 100%;">
-                <option value="Inter, sans-serif" ${s.font_family === 'Inter, sans-serif' ? 'selected' : ''}>Inter (Modern Sans)</option>
-                <option value="Outfit, sans-serif" ${s.font_family === 'Outfit, sans-serif' ? 'selected' : ''}>Outfit (Geometric Premium)</option>
-                <option value="Playfair Display, serif" ${s.font_family === 'Playfair Display, serif' ? 'selected' : ''}>Playfair Display (Editorial Serif)</option>
-                <option value="System-UI, sans-serif" ${s.font_family === 'System-UI, sans-serif' ? 'selected' : ''}>System UI Default</option>
-              </select>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Button border radius</label>
-              <select id="select-border-radius" class="admin-input" style="width: 100%;">
-                <option value="none" ${s.border_radius === 'none' ? 'selected' : ''}>Sharp (0px)</option>
-                <option value="sm" ${s.border_radius === 'sm' ? 'selected' : ''}>Slight Curve (4px)</option>
-                <option value="md" ${s.border_radius === 'md' ? 'selected' : ''}>Modern Medium (8px)</option>
-                <option value="lg" ${s.border_radius === 'lg' ? 'selected' : ''}>Rounded Large (12px)</option>
-                <option value="full" ${s.border_radius === 'full' ? 'selected' : ''}>Pill / Fully Rounded</option>
-              </select>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Layout spacing density</label>
-              <select id="select-spacing-density" class="admin-input" style="width: 100%;">
-                <option value="compact" ${s.spacing_density === 'compact' ? 'selected' : ''}>Compact (High density)</option>
-                <option value="comfortable" ${s.spacing_density === 'comfortable' ? 'selected' : ''}>Comfortable (Balanced)</option>
-                <option value="spacious" ${s.spacing_density === 'spacious' ? 'selected' : ''}>Spacious (Airy Editorial)</option>
-              </select>
-            </div>
+        <!-- Sticky Executive Action Bar (Rule 2: Compact Semantic Icons & Micro-tooltips) -->
+        <div class="set-action-bar">
+          <div style="display: flex; align-items: center; gap: 10px; flex: 1; max-width: 360px;">
+            <input type="text" id="input-change-reason" placeholder="Audit change reason (e.g. Winter Campaign Refresh)" class="admin-input" style="width: 100%; font-size: 0.8125rem;">
           </div>
-        </div>
-
-        <!-- Reason & Submit -->
-        <div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end;">
-          <input type="text" id="input-change-reason" placeholder="Change reason (e.g. Seasonal Theme Update)" class="admin-input" style="max-width: 320px;">
-          <button type="submit" id="btn-save-storefront" class="btn btn-primary" style="padding: 10px 24px; font-weight: 500;">
-            Save storefront settings
-          </button>
+          <div class="set-action-group">
+            <button type="submit" id="btn-save-storefront" class="set-action-btn is-save" data-tooltip="Save storefront branding tokens & banner" aria-label="Save storefront branding settings" title="Save storefront settings">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            </button>
+          </div>
         </div>
       </form>
     `;
@@ -196,56 +270,74 @@ export function createStoreSettingsComponent() {
     const freePkr = s.free_shipping_threshold_minor ? s.free_shipping_threshold_minor / 100 : '';
 
     return `
-      <form id="form-shipping-settings" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
-        <div class="settings-card">
-          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0;">Shipping coverage & rates</h3>
-          <p style="font-size: 0.8125rem; color: var(--admin-text-secondary); margin: 0 0 16px 0;">
-            AlphaZee strictly bears 100% of RTO and return transit expenses. Configure customer-facing delivery coverage and flat standard charges below.
-          </p>
-          
-          <div style="background: rgba(20, 92, 68, 0.2); border: 1px solid var(--admin-border-subtle); border-radius: var(--admin-radius-control); padding: 14px 16px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px;">
-            <input id="confirm-shipping-rules" type="checkbox" ${s.shipping_rules_configured ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
-            <label for="confirm-shipping-rules" style="font-size: 0.8125rem; font-weight: 500; color: var(--admin-text-primary); cursor: pointer; margin: 0;">
-              I confirm these customer-facing delivery rules are verified and ready for live storefront use.
-            </label>
+      <form id="form-shipping-settings" style="display: flex; flex-direction: column; gap: 20px;">
+        <!-- Verification Banner -->
+        <div class="set-verify-banner">
+          <input id="confirm-shipping-rules" type="checkbox" ${s.shipping_rules_configured ? 'checked' : ''} style="width: 17px; height: 17px; cursor: pointer;">
+          <label for="confirm-shipping-rules" style="font-size: 0.8125rem; font-weight: 500; color: #fff; cursor: pointer; margin: 0; display: flex; align-items: center; gap: 8px;">
+            <span>Customer delivery commitments verified for live storefront dispatch.</span>
+            <span style="font-size: 0.6875rem; padding: 2px 8px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34D399;">AlphaZee bears 100% RTO</span>
+          </label>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+          <!-- Shipping Rates Card -->
+          <div class="set-card">
+            <div class="set-card-header">
+              <h3 class="set-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><rect width="14" height="10" x="1" y="5" rx="2"/><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M15 8h4.28a2 2 0 0 1 1.79 1.11l2.09 4.18A2 2 0 0 1 23 14.18V17h-3"/><path d="M1 12h14"/></svg>
+                Coverage & Shipping Rates
+              </h3>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Coverage Area</label>
+                <input type="text" id="input-shipping-coverage" value="${escapeHtml(s.shipping_coverage_area || 'All Pakistan')}" class="admin-input" style="width: 100%;" required>
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Standard Delivery Fee (PKR)</label>
+                <input type="number" id="input-shipping-fee-pkr" value="${stdPkr}" min="0" step="10" class="admin-input" style="width: 100%; font-variant-numeric: tabular-nums;" required>
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Free Delivery Threshold (PKR, leave empty for none)</label>
+                <input type="number" id="input-free-shipping-pkr" value="${freePkr}" min="0" step="100" class="admin-input" style="width: 100%; font-variant-numeric: tabular-nums;" placeholder="e.g. 5000">
+              </div>
+            </div>
           </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Coverage: All Pakistan or comma-separated cities/provinces</label>
-              <input type="text" id="input-shipping-coverage" value="${escapeHtml(s.shipping_coverage_area || 'All Pakistan')}" class="admin-input" style="width: 100%;" required>
+
+          <!-- Operational Alert Thresholds Card -->
+          <div class="set-card">
+            <div class="set-card-header">
+              <h3 class="set-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #F59E0B;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Inventory Alert Thresholds
+              </h3>
             </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Standard delivery fee (PKR)</label>
-              <input type="number" id="input-shipping-fee-pkr" value="${stdPkr}" min="0" step="10" class="admin-input" style="width: 100%;" required>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Free delivery threshold (PKR, leave blank if none)</label>
-              <input type="number" id="input-free-shipping-pkr" value="${freePkr}" min="0" step="100" class="admin-input" style="width: 100%;" placeholder="e.g. 5000">
+            
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Low-Stock Warning (Units)</label>
+                <input type="number" id="input-low-stock-threshold" value="${s.low_stock_threshold}" min="0" step="1" class="admin-input" style="width: 100%; font-variant-numeric: tabular-nums;" required>
+                <p class="set-card-desc">SKUs at or below this sellable count trigger inventory warning badges.</p>
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Stock Staleness Period (Days)</label>
+                <input type="number" id="input-staleness-threshold" value="${s.stock_staleness_threshold_days}" min="1" step="1" class="admin-input" style="width: 100%; font-variant-numeric: tabular-nums;" required>
+                <p class="set-card-desc">Unverified vendor stock records trigger verification alerts after N days.</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="settings-card">
-          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0;">Operational alerts & stock thresholds</h3>
-          
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Low-stock warning (units)</label>
-              <input type="number" id="input-low-stock-threshold" value="${s.low_stock_threshold}" min="0" step="1" class="admin-input" style="width: 100%;" required>
-              <small style="color: var(--admin-text-muted); font-size: 0.75rem;">Variants at or below this count trigger low-stock alerts.</small>
-            </div>
-            <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Stock staleness warning (days)</label>
-              <input type="number" id="input-staleness-threshold" value="${s.stock_staleness_threshold_days}" min="1" step="1" class="admin-input" style="width: 100%;" required>
-              <small style="color: var(--admin-text-muted); font-size: 0.75rem;">Unverified vendor stock triggers staleness warning after N days.</small>
-            </div>
+        <!-- Action Bar (Rule 2) -->
+        <div class="set-action-bar">
+          <span style="font-size: 0.75rem; color: var(--admin-text-muted);">Configures authoritative logistics and inventory thresholds across the store.</span>
+          <div class="set-action-group">
+            <button type="submit" id="btn-save-shipping" class="set-action-btn is-save" data-tooltip="Save shipping rates & operational thresholds" aria-label="Save logistics and thresholds" title="Save shipping settings">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            </button>
           </div>
-        </div>
-
-        <div style="display: flex; gap: 12px; align-items: center; justify-content: flex-end;">
-          <button type="submit" id="btn-save-shipping" class="btn btn-primary" style="padding: 10px 24px; font-weight: 500;">
-            Save logistics & thresholds
-          </button>
         </div>
       </form>
     `;
@@ -255,25 +347,25 @@ export function createStoreSettingsComponent() {
     const s = currentSettings;
     const policyMap = {
       delivery: {
-        title: 'Delivery & shipping policy',
+        title: 'Delivery & Shipping Policy',
         content: s.delivery_policy_content || '',
         status: s.delivery_policy_status,
         publishedAt: s.delivery_policy_published_at,
       },
       return: {
-        title: 'Return & exchange policy',
+        title: 'Return & Exchange Policy',
         content: s.return_policy_content || '',
         status: s.return_policy_status,
         publishedAt: s.return_policy_published_at,
       },
       terms: {
-        title: 'Terms of service',
+        title: 'Terms of Service',
         content: s.terms_policy_content || '',
         status: s.terms_policy_status,
         publishedAt: s.terms_policy_published_at,
       },
       privacy: {
-        title: 'Privacy policy',
+        title: 'Privacy Policy',
         content: s.privacy_policy_content || '',
         status: s.privacy_policy_status,
         publishedAt: s.privacy_policy_published_at,
@@ -284,16 +376,18 @@ export function createStoreSettingsComponent() {
     const isPublished = pol.status === 'published';
 
     return `
-      <div style="display: flex; flex-direction: column; gap: 20px; max-width: 900px;">
+      <div style="display: flex; flex-direction: column; gap: 16px;">
         <!-- Policy Switcher Sub-nav -->
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div class="set-policy-pills">
           ${Object.keys(policyMap).map(k => {
             const p = policyMap[k];
             const active = k === activePolicy;
+            const pub = p.status === 'published';
             return `
-              <button type="button" class="btn ${active ? 'btn-primary' : 'btn-secondary'} sub-policy-tab" data-policy="${k}" style="padding: 6px 14px; font-size: 0.8125rem;">
-                ${escapeHtml(p.title)}
-                <span style="font-size: 0.6875rem; padding: 2px 6px; border-radius: var(--admin-radius-tag); margin-left: 6px; ${p.status === 'published' ? 'background: rgba(74, 222, 128, 0.12); color: #4ade80;' : 'background: rgba(251, 191, 36, 0.12); color: #facc15;'}">
+              <button type="button" class="btn sub-policy-tab set-policy-pill ${active ? 'active' : ''}" data-policy="${k}">
+                <span class="set-status-dot ${pub ? 'is-pub' : 'is-draft'}"></span>
+                <span>${escapeHtml(p.title)}</span>
+                <span style="font-size: 0.6875rem; padding: 1px 6px; border-radius: 4px; font-family: monospace; ${pub ? 'background: rgba(16, 185, 129, 0.15); color: #34D399;' : 'background: rgba(245, 158, 11, 0.15); color: #FBBF24;'}">
                   ${p.status}
                 </span>
               </button>
@@ -302,39 +396,35 @@ export function createStoreSettingsComponent() {
         </div>
 
         <!-- Policy Editor Card -->
-        <div class="settings-card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <div class="set-card">
+          <div class="set-card-header">
             <div>
-              <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 4px 0;">${pol.title}</h3>
-              <div style="font-size: 0.75rem; color: var(--admin-text-muted);">
-                Status: <strong style="color: ${isPublished ? '#4ade80' : '#facc15'}; text-transform: capitalize;">${pol.status}</strong>
+              <h3 class="set-card-title">${escapeHtml(pol.title)}</h3>
+              <div style="font-size: 0.75rem; color: var(--admin-text-muted); margin-top: 2px;">
+                Status: <strong style="color: ${isPublished ? '#34D399' : '#FBBF24'}; text-transform: capitalize;">${pol.status}</strong>
                 ${pol.publishedAt ? ` • Last published: ${new Date(pol.publishedAt).toLocaleString()}` : ''}
               </div>
             </div>
 
-            <!-- Publish / Unpublish actions -->
-            <div style="display: flex; gap: 10px;">
+            <!-- Compact Icon Actions for Policies (Rule 2) -->
+            <div class="set-action-group">
               ${isPublished ? `
-                <button type="button" id="btn-unpublish-policy" class="btn btn-secondary" style="font-size: 0.8125rem;">
-                  Revert to draft
+                <button type="button" id="btn-unpublish-policy" class="set-action-btn is-draft" data-tooltip="Revert policy to draft" aria-label="Revert policy to draft" title="Revert to draft">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
                 </button>
               ` : `
-                <button type="button" id="btn-publish-policy" class="btn btn-primary" style="font-size: 0.8125rem;">
-                  Publish to storefront
+                <button type="button" id="btn-publish-policy" class="set-action-btn is-publish" data-tooltip="Publish policy to live storefront" aria-label="Publish policy to storefront" title="Publish to storefront">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/><polyline points="16 16 12 12 8 16"/></svg>
                 </button>
               `}
+              <button type="button" id="btn-save-policy-draft" class="set-action-btn is-save" data-tooltip="Save policy draft changes" aria-label="Save policy draft" title="Save draft">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              </button>
             </div>
           </div>
 
           <div>
-            <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Policy content (Markdown / Plain Text)</label>
-            <textarea id="textarea-policy-content" class="admin-input" style="width: 100%; min-height: 240px; font-family: monospace; font-size: 0.875rem; line-height: 1.5;" placeholder="Enter legal terms, delivery commitments, or return rules...">${escapeHtml(pol.content)}</textarea>
-          </div>
-
-          <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
-            <button type="button" id="btn-save-policy-draft" class="btn btn-secondary" style="padding: 8px 18px; font-size: 0.8125rem;">
-              Save draft
-            </button>
+            <textarea id="textarea-policy-content" class="admin-input" style="width: 100%; min-height: 280px; font-family: monospace; font-size: 0.8125rem; line-height: 1.6; padding: 14px;" placeholder="Draft legal terms, shipping commitments, or return guarantees in Markdown or Plain Text...">${escapeHtml(pol.content)}</textarea>
           </div>
         </div>
       </div>
@@ -343,37 +433,60 @@ export function createStoreSettingsComponent() {
 
   function renderAuditTab() {
     return `
-      <div class="settings-card">
-        <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 16px 0;">Configuration revision history</h3>
+      <div class="set-card">
+        <div class="set-card-header">
+          <h3 class="set-card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #38BDF8;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+            Configuration Revision Ledger
+          </h3>
+          <span style="font-size: 0.75rem; color: var(--admin-text-muted);">${auditLogs.length} revisions recorded</span>
+        </div>
         
         ${auditLogs.length === 0 ? `
-          <div style="padding: 24px; text-align: center; color: var(--admin-text-muted);">
-            No configuration changes recorded yet. Initial baseline is Revision 1.
+          <div style="padding: 40px 20px; text-align: center; color: var(--admin-text-muted);">
+            No configuration alterations recorded yet. Initial baseline is Revision 1.
           </div>
         ` : `
-          <div style="overflow-x: auto;">
+          <!-- Desktop Table View -->
+          <div class="set-table-wrap set-table-desktop">
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Revision</th>
-                  <th>Timestamp</th>
-                  <th>Reason</th>
-                  <th>Modified fields</th>
+                  <th style="width: 100px;">Revision</th>
+                  <th style="width: 180px;">Timestamp</th>
+                  <th>Change Reason</th>
+                  <th>Modified Fields</th>
                 </tr>
               </thead>
               <tbody>
                 ${auditLogs.map(log => `
                   <tr>
-                    <td style="font-weight: 500; font-variant-numeric: tabular-nums; color: var(--admin-text-primary);">v${log.version}</td>
-                    <td style="color: var(--admin-text-secondary); font-variant-numeric: tabular-nums;">${new Date(log.created_at).toLocaleString()}</td>
-                    <td style="color: var(--admin-text-primary);">${escapeHtml(log.change_reason || '—')}</td>
-                    <td style="font-family: monospace; font-size: 0.75rem; color: var(--admin-text-secondary);">
-                      ${Object.keys(log.changed_fields || {}).join(', ') || '—'}
+                    <td><span class="set-version-tag">v${log.version}</span></td>
+                    <td style="color: var(--admin-text-secondary); font-variant-numeric: tabular-nums; font-size: 0.75rem;">${new Date(log.created_at).toLocaleString()}</td>
+                    <td style="color: #ffffff; font-weight: 500;">${escapeHtml(log.change_reason || '—')}</td>
+                    <td class="set-audit-fields">
+                      ${Object.keys(log.changed_fields || {}).map(f => `<span style="display: inline-block; padding: 2px 6px; margin: 1px; border-radius: 3px; background: rgba(255, 255, 255, 0.05);">${escapeHtml(f)}</span>`).join('') || '—'}
                     </td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
+          </div>
+
+          <!-- Mobile Cards View (Rule 1: Zero horizontal scroll) -->
+          <div class="set-cards-mobile">
+            ${auditLogs.map(log => `
+              <div class="set-audit-card">
+                <div class="set-audit-header">
+                  <span class="set-version-tag">Revision v${log.version}</span>
+                  <span class="set-audit-time">${new Date(log.created_at).toLocaleDateString()}</span>
+                </div>
+                <div class="set-audit-reason">${escapeHtml(log.change_reason || 'Configuration update')}</div>
+                <div class="set-audit-fields">
+                  ${Object.keys(log.changed_fields || {}).join(', ') || '—'}
+                </div>
+              </div>
+            `).join('')}
           </div>
         `}
       </div>
@@ -409,64 +522,69 @@ export function createStoreSettingsComponent() {
     const dashboardCards = p.dashboard_layout?.cards || [];
 
     return `
-      <form id="form-admin-preferences" style="display: flex; flex-direction: column; gap: 24px; max-width: 860px;">
-        <!-- Theme & Display Density -->
-        <div class="settings-card">
-          <h3 style="font-size: 1rem; font-weight: 500; color: var(--admin-text-primary); margin: 0 0 8px 0;">Personal console preferences</h3>
-          <p style="font-size: 0.8125rem; color: var(--admin-text-secondary); margin: 0 0 18px 0;">
-            Preferences are isolated to your owner account. Changes here customize your working environment without altering customer-facing storefront settings.
+      <form id="form-admin-preferences" style="display: flex; flex-direction: column; gap: 20px;">
+        <!-- Theme & Display Density Card -->
+        <div class="set-card">
+          <div class="set-card-header">
+            <h3 class="set-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+              Personal Console Environment
+            </h3>
+          </div>
+          <p class="set-card-desc" style="margin-bottom: 14px;">
+            Personal preferences are scoped to your authenticated owner account without altering public storefront attributes.
           </p>
 
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Interface theme</label>
+              <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Interface Theme</label>
               <select id="select-pref-theme" class="admin-input" style="width: 100%;">
-                <option value="system" ${p.theme === 'system' ? 'selected' : ''}>System default</option>
-                <option value="dark" ${p.theme === 'dark' ? 'selected' : ''}>OLED dark</option>
-                <option value="light" ${p.theme === 'light' ? 'selected' : ''}>Light theme</option>
+                <option value="system" ${p.theme === 'system' ? 'selected' : ''}>System Default</option>
+                <option value="dark" ${p.theme === 'dark' ? 'selected' : ''}>OLED Dark</option>
+                <option value="light" ${p.theme === 'light' ? 'selected' : ''}>Clean Light</option>
               </select>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Table display density</label>
+              <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Table Display Density</label>
               <select id="select-pref-density" class="admin-input" style="width: 100%;">
                 <option value="comfortable" ${p.table_density === 'comfortable' ? 'selected' : ''}>Comfortable (Standard)</option>
-                <option value="compact" ${p.table_density === 'compact' ? 'selected' : ''}>Compact (Dense)</option>
+                <option value="compact" ${p.table_density === 'compact' ? 'selected' : ''}>Compact (High density)</option>
               </select>
             </div>
             <div>
-              <label style="display: block; font-size: 0.8125rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Default analytics period</label>
+              <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Default Analytics Period</label>
               <select id="select-pref-date" class="admin-input" style="width: 100%;">
                 <option value="today" ${p.default_date_range === 'today' ? 'selected' : ''}>Today</option>
-                <option value="this_month" ${p.default_date_range === 'this_month' ? 'selected' : ''}>This month</option>
-                <option value="last_month" ${p.default_date_range === 'last_month' ? 'selected' : ''}>Last month</option>
-                <option value="all_time" ${p.default_date_range === 'all_time' ? 'selected' : ''}>All time</option>
+                <option value="this_month" ${p.default_date_range === 'this_month' ? 'selected' : ''}>This Month</option>
+                <option value="last_month" ${p.default_date_range === 'last_month' ? 'selected' : ''}>Last Month</option>
+                <option value="all_time" ${p.default_date_range === 'all_time' ? 'selected' : ''}>All Time</option>
               </select>
             </div>
           </div>
         </div>
 
-        <!-- Sidebar Navigation Order -->
-        <fieldset class="settings-card" style="padding: 20px;">
-          <legend style="display: flex; align-items: center; gap: 8px;">
-            Sidebar navigation order
+        <!-- Sidebar Navigation Order Fieldset -->
+        <fieldset class="settings-card set-card" style="padding: 20px;">
+          <legend style="display: flex; align-items: center; gap: 8px; font-size: 0.9375rem; font-weight: 500; color: #fff; padding: 0 4px;">
+            Sidebar Navigation Ordering
           </legend>
-          <p style="margin: 4px 0 16px 0;">
-            Set a unique position number (1–20) for each operational section to arrange the admin sidebar to your workflow preference.
+          <p class="set-card-desc" style="margin: 4px 0 16px 0;">
+            Assign numeric display priority (1–20) for each operational section to tailor the admin navigation to your daily workflow.
           </p>
-          <div class="pref-items-grid">
+          <div class="pref-items-grid set-reorder-list">
             ${navItems.map((id, index) => {
               const meta = NAV_METADATA[id] || { name: id, desc: `Section ${id}` };
               return `
-                <div class="pref-item-card">
+                <div class="pref-item-card set-reorder-item">
                   <div class="pref-item-info">
                     <div class="pref-item-text">
-                      <span class="pref-item-name">${escapeHtml(meta.name)}</span>
-                      <p class="pref-item-desc">${escapeHtml(meta.desc)}</p>
+                      <span class="pref-item-name set-reorder-title">${escapeHtml(meta.name)}</span>
+                      <p class="pref-item-desc set-reorder-desc">${escapeHtml(meta.desc)}</p>
                     </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                    <label style="font-size: 0.75rem; color: var(--admin-text-muted);">Pos:</label>
-                    <input class="pref-nav-position pref-number-input" data-id="${escapeHtml(id)}" type="number" min="1" max="20" value="${index + 1}" required aria-label="${escapeHtml(meta.name)} sidebar position">
+                    <label style="font-size: 0.75rem; color: var(--admin-text-muted);">#</label>
+                    <input class="pref-nav-position pref-number-input admin-input" data-id="${escapeHtml(id)}" type="number" min="1" max="20" value="${index + 1}" required aria-label="${escapeHtml(meta.name)} sidebar position" style="width: 44px; padding: 4px 6px; text-align: center; font-variant-numeric: tabular-nums;">
                   </div>
                 </div>
               `;
@@ -474,29 +592,29 @@ export function createStoreSettingsComponent() {
           </div>
         </fieldset>
 
-        <!-- Overview KPI Cards -->
-        <fieldset class="settings-card" style="padding: 20px;">
-          <legend style="display: flex; align-items: center; gap: 8px;">
-            Overview dashboard cards
+        <!-- Overview Dashboard Cards Fieldset -->
+        <fieldset class="settings-card set-card" style="padding: 20px;">
+          <legend style="display: flex; align-items: center; gap: 8px; font-size: 0.9375rem; font-weight: 500; color: #fff; padding: 0 4px;">
+            Store Overview KPI Metrics
           </legend>
-          <p style="margin: 4px 0 16px 0;">
-            Choose which metric cards appear on your Store Overview screen and specify their display order (1–4).
+          <p class="set-card-desc" style="margin: 4px 0 16px 0;">
+            Toggle visibility and sequence (1–4) for top-level operational cards on your Store Overview dashboard.
           </p>
           <div style="display: flex; flex-direction: column; gap: 8px;">
             ${dashboardCards.map((card, index) => {
               const meta = CARD_METADATA[card.id] || { title: card.id, desc: `KPI card ${card.id}` };
               return `
-                <div class="pref-card-row">
-                  <div class="pref-card-left">
+                <div class="pref-card-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #1A1D24; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 6px;">
+                  <div class="pref-card-left" style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" class="pref-card-visible" data-id="${escapeHtml(card.id)}" id="pref-card-${escapeHtml(card.id)}" ${card.visible ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
-                    <label for="pref-card-${escapeHtml(card.id)}" class="pref-card-info" style="cursor: pointer;">
-                      <span class="pref-card-title">${escapeHtml(meta.title)}</span>
-                      <p class="pref-card-desc">${escapeHtml(meta.desc)}</p>
+                    <label for="pref-card-${escapeHtml(card.id)}" class="pref-card-info" style="cursor: pointer; margin: 0;">
+                      <span class="pref-card-title" style="font-size: 0.8125rem; font-weight: 500; color: #fff;">${escapeHtml(meta.title)}</span>
+                      <p class="pref-card-desc" style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.45); margin: 0;">${escapeHtml(meta.desc)}</p>
                     </label>
                   </div>
-                  <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                    <label for="pos-${escapeHtml(card.id)}" style="font-size: 0.75rem; color: var(--admin-text-muted);">Order:</label>
-                    <input id="pos-${escapeHtml(card.id)}" class="pref-card-position pref-number-input" data-id="${escapeHtml(card.id)}" aria-label="${escapeHtml(meta.title)} position" type="number" min="1" max="4" value="${index + 1}" required>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <label for="pos-${escapeHtml(card.id)}" style="font-size: 0.75rem; color: var(--admin-text-muted);">#</label>
+                    <input id="pos-${escapeHtml(card.id)}" class="pref-card-position pref-number-input admin-input" data-id="${escapeHtml(card.id)}" aria-label="${escapeHtml(meta.title)} position" type="number" min="1" max="4" value="${index + 1}" required style="width: 44px; padding: 4px 6px; text-align: center; font-variant-numeric: tabular-nums;">
                   </div>
                 </div>
               `;
@@ -504,14 +622,18 @@ export function createStoreSettingsComponent() {
           </div>
         </fieldset>
 
-        <!-- Submit & Reset Actions -->
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-          <button type="button" id="btn-reset-preferences" class="btn btn-secondary" style="color: #f87171 !important; border-color: rgba(239, 68, 68, 0.3) !important;">
-            Reset to system defaults
-          </button>
-          <button type="submit" id="btn-save-preferences" class="btn btn-primary" style="padding: 10px 24px; font-weight: 500;">
-            Save preferences
-          </button>
+        <!-- Submit & Reset Actions (Rule 2: Compact Semantic Icons & Micro-tooltips) -->
+        <div class="set-action-bar">
+          <div class="set-action-group">
+            <button type="button" id="btn-reset-preferences" class="set-action-btn is-danger" data-tooltip="Reset personal preferences to system defaults" aria-label="Reset preferences to defaults" title="Reset preferences">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </button>
+          </div>
+          <div class="set-action-group">
+            <button type="submit" id="btn-save-preferences" class="set-action-btn is-save" data-tooltip="Save personal console preferences" aria-label="Save preferences" title="Save preferences">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            </button>
+          </div>
         </div>
       </form>
     `;
@@ -522,12 +644,12 @@ export function createStoreSettingsComponent() {
     if (!alert) return;
     alert.style.display = 'block';
     if (type === 'success') {
-      alert.style.background = 'rgba(34, 197, 94, 0.15)';
-      alert.style.color = '#4ade80';
-      alert.style.border = '1px solid rgba(34, 197, 94, 0.3)';
+      alert.style.background = 'rgba(16, 185, 129, 0.15)';
+      alert.style.color = '#34D399';
+      alert.style.border = '1px solid rgba(16, 185, 129, 0.3)';
     } else {
       alert.style.background = 'rgba(239, 68, 68, 0.15)';
-      alert.style.color = '#f87171';
+      alert.style.color = '#F87171';
       alert.style.border = '1px solid rgba(239, 68, 68, 0.3)';
     }
     alert.textContent = message;
@@ -549,29 +671,90 @@ export function createStoreSettingsComponent() {
       });
     });
 
-    // Color picker sync
+    // Color picker sync & Mockup sync
     const picker = container.querySelector('#input-accent-color-picker');
     const hexInput = container.querySelector('#input-accent-color');
     const previewBar = container.querySelector('#preview-announcement-bar');
+    const mockupAnnounce = container.querySelector('#mockup-announcement');
+    const mockupSampleBtn = container.querySelector('#mockup-sample-btn');
+    const mockupChipAccent = container.querySelector('#mockup-chip-accent');
+
+    function updateAccent(color) {
+      if (previewBar) previewBar.style.background = color;
+      if (mockupAnnounce) mockupAnnounce.style.background = color;
+      if (mockupSampleBtn) mockupSampleBtn.style.background = color;
+      if (mockupChipAccent) mockupChipAccent.textContent = `Accent: ${color}`;
+    }
 
     if (picker && hexInput) {
       picker.addEventListener('input', (e) => {
         hexInput.value = e.target.value;
-        if (previewBar) previewBar.style.background = e.target.value;
+        updateAccent(e.target.value);
       });
       hexInput.addEventListener('input', (e) => {
         if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) {
           picker.value = e.target.value;
-          if (previewBar) previewBar.style.background = e.target.value;
+          updateAccent(e.target.value);
         }
       });
     }
 
-    // Announcement text preview sync
+    // Announcement text & enabled toggle sync
     const announceInput = container.querySelector('#input-announcement-text');
-    if (announceInput && previewBar) {
+    const announceToggle = container.querySelector('#input-announcement-enabled');
+    if (announceInput && mockupAnnounce) {
       announceInput.addEventListener('input', (e) => {
-        previewBar.textContent = e.target.value || 'Store announcement banner';
+        const val = e.target.value || 'Complimentary delivery nationwide';
+        if (previewBar) previewBar.textContent = val;
+        mockupAnnounce.textContent = val;
+      });
+    }
+    if (announceToggle && mockupAnnounce) {
+      announceToggle.addEventListener('change', (e) => {
+        mockupAnnounce.style.display = e.target.checked ? 'block' : 'none';
+      });
+    }
+
+    // Brand Name & Tagline sync
+    const brandInput = container.querySelector('#input-brand-name');
+    const taglineInput = container.querySelector('#input-tagline');
+    const mockupBrand = container.querySelector('#mockup-brand');
+    const mockupTagline = container.querySelector('#mockup-tagline');
+    if (brandInput && mockupBrand) {
+      brandInput.addEventListener('input', (e) => {
+        mockupBrand.textContent = e.target.value || 'AlphaZee';
+      });
+    }
+    if (taglineInput && mockupTagline) {
+      taglineInput.addEventListener('input', (e) => {
+        mockupTagline.textContent = e.target.value || 'Curated Contemporary Silhouettes';
+      });
+    }
+
+    // Typography select sync
+    const fontSelect = container.querySelector('#select-font-family');
+    const mockupSpecimenTitle = container.querySelector('#mockup-specimen-title');
+    const mockupChipFont = container.querySelector('#mockup-chip-font');
+    if (fontSelect) {
+      fontSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (mockupBrand) mockupBrand.style.fontFamily = val;
+        if (mockupSpecimenTitle) mockupSpecimenTitle.style.fontFamily = val;
+        if (mockupSampleBtn) mockupSampleBtn.style.fontFamily = val;
+        if (mockupChipFont) mockupChipFont.textContent = `Font: ${val.split(',')[0]}`;
+      });
+    }
+
+    // Radius select sync
+    const radiusSelect = container.querySelector('#select-border-radius');
+    const mockupChipRadius = container.querySelector('#mockup-chip-radius');
+    const radiusMap = { none: '0px', sm: '4px', md: '8px', lg: '12px', full: '999px' };
+    if (radiusSelect) {
+      radiusSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        const px = radiusMap[val] || '8px';
+        if (mockupSampleBtn) mockupSampleBtn.style.borderRadius = px;
+        if (mockupChipRadius) mockupChipRadius.textContent = `Radius: ${val}`;
       });
     }
 
@@ -672,7 +855,6 @@ export function createStoreSettingsComponent() {
           return;
         }
         try {
-          // First save draft content to be sure
           const key = `${activePolicy}_policy_content`;
           await updateAdminStoreSettings({ [key]: text });
           const res = await publishStorePolicy(activePolicy, true);
@@ -766,7 +948,7 @@ export function createStoreSettingsComponent() {
       render();
     } catch (err) {
       container.innerHTML = `
-        <div style="padding: 30px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #f87171;">
+        <div style="padding: 30px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #F87171;">
           Failed to load store settings: ${escapeHtml(err.message)}
         </div>
       `;
