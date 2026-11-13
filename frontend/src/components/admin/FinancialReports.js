@@ -26,7 +26,6 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
   function setDatePreset(preset) {
     selectedPreset = preset;
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));
-    // Use UTC/local date calculations for presets
     const pad = n => String(n).padStart(2, '0');
     const toIso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
@@ -53,8 +52,8 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
   async function loadData() {
     try {
       container.innerHTML = `
-        <div style="padding: 32px 16px; text-align: center; color: rgba(255, 255, 255, 0.6); font-size: 0.875rem;">
-          <div class="spinner" style="margin: 0 auto 12px; width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #38BDF8; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <div style="padding: 48px 16px; text-align: center; color: rgba(255, 255, 255, 0.45); font-size: 0.8125rem;">
+          <div class="spinner" style="margin: 0 auto 14px; width: 28px; height: 28px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #10B981; border-radius: 50%; animation: spin 1s linear infinite;"></div>
           Calculating period financials, cash movements, and unit economics...
         </div>
       `;
@@ -82,7 +81,7 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
       render();
     } catch (err) {
       container.innerHTML = `
-        <div style="padding: 16px; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 8px; color: #FCA5A5; font-size: 0.875rem; margin-bottom: 16px;">
+        <div style="padding: 16px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #F87171; font-size: 0.8125rem; margin-bottom: 16px;">
           <strong>Error loading financial reports:</strong> ${escapeHtml(err.message || 'Unknown error')}
         </div>
         <button type="button" id="btn-retry-reports" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.8125rem;">Retry Loading</button>
@@ -107,12 +106,14 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
       end_date: endDate || undefined,
     });
 
-    // Orders rows
+    const isOpResultPos = (r.net_operating_result_minor || 0) >= 0;
+
+    // Desktop Order rows
     const ordersRowsHtml = (orderEconomics.orders || []).map(order => {
       const isExpanded = expandedOrderIds.has(order.order_id);
       const isPositiveMargin = order.estimated_contribution_minor >= 0;
       const statusColorMap = {
-        delivered: '#4ADE80',
+        delivered: '#34D399',
         dispatched: '#38BDF8',
         confirmed: '#818CF8',
         placed: '#FBBF24',
@@ -127,21 +128,21 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
           const isAlphazee = line.ownership_source === 'alphazee_owned';
           return `
             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.75rem;">
-              <td style="padding: 6px 8px; color: #FFFFFF;">
+              <td style="padding: 8px 10px; color: #FFFFFF;">
                 <strong>${escapeHtml(line.product_title)}</strong>
-                ${line.variant_sku ? `<span style="color: rgba(255, 255, 255, 0.4); margin-left: 6px;">[${escapeHtml(line.variant_sku)}]</span>` : ''}
-                ${(line.variant_color || line.variant_size) ? `<div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.5);">${escapeHtml([line.variant_color, line.variant_size].filter(Boolean).join(' / '))}</div>` : ''}
+                ${line.variant_sku ? `<span style="color: rgba(255, 255, 255, 0.4); margin-left: 6px; font-family: monospace;">[${escapeHtml(line.variant_sku)}]</span>` : ''}
+                ${(line.variant_color || line.variant_size) ? `<div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5);">${escapeHtml([line.variant_color, line.variant_size].filter(Boolean).join(' / '))}</div>` : ''}
               </td>
-              <td style="padding: 6px 8px; text-align: center;">
-                <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.6875rem; font-weight: 600; ${isAlphazee ? 'background: rgba(34, 197, 94, 0.2); color: #86EFAC;' : 'background: rgba(59, 130, 246, 0.2); color: #93C5FD;'}">
+              <td style="padding: 8px 10px; text-align: center;">
+                <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.6875rem; font-weight: 500; ${isAlphazee ? 'background: rgba(16, 185, 129, 0.15); color: #34D399;' : 'background: rgba(56, 189, 248, 0.15); color: #38BDF8;'}">
                   ${isAlphazee ? 'AlphaZee Owned' : 'Vendor Consigned'}
                 </span>
-                ${isAlphazee ? '<div style="font-size: 0.65rem; color: rgba(255, 255, 255, 0.4); margin-top: 2px;">0 vendor liability</div>' : ''}
+                ${isAlphazee ? '<div style="font-size: 0.625rem; color: rgba(255, 255, 255, 0.4); margin-top: 2px;">0 vendor liability</div>' : ''}
               </td>
-              <td style="padding: 6px 8px; text-align: center;">${line.quantity}</td>
-              <td style="padding: 6px 8px; text-align: right; font-family: monospace;">${formatPkr(line.unit_cost_minor)}</td>
-              <td style="padding: 6px 8px; text-align: right; font-family: monospace;">${formatPkr(line.unit_price_minor)}</td>
-              <td style="padding: 6px 8px; text-align: right; font-family: monospace; font-weight: 700; color: ${line.line_contribution_minor >= 0 ? '#4ADE80' : '#F87171'};">
+              <td style="padding: 8px 10px; text-align: center; font-variant-numeric: tabular-nums;">${line.quantity}</td>
+              <td style="padding: 8px 10px; text-align: right; font-family: monospace;">${formatPkr(line.unit_cost_minor)}</td>
+              <td style="padding: 8px 10px; text-align: right; font-family: monospace;">${formatPkr(line.unit_price_minor)}</td>
+              <td style="padding: 8px 10px; text-align: right; font-family: monospace; font-weight: 600; color: ${line.line_contribution_minor >= 0 ? '#34D399' : '#F87171'};">
                 ${formatPkr(line.line_contribution_minor)}
               </td>
             </tr>
@@ -149,20 +150,20 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
         }).join('');
 
         linesTableHtml = `
-          <tr class="order-detail-row" style="background: rgba(0, 0, 0, 0.35);">
-            <td colspan="10" style="padding: 12px 16px;">
-              <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.6); text-transform: uppercase; font-weight: 700; margin-bottom: 8px; letter-spacing: 0.5px;">
+          <tr class="order-detail-row" style="background: rgba(0, 0, 0, 0.4);">
+            <td colspan="9" style="padding: 12px 16px;">
+              <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600; margin-bottom: 8px; letter-spacing: 0.04em;">
                 Line-Item Economics & Supplier Cost Attribution (Order #${escapeHtml(order.order_number)})
               </div>
               <table style="width: 100%; border-collapse: collapse; text-align: left;">
                 <thead>
-                  <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); text-transform: uppercase;">
-                    <th style="padding: 6px 8px;">Item & Variant</th>
-                    <th style="padding: 6px 8px; text-align: center;">Ownership</th>
-                    <th style="padding: 6px 8px; text-align: center;">Qty</th>
-                    <th style="padding: 6px 8px; text-align: right;">Unit Cost</th>
-                    <th style="padding: 6px 8px; text-align: right;">Unit Price</th>
-                    <th style="padding: 6px 8px; text-align: right;">Contribution</th>
+                  <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); text-transform: uppercase;">
+                    <th style="padding: 6px 10px;">Item & Variant</th>
+                    <th style="padding: 6px 10px; text-align: center;">Ownership</th>
+                    <th style="padding: 6px 10px; text-align: center;">Qty</th>
+                    <th style="padding: 6px 10px; text-align: right;">Unit Cost</th>
+                    <th style="padding: 6px 10px; text-align: right;">Unit Price</th>
+                    <th style="padding: 6px 10px; text-align: right;">Contribution</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -176,39 +177,39 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
 
       return `
         <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-          <td style="padding: 10px 8px; font-family: monospace; color: #FFFFFF;">
+          <td style="padding: 10px 12px; font-family: monospace; color: #FFFFFF;">
             <strong>#${escapeHtml(order.order_number)}</strong>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); font-family: sans-serif;">${escapeHtml(order.created_at ? order.created_at.slice(0, 10) : '')}</div>
+            <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); font-family: sans-serif;">${escapeHtml(order.created_at ? order.created_at.slice(0, 10) : '')}</div>
           </td>
-          <td style="padding: 10px 8px; color: rgba(255, 255, 255, 0.85);">
+          <td style="padding: 10px 12px; color: rgba(255, 255, 255, 0.85);">
             ${escapeHtml(order.customer_name || 'Customer')}
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); text-transform: uppercase;">${escapeHtml(order.payment_method)}</div>
+            <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); text-transform: uppercase;">${escapeHtml(order.payment_method)}</div>
           </td>
-          <td style="padding: 10px 8px;">
-            <span style="font-size: 0.75rem; font-weight: 700; color: ${statusColor};">
+          <td style="padding: 10px 12px;">
+            <span style="font-size: 0.75rem; font-weight: 600; color: ${statusColor};">
               ${escapeHtml(order.order_status.toUpperCase())}
             </span>
           </td>
-          <td style="padding: 10px 8px; text-align: right; font-family: monospace; font-weight: 600;">
+          <td style="padding: 10px 12px; text-align: right; font-family: monospace; font-weight: 600;">
             ${formatPkr(order.customer_total_minor)}
           </td>
-          <td style="padding: 10px 8px; text-align: right; font-family: monospace; color: #F59E0B;">
+          <td style="padding: 10px 12px; text-align: right; font-family: monospace; color: #F59E0B;">
             ${formatPkr(order.wholesale_cogs_minor)}
           </td>
-          <td style="padding: 10px 8px; text-align: right; font-family: monospace; color: #F87171;">
+          <td style="padding: 10px 12px; text-align: right; font-family: monospace; color: #F87171;">
             ${formatPkr(order.total_logistics_cost_minor)}
-            ${order.rto_courier_cost_minor > 0 ? `<div style="font-size: 0.65rem; color: #F87171;">RTO: ${formatPkr(order.rto_courier_cost_minor)}</div>` : ''}
+            ${order.rto_courier_cost_minor > 0 ? `<div style="font-size: 0.625rem; color: #F87171;">RTO: ${formatPkr(order.rto_courier_cost_minor)}</div>` : ''}
           </td>
-          <td style="padding: 10px 8px; text-align: right; font-family: monospace; font-size: 0.75rem;">
+          <td style="padding: 10px 12px; text-align: right; font-family: monospace; font-size: 0.75rem;">
             <div>Paid: ${formatPkr(order.supplier_payments_minor)}</div>
             ${order.supplier_outstanding_minor > 0 ? `<div style="color: #FBBF24;">Due: ${formatPkr(order.supplier_outstanding_minor)}</div>` : '<div style="color: rgba(255, 255, 255, 0.35);">Settled</div>'}
           </td>
-          <td style="padding: 10px 8px; text-align: right; font-family: monospace; font-weight: 800; color: ${isPositiveMargin ? '#4ADE80' : '#F87171'};">
+          <td style="padding: 10px 12px; text-align: right; font-family: monospace; font-weight: 700; color: ${isPositiveMargin ? '#34D399' : '#F87171'};">
             ${escapeHtml(order.formatted_contribution)}
           </td>
-          <td style="padding: 10px 8px; text-align: center;">
-            <button type="button" class="btn-toggle-order-lines" data-order-id="${escapeHtml(order.order_id)}" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.85); padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; cursor: pointer;">
-              ${isExpanded ? 'Hide' : 'Inspect'}
+          <td style="padding: 10px 12px; text-align: center;">
+            <button type="button" class="btn-toggle-order-lines rep-icon-btn is-inspect" data-order-id="${escapeHtml(order.order_id)}" data-tooltip="${isExpanded ? 'Hide line details' : 'Inspect line-item economics'}" aria-label="Toggle details for order ${escapeHtml(order.order_number)}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${isExpanded ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'}"/></svg>
             </button>
           </td>
         </tr>
@@ -216,337 +217,398 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
       `;
     }).join('');
 
+    // Mobile Order Cards (Rule 1: Zero horizontal scroll)
+    const ordersCardsHtml = (orderEconomics.orders || []).map(order => {
+      const isExpanded = expandedOrderIds.has(order.order_id);
+      const isPositiveMargin = order.estimated_contribution_minor >= 0;
+      return `
+        <div class="rep-order-card">
+          <div class="rep-order-card-top">
+            <div>
+              <span style="font-family: monospace; font-weight: 600; color: #FFFFFF;">#${escapeHtml(order.order_number)}</span>
+              <span style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); margin-left: 6px;">${escapeHtml(order.created_at ? order.created_at.slice(0, 10) : '')}</span>
+            </div>
+            <span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: #34D399;">${escapeHtml(order.order_status)}</span>
+          </div>
+          <div class="rep-order-card-meta">
+            <span>Customer: ${escapeHtml(order.customer_name || 'Customer')}</span>
+            <span style="color: #FFFFFF; font-weight: 600;">${formatPkr(order.customer_total_minor)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); font-variant-numeric: tabular-nums;">
+            <span>COGS: ${formatPkr(order.wholesale_cogs_minor)}</span>
+            <span>Freight: ${formatPkr(order.total_logistics_cost_minor)}</span>
+            <span style="font-weight: 600; color: ${isPositiveMargin ? '#34D399' : '#F87171'};">Margin: ${escapeHtml(order.formatted_contribution)}</span>
+          </div>
+          <div style="display: flex; justify-content: flex-end; padding-top: 4px;">
+            <button type="button" class="btn-toggle-order-lines rep-icon-btn is-inspect" data-order-id="${escapeHtml(order.order_id)}" data-tooltip="${isExpanded ? 'Hide lines' : 'Inspect lines'}" style="width: auto; padding: 4px 10px; font-size: 0.75rem; gap: 4px;">
+              <span>${isExpanded ? 'Hide Lines' : 'Inspect Lines'}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${isExpanded ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'}"/></svg>
+            </button>
+          </div>
+          ${isExpanded && order.lines ? `
+            <div style="background: rgba(0, 0, 0, 0.3); border-radius: 6px; padding: 10px; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem;">
+              ${order.lines.map(l => `
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 4px;">
+                  <div>
+                    <div style="color: #FFFFFF; font-weight: 500;">${escapeHtml(l.product_title)}</div>
+                    <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4);">${l.quantity}x @ ${formatPkr(l.unit_price_minor)}</div>
+                  </div>
+                  <div style="text-align: right; font-family: monospace; font-weight: 600; color: ${l.line_contribution_minor >= 0 ? '#34D399' : '#F87171'};">
+                    ${formatPkr(l.line_contribution_minor)}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+
     // Marketing Rows
     const marketingRowsHtml = ((marketingAnalytics && marketingAnalytics.channels) || []).map(c => `
       <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-        <td style="padding: 8px; font-weight: 700; color: #38BDF8;">${escapeHtml(c.utm_source)}</td>
-        <td style="padding: 8px;">${escapeHtml(c.utm_medium)}</td>
-        <td style="padding: 8px;">${escapeHtml(c.utm_campaign)}</td>
-        <td style="padding: 8px; font-weight: 600; text-align: center;">${c.orders_count}</td>
-        <td style="padding: 8px; font-weight: 700; color: #4ADE80; text-align: right;">${escapeHtml(c.formatted_revenue)}</td>
-        <td style="padding: 8px; color: #F59E0B; text-align: right;">${escapeHtml(c.formatted_discount)}</td>
+        <td style="padding: 10px 12px; font-weight: 600; color: #38BDF8;">${escapeHtml(c.utm_source)}</td>
+        <td style="padding: 10px 12px; color: rgba(255, 255, 255, 0.7);">${escapeHtml(c.utm_medium)}</td>
+        <td style="padding: 10px 12px; color: rgba(255, 255, 255, 0.7);">${escapeHtml(c.utm_campaign)}</td>
+        <td style="padding: 10px 12px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums;">${c.orders_count}</td>
+        <td style="padding: 10px 12px; font-weight: 600; color: #34D399; text-align: right; font-family: monospace;">${escapeHtml(c.formatted_revenue)}</td>
+        <td style="padding: 10px 12px; color: #F59E0B; text-align: right; font-family: monospace;">${escapeHtml(c.formatted_discount)}</td>
       </tr>
     `).join('');
 
+    // Mobile Marketing Cards
+    const marketingCardsHtml = ((marketingAnalytics && marketingAnalytics.channels) || []).map(c => `
+      <div style="background: #101318; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 600; color: #38BDF8; font-size: 0.8125rem;">${escapeHtml(c.utm_source)}</span>
+          <span style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">${escapeHtml(c.utm_medium)} / ${escapeHtml(c.utm_campaign)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 6px;">
+          <span>Orders: ${c.orders_count}</span>
+          <span style="font-family: monospace; font-weight: 600; color: #34D399;">${escapeHtml(c.formatted_revenue)}</span>
+        </div>
+      </div>
+    `).join('');
+
     container.innerHTML = `
-      <div class="financial-reports-view" style="display: flex; flex-direction: column; gap: 24px;">
+      <div class="financial-reports-view">
         
         <!-- Header & Date Period Filter Toolbar -->
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div class="rep-toolbar">
+          <div class="rep-toolbar-top">
             <div>
-              <h3 style="font-size: 1.125rem; font-weight: 700; color: #FFFFFF; margin: 0 0 4px 0;">Executive P&L, Cash Reconciliation & Unit Economics</h3>
-              <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">
-                Authoritative financial reporting with Karachi timezone day boundaries (UTC+5) and complete formula-safe exports.
-              </div>
+              <h2 class="rep-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                Financial Reports & Unit Economics
+              </h2>
+              <p class="rep-subtitle">
+                Authoritative executive P&L, realized cash reconciliation, and line-item supplier attribution.
+              </p>
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <a id="btn-export-pnl-csv" href="${escapeHtml(csvPeriodUrl)}" download class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.78125rem; text-decoration: none; border-radius: var(--admin-radius-sm); color: var(--admin-text-primary);">
-                Export P&L statement (CSV)
+            <!-- Rule 2: Compact Semantic Icons for CSV Exports -->
+            <div class="rep-actions-group">
+              <a id="btn-export-pnl-csv" href="${escapeHtml(csvPeriodUrl)}" download class="rep-icon-btn is-export" data-tooltip="Export P&L statement (CSV)" aria-label="Export P&L statement CSV" title="Export P&L statement (CSV)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>
               </a>
-              <a id="btn-export-orders-csv" href="${escapeHtml(csvOrdersUrl)}" download class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.78125rem; text-decoration: none; border-radius: var(--admin-radius-sm); color: var(--admin-text-primary);">
-                Export orders CSV
+              <a id="btn-export-orders-csv" href="${escapeHtml(csvOrdersUrl)}" download class="rep-icon-btn is-export" data-tooltip="Export per-order unit economics (CSV)" aria-label="Export orders CSV" title="Export orders CSV">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               </a>
             </div>
           </div>
 
           <!-- Date Filters Row -->
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--admin-border-hairline);">
-            <div style="display: flex; gap: 6px;">
-              <button type="button" class="btn-preset-date ${selectedPreset === 'all_time' ? 'active' : ''}" data-preset="all_time" style="padding: 5px 10px; font-size: 0.75rem; border-radius: var(--admin-radius-tag); border: 1px solid var(--admin-border-hairline); background: ${selectedPreset === 'all_time' ? 'var(--admin-bg-raised)' : 'transparent'}; color: var(--admin-text-primary); cursor: pointer;">All time</button>
-              <button type="button" class="btn-preset-date ${selectedPreset === 'today' ? 'active' : ''}" data-preset="today" style="padding: 5px 10px; font-size: 0.75rem; border-radius: var(--admin-radius-tag); border: 1px solid var(--admin-border-hairline); background: ${selectedPreset === 'today' ? 'var(--admin-bg-raised)' : 'transparent'}; color: var(--admin-text-primary); cursor: pointer;">Today</button>
-              <button type="button" class="btn-preset-date ${selectedPreset === 'this_month' ? 'active' : ''}" data-preset="this_month" style="padding: 5px 10px; font-size: 0.75rem; border-radius: var(--admin-radius-tag); border: 1px solid var(--admin-border-hairline); background: ${selectedPreset === 'this_month' ? 'var(--admin-bg-raised)' : 'transparent'}; color: var(--admin-text-primary); cursor: pointer;">This month</button>
-              <button type="button" class="btn-preset-date ${selectedPreset === 'last_month' ? 'active' : ''}" data-preset="last_month" style="padding: 5px 10px; font-size: 0.75rem; border-radius: var(--admin-radius-tag); border: 1px solid var(--admin-border-hairline); background: ${selectedPreset === 'last_month' ? 'var(--admin-bg-raised)' : 'transparent'}; color: var(--admin-text-primary); cursor: pointer;">Last month</button>
+          <div class="rep-toolbar-filters">
+            <div class="rep-date-rail">
+              <button type="button" class="btn-preset-date rep-preset-pill ${selectedPreset === 'all_time' ? 'active' : ''}" data-preset="all_time">All Time</button>
+              <button type="button" class="btn-preset-date rep-preset-pill ${selectedPreset === 'today' ? 'active' : ''}" data-preset="today">Today</button>
+              <button type="button" class="btn-preset-date rep-preset-pill ${selectedPreset === 'this_month' ? 'active' : ''}" data-preset="this_month">This Month</button>
+              <button type="button" class="btn-preset-date rep-preset-pill ${selectedPreset === 'last_month' ? 'active' : ''}" data-preset="last_month">Last Month</button>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 0.75rem; color: var(--admin-text-secondary);">Custom:</span>
-              <input type="date" id="report-start-date" value="${escapeHtml(startDate)}" style="background: var(--admin-bg-raised); border: 1px solid var(--admin-border-hairline); color: var(--admin-text-primary); border-radius: var(--admin-radius-tag); padding: 4px 8px; font-size: 0.75rem;" />
-              <span style="color: var(--admin-text-muted); font-size: 0.75rem;">to</span>
-              <input type="date" id="report-end-date" value="${escapeHtml(endDate)}" style="background: var(--admin-bg-raised); border: 1px solid var(--admin-border-hairline); color: var(--admin-text-primary); border-radius: var(--admin-radius-tag); padding: 4px 8px; font-size: 0.75rem;" />
-              <button type="button" id="btn-apply-period" class="btn btn-primary" style="padding: 4px 12px; font-size: 0.75rem; font-weight: 500; cursor: pointer;">Apply</button>
+            <div class="rep-custom-date">
+              <input type="date" id="report-start-date" value="${escapeHtml(startDate)}" class="rep-date-input" aria-label="Report start date" />
+              <span style="color: rgba(255, 255, 255, 0.4); font-size: 0.75rem;">to</span>
+              <input type="date" id="report-end-date" value="${escapeHtml(endDate)}" class="rep-date-input" aria-label="Report end date" />
+              <button type="button" id="btn-apply-period" class="rep-icon-btn is-apply" data-tooltip="Apply custom date range" aria-label="Apply custom date range" title="Apply date range">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
             </div>
 
-            <div style="font-size: 0.72rem; color: var(--admin-text-secondary); margin-left: auto; display: flex; align-items: center; gap: 4px;">
-              Reporting timezone: <strong style="color: var(--admin-text-primary);">Asia/Karachi (UTC+5)</strong>
+            <div class="rep-tz-badge">
+              <span class="rep-tz-dot"></span>
+              <span>Asia/Karachi (UTC+5)</span>
             </div>
           </div>
         </div>
 
-        <!-- KPI Summary Cards (5-Column) -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
-          
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
-            <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600;">Delivered Net Revenue</div>
-            <div id="kpi-net-revenue" style="font-size: 1.4rem; font-weight: 800; color: #4ADE80; margin-top: 4px;">
+        <!-- Executive KPI 5-Card Grid (High Density Swiss Banking) -->
+        <div class="rep-kpis-grid">
+          <div class="rep-kpi-card">
+            <div class="rep-kpi-label">Delivered Net Revenue</div>
+            <div id="kpi-net-revenue" class="rep-kpi-val">
               ${escapeHtml(r.formatted_net_revenue || formatPkr(r.net_revenue_minor || 0))}
             </div>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">
+            <div class="rep-kpi-sub">
               Gross: ${formatPkr(r.gross_revenue_minor || 0)} · Disc: -${formatPkr(r.customer_discounts_minor || 0)}
             </div>
           </div>
 
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
-            <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600;">Net Wholesale COGS</div>
-            <div id="kpi-net-cogs" style="font-size: 1.4rem; font-weight: 800; color: #F59E0B; margin-top: 4px;">
+          <div class="rep-kpi-card">
+            <div class="rep-kpi-label">Net Wholesale COGS</div>
+            <div id="kpi-net-cogs" class="rep-kpi-val" style="color: #F59E0B;">
               ${escapeHtml(r.formatted_net_cogs || formatPkr(r.net_cogs_minor || 0))}
             </div>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">
+            <div class="rep-kpi-sub">
               Restock Reversals: -${formatPkr(r.cogs_reversals_minor || 0)}
             </div>
           </div>
 
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
-            <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600;">Contribution Before Overhead</div>
-            <div id="kpi-contribution" style="font-size: 1.4rem; font-weight: 800; color: #38BDF8; margin-top: 4px;">
+          <div class="rep-kpi-card">
+            <div class="rep-kpi-label">Unit Contribution</div>
+            <div id="kpi-contribution" class="rep-kpi-val" style="color: #38BDF8;">
               ${escapeHtml(r.formatted_contribution_before_overhead || formatPkr(r.contribution_before_overhead_minor || 0))}
             </div>
-            <div style="font-size: 0.7rem; color: #38BDF8; font-weight: 700; margin-top: 4px;">
+            <div class="rep-kpi-sub" style="color: #38BDF8;">
               ${(r.contribution_margin_pct ?? 0).toFixed(1)}% margin on net revenue
             </div>
           </div>
 
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
-            <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600;">Evidenced Logistics & Overhead</div>
-            <div id="kpi-total-overhead" style="font-size: 1.4rem; font-weight: 800; color: #F87171; margin-top: 4px;">
+          <div class="rep-kpi-card">
+            <div class="rep-kpi-label">Freight & Overhead</div>
+            <div id="kpi-total-overhead" class="rep-kpi-val" style="color: #F87171;">
               ${formatPkr((r.total_freight_minor || 0) + (r.total_overhead_minor || 0))}
             </div>
-            <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin-top: 4px;">
-              Freight: ${formatPkr(r.total_freight_minor || 0)} · Overhead: ${formatPkr(r.total_overhead_minor || 0)}
+            <div class="rep-kpi-sub">
+              Freight: ${formatPkr(r.total_freight_minor || 0)} · Op: ${formatPkr(r.total_overhead_minor || 0)}
             </div>
           </div>
 
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
-            <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; font-weight: 600;">Net Operating Result</div>
-            <div id="kpi-operating-result" style="font-size: 1.4rem; font-weight: 800; color: ${(r.net_operating_result_minor || 0) >= 0 ? '#34D399' : '#F87171'}; margin-top: 4px;">
+          <div class="rep-kpi-card">
+            <div class="rep-kpi-label">Net Operating Result</div>
+            <div id="kpi-operating-result" class="rep-kpi-val ${isOpResultPos ? 'is-result-pos' : 'is-result-neg'}">
               ${escapeHtml(r.formatted_net_operating_result || formatPkr(r.net_operating_result_minor || 0))}
             </div>
-            <div style="font-size: 0.7rem; color: ${(r.net_operating_result_minor || 0) >= 0 ? '#34D399' : '#F87171'}; font-weight: 700; margin-top: 4px;">
+            <div class="rep-kpi-sub" style="color: ${isOpResultPos ? '#34D399' : '#F87171'}; font-weight: 600;">
               ${(r.operating_margin_pct ?? 0).toFixed(1)}% operating margin
             </div>
           </div>
-
         </div>
 
         <!-- Section 1 & 2 Split: P&L Statement and Cash Movement -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="rep-pnl-split">
           
           <!-- Card 1: P&L Statement -->
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px;">
-              <h4 style="font-size: 0.875rem; font-weight: 700; color: #FFFFFF; margin: 0;">Period Income Statement (P&L)</h4>
-              <span style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.4); text-transform: uppercase;">Delivered basis</span>
+          <div class="rep-card">
+            <div class="rep-card-header">
+              <h3 class="rep-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #34D399;"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                Period Income Statement (P&L)
+              </h3>
+              <span class="rep-card-tag">Delivered Basis</span>
             </div>
 
             <!-- Revenue Block -->
-            <div style="font-size: 0.8125rem;">
-              <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.45); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Revenue</div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Gross Delivered Sales</span>
-                <span style="font-family: monospace;">${formatPkr(r.gross_revenue_minor || 0)}</span>
+            <div>
+              <div class="rep-sec-title">Revenue</div>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Gross Delivered Sales</span>
+                <span class="rep-line-val">${formatPkr(r.gross_revenue_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Customer Discounts</span>
-                <span style="font-family: monospace; color: #F59E0B;">-${formatPkr(r.customer_discounts_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Customer Discounts</span>
+                <span class="rep-line-val" style="color: #F59E0B;">-${formatPkr(r.customer_discounts_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Customer Shipping Fee</span>
-                <span style="font-family: monospace;">+${formatPkr(r.customer_shipping_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Customer Shipping Fee</span>
+                <span class="rep-line-val">+${formatPkr(r.customer_shipping_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Completed Sales Reversals (Returns)</span>
-                <span style="font-family: monospace; color: #F87171;">-${formatPkr(r.sales_reversals_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Completed Sales Reversals (Returns)</span>
+                <span class="rep-line-val" style="color: #F87171;">-${formatPkr(r.sales_reversals_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px dashed rgba(255, 255, 255, 0.1); font-weight: 700;">
-                <span style="color: #4ADE80;">Net Revenue</span>
-                <span style="font-family: monospace; color: #4ADE80;">${formatPkr(r.net_revenue_minor || 0)}</span>
+              <div class="rep-line-row is-total">
+                <span style="color: #34D399;">Net Revenue</span>
+                <span class="rep-line-val" style="color: #34D399;">${formatPkr(r.net_revenue_minor || 0)}</span>
               </div>
             </div>
 
             <!-- COGS Block -->
-            <div style="font-size: 0.8125rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px;">
-              <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.45); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Cost of Goods Sold (COGS)</div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Wholesale Product Cost (Snapshot)</span>
-                <span style="font-family: monospace;">${formatPkr(r.gross_cogs_minor || 0)}</span>
+            <div style="border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 10px;">
+              <div class="rep-sec-title">Cost of Goods Sold (COGS)</div>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Wholesale Product Cost (Snapshot)</span>
+                <span class="rep-line-val">${formatPkr(r.gross_cogs_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Sellable Return Restocks (COGS Reversals)</span>
-                <span style="font-family: monospace; color: #4ADE80;">-${formatPkr(r.cogs_reversals_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Sellable Return Restocks (COGS Reversals)</span>
+                <span class="rep-line-val" style="color: #34D399;">-${formatPkr(r.cogs_reversals_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px dashed rgba(255, 255, 255, 0.1); font-weight: 700;">
+              <div class="rep-line-row is-total">
                 <span style="color: #F59E0B;">Net Wholesale COGS</span>
-                <span style="font-family: monospace; color: #F59E0B;">${formatPkr(r.net_cogs_minor || 0)}</span>
+                <span class="rep-line-val" style="color: #F59E0B;">${formatPkr(r.net_cogs_minor || 0)}</span>
               </div>
             </div>
 
-            <!-- Contribution Block -->
-            <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 10px 12px; font-size: 0.8125rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <div style="font-weight: 700; color: #38BDF8;">Contribution Before Overhead</div>
-                  <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.5);">Net Revenue less Net COGS</div>
-                </div>
-                <div style="text-align: right;">
-                  <div style="font-family: monospace; font-size: 1.1rem; font-weight: 800; color: #38BDF8;">${formatPkr(r.contribution_before_overhead_minor || 0)}</div>
-                  <div style="font-size: 0.7rem; color: #38BDF8; font-weight: 600;">${(r.contribution_margin_pct ?? 0).toFixed(1)}% Margin</div>
-                </div>
+            <!-- Contribution Callout Box -->
+            <div class="rep-callout-box is-blue">
+              <div>
+                <div class="rep-callout-title">Contribution Before Overhead</div>
+                <div class="rep-callout-sub">Net Revenue less Net COGS</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="rep-callout-val" style="color: #38BDF8;">${formatPkr(r.contribution_before_overhead_minor || 0)}</div>
+                <div style="font-size: 0.6875rem; color: #38BDF8; font-weight: 600;">${(r.contribution_margin_pct ?? 0).toFixed(1)}% Margin</div>
               </div>
             </div>
 
-            <!-- Freight & Overhead Expenses Block -->
-            <div style="font-size: 0.8125rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px;">
+            <!-- Logistics & Overhead Block -->
+            <div style="border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.45); text-transform: uppercase; font-weight: 700;">Evidenced Logistics & Overhead</span>
-                <span style="font-size: 0.6875rem; color: #60A5FA; background: rgba(96, 165, 250, 0.15); padding: 1px 6px; border-radius: 4px; font-weight: 600;">AlphaZee-Borne Freight</span>
+                <span class="rep-sec-title" style="margin: 0;">Evidenced Logistics & Overhead</span>
+                <span style="font-size: 0.625rem; color: #60A5FA; background: rgba(96, 165, 250, 0.12); padding: 1px 6px; border-radius: 4px;">AlphaZee-Borne Freight</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Outbound Courier Freight</span>
-                <span style="font-family: monospace;">${formatPkr(r.outbound_freight_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Outbound Courier Freight</span>
+                <span class="rep-line-val">${formatPkr(r.outbound_freight_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">RTO Transport Freight (100% AlphaZee)</span>
-                <span style="font-family: monospace; color: #F87171;">${formatPkr(r.rto_freight_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">RTO Transport Freight (100% AlphaZee)</span>
+                <span class="rep-line-val" style="color: #F87171;">${formatPkr(r.rto_freight_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Customer Return Freight (100% AlphaZee)</span>
-                <span style="font-family: monospace; color: #F87171;">${formatPkr(r.customer_return_freight_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Customer Return Freight (100% AlphaZee)</span>
+                <span class="rep-line-val" style="color: #F87171;">${formatPkr(r.customer_return_freight_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Packaging & Boxes</span>
-                <span style="font-family: monospace;">${formatPkr(overhead.packaging || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Packaging & Boxes</span>
+                <span class="rep-line-val">${formatPkr(overhead.packaging || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Advertising & Marketing</span>
-                <span style="font-family: monospace;">${formatPkr(overhead.advertising || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Advertising & Marketing</span>
+                <span class="rep-line-val">${formatPkr(overhead.advertising || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Platform & Hosting</span>
-                <span style="font-family: monospace;">${formatPkr(overhead.platform_hosting || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Platform & Hosting</span>
+                <span class="rep-line-val">${formatPkr(overhead.platform_hosting || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Salaries & Wages</span>
-                <span style="font-family: monospace;">${formatPkr(overhead.salaries || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Salaries & Wages</span>
+                <span class="rep-line-val">${formatPkr(overhead.salaries || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Office & Other Overhead</span>
-                <span style="font-family: monospace;">${formatPkr((overhead.office_supplies || 0) + (overhead.other_overhead || 0))}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Office & General Overhead</span>
+                <span class="rep-line-val">${formatPkr((overhead.office_supplies || 0) + (overhead.other_overhead || 0))}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px dashed rgba(255, 255, 255, 0.1); font-weight: 700;">
+              <div class="rep-line-row is-total">
                 <span style="color: #F87171;">Total Evidenced Logistics & Overhead</span>
-                <span style="font-family: monospace; color: #F87171;">-${formatPkr((r.total_freight_minor || 0) + (r.total_overhead_minor || 0))}</span>
+                <span class="rep-line-val" style="color: #F87171;">-${formatPkr((r.total_freight_minor || 0) + (r.total_overhead_minor || 0))}</span>
               </div>
             </div>
 
-            <!-- Net Operating Result Block -->
-            <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 12px; font-size: 0.8125rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <div style="font-weight: 800; color: #FFFFFF; font-size: 0.9375rem;">Net Operating Result</div>
-                  <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.45); margin-top: 2px;">
-                    Contribution less recorded transport & operational overhead
-                  </div>
+            <!-- Net Operating Result Box -->
+            <div class="rep-callout-box" style="background: rgba(0, 0, 0, 0.4); border-color: rgba(255, 255, 255, 0.1);">
+              <div>
+                <div class="rep-callout-title" style="font-size: 0.9375rem;">Net Operating Result</div>
+                <div class="rep-callout-sub">Contribution less verified transport & overhead</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="rep-callout-val" style="color: ${isOpResultPos ? '#34D399' : '#F87171'}; font-size: 1.25rem;">
+                  ${formatPkr(r.net_operating_result_minor || 0)}
                 </div>
-                <div style="text-align: right;">
-                  <div style="font-family: monospace; font-size: 1.25rem; font-weight: 800; color: ${(r.net_operating_result_minor || 0) >= 0 ? '#34D399' : '#F87171'};">
-                    ${formatPkr(r.net_operating_result_minor || 0)}
-                  </div>
-                  <div style="font-size: 0.72rem; color: ${(r.net_operating_result_minor || 0) >= 0 ? '#34D399' : '#F87171'}; font-weight: 700;">
-                    ${(r.operating_margin_pct ?? 0).toFixed(1)}% Operating Margin
-                  </div>
+                <div style="font-size: 0.6875rem; color: ${isOpResultPos ? '#34D399' : '#F87171'}; font-weight: 600;">
+                  ${(r.operating_margin_pct ?? 0).toFixed(1)}% Operating Margin
                 </div>
               </div>
-              <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 8px; border-top: 1px solid var(--admin-border-hairline); padding-top: 6px;">
-                <strong>Disclosure:</strong> Net Operating Result is subject to unrecorded business expenses, tax liabilities, and pending courier settlements. Never treat as final audited net profit.
-              </div>
+            </div>
+            <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.35); line-height: 1.4;">
+              <strong>Disclosure:</strong> Net Operating Result is subject to unrecorded business expenses, courier settlement adjustments, and tax liabilities. Never treat as final audited net profit.
             </div>
 
           </div>
 
           <!-- Card 2: Cash Movement & Balance Sheet -->
-          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px;">
-              <h4 style="font-size: 0.875rem; font-weight: 700; color: #FFFFFF; margin: 0;">Cash Movement & Account Reconciliation</h4>
-              <span style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.4); text-transform: uppercase;">Realized cash flow</span>
+          <div class="rep-card">
+            <div class="rep-card-header">
+              <h3 class="rep-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #38BDF8;"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+                Cash Movement & Account Reconciliation
+              </h3>
+              <span class="rep-card-tag">Realized Cash Flow</span>
             </div>
 
             <!-- Inflows Block -->
-            <div style="font-size: 0.8125rem;">
-              <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.45); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Cash Inflows (Actual Receipts)</div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Bank Customer Prepayments Cleared</span>
-                <span style="font-family: monospace;">+${formatPkr(r.bank_prepayments_minor || 0)}</span>
+            <div>
+              <div class="rep-sec-title">Cash Inflows (Actual Receipts)</div>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Bank Customer Prepayments Cleared</span>
+                <span class="rep-line-val">+${formatPkr(r.bank_prepayments_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Courier COD Cash Remitted into Bank</span>
-                <span style="font-family: monospace;">+${formatPkr(r.courier_cod_remitted_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Courier COD Cash Remitted into Bank</span>
+                <span class="rep-line-val">+${formatPkr(r.courier_cod_remitted_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Supplier Refunds Received</span>
-                <span style="font-family: monospace;">+${formatPkr(r.supplier_refunds_received_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Supplier Refunds Received</span>
+                <span class="rep-line-val">+${formatPkr(r.supplier_refunds_received_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px dashed rgba(255, 255, 255, 0.1); font-weight: 700;">
-                <span style="color: #4ADE80;">Total Cash Inflows</span>
-                <span style="font-family: monospace; color: #4ADE80;">${formatPkr(r.total_cash_inflows_minor || 0)}</span>
+              <div class="rep-line-row is-total">
+                <span style="color: #34D399;">Total Cash Inflows</span>
+                <span class="rep-line-val" style="color: #34D399;">${formatPkr(r.total_cash_inflows_minor || 0)}</span>
               </div>
             </div>
 
             <!-- Outflows Block -->
-            <div style="font-size: 0.8125rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px;">
-              <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.45); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Cash Outflows (Disbursements)</div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Supplier Payments Disbursed</span>
-                <span style="font-family: monospace; color: #F87171;">-${formatPkr(r.supplier_payments_minor || 0)}</span>
+            <div style="border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 10px;">
+              <div class="rep-sec-title">Cash Outflows (Disbursements)</div>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Supplier Payments Disbursed</span>
+                <span class="rep-line-val" style="color: #F87171;">-${formatPkr(r.supplier_payments_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Customer Refunds Paid</span>
-                <span style="font-family: monospace; color: #F87171;">-${formatPkr(r.refunds_paid_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Customer Refunds Paid</span>
+                <span class="rep-line-val" style="color: #F87171;">-${formatPkr(r.refunds_paid_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Direct Cash & Bank Expenses Paid</span>
-                <span style="font-family: monospace; color: #F87171;">-${formatPkr(r.cash_expenses_paid_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Direct Cash & Bank Expenses Paid</span>
+                <span class="rep-line-val" style="color: #F87171;">-${formatPkr(r.cash_expenses_paid_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Courier Freight Deductions Settled</span>
-                <span style="font-family: monospace; color: #F87171;">-${formatPkr(r.courier_deductions_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Courier Freight Deductions Settled</span>
+                <span class="rep-line-val" style="color: #F87171;">-${formatPkr(r.courier_deductions_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px dashed rgba(255, 255, 255, 0.1); font-weight: 700;">
+              <div class="rep-line-row is-total">
                 <span style="color: #F87171;">Total Cash Outflows</span>
-                <span style="font-family: monospace; color: #F87171;">-${formatPkr(r.total_cash_outflows_minor || 0)}</span>
+                <span class="rep-line-val" style="color: #F87171;">-${formatPkr(r.total_cash_outflows_minor || 0)}</span>
               </div>
             </div>
 
-            <!-- Net Cash Movement Block -->
-            <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 12px; font-size: 0.8125rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <div style="font-weight: 800; color: #FFFFFF; font-size: 0.9375rem;">Net Cash Movement</div>
-                  <div style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.45); margin-top: 2px;">
-                    Realized cash inflow less disbursed outflow
-                  </div>
-                </div>
-                <div style="text-align: right;">
-                  <div style="font-family: monospace; font-size: 1.25rem; font-weight: 800; color: ${(r.net_cash_movement_minor || 0) >= 0 ? '#4ADE80' : '#F87171'};">
-                    ${formatPkr(r.net_cash_movement_minor || 0)}
-                  </div>
+            <!-- Net Cash Movement Box -->
+            <div class="rep-callout-box" style="background: rgba(0, 0, 0, 0.4); border-color: rgba(255, 255, 255, 0.1);">
+              <div>
+                <div class="rep-callout-title" style="font-size: 0.9375rem;">Net Cash Movement</div>
+                <div class="rep-callout-sub">Realized cash inflow less disbursed outflow</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="rep-callout-val" style="color: ${(r.net_cash_movement_minor || 0) >= 0 ? '#34D399' : '#F87171'}; font-size: 1.25rem;">
+                  ${formatPkr(r.net_cash_movement_minor || 0)}
                 </div>
               </div>
             </div>
 
             <!-- Outstanding Receivables & Liabilities Block -->
-            <div style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px; font-size: 0.8125rem;">
-              <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.45); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">Outstanding Receivables & Liabilities</div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Courier-Held COD (Pending Remittance)</span>
-                <span style="font-family: monospace; font-weight: 700; color: #FBBF24;">${formatPkr(r.courier_held_cod_minor || 0)}</span>
+            <div style="border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 10px;">
+              <div class="rep-sec-title">Outstanding Receivables & Liabilities</div>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Courier-Held COD (Pending Remittance)</span>
+                <span class="rep-line-val" style="color: #FBBF24; font-weight: 600;">${formatPkr(r.courier_held_cod_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Outstanding Supplier Liabilities</span>
-                <span style="font-family: monospace; font-weight: 700; color: #F87171;">${formatPkr(r.supplier_liabilities_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Outstanding Supplier Liabilities</span>
+                <span class="rep-line-val" style="color: #F87171; font-weight: 600;">${formatPkr(r.supplier_liabilities_minor || 0)}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                <span style="color: rgba(255, 255, 255, 0.75);">Customer Refund Liabilities Payable</span>
-                <span style="font-family: monospace; font-weight: 700; color: #F87171;">${formatPkr(r.refund_liabilities_minor || 0)}</span>
+              <div class="rep-line-row">
+                <span class="rep-line-label">Customer Refund Liabilities Payable</span>
+                <span class="rep-line-val" style="color: #F87171; font-weight: 600;">${formatPkr(r.refund_liabilities_minor || 0)}</span>
               </div>
             </div>
 
@@ -555,19 +617,21 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
         </div>
 
         <!-- Section 3: Per-Order Economics & Margin Inspection -->
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
-          
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div class="rep-card">
+          <div class="rep-orders-toolbar">
             <div>
-              <h4 style="font-size: 0.875rem; font-weight: 700; color: #FFFFFF; margin: 0 0 4px 0;">Per-Order Economics & Line-Item Margins</h4>
-              <div style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5);">
-                Inspect wholesale cost, outbound freight, RTO penalties, and stock ownership source per order.
-              </div>
+              <h3 class="rep-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                Per-Order Economics & Unit Margins
+              </h3>
+              <p class="rep-subtitle" style="margin-top: 2px;">
+                Wholesale cost, outbound freight, RTO penalties, and stock ownership source per order.
+              </p>
             </div>
 
             <!-- Order Table Filter Controls -->
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-              <select id="report-order-status-filter" style="background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 4px; padding: 4px 8px; font-size: 0.75rem;">
+              <select id="report-order-status-filter" class="rep-status-select" aria-label="Filter by order status">
                 <option value="" ${orderStatusFilter === '' ? 'selected' : ''}>All Order Statuses</option>
                 <option value="delivered" ${orderStatusFilter === 'delivered' ? 'selected' : ''}>Delivered</option>
                 <option value="dispatched" ${orderStatusFilter === 'dispatched' ? 'selected' : ''}>Dispatched</option>
@@ -577,68 +641,86 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
                 <option value="cancelled" ${orderStatusFilter === 'cancelled' ? 'selected' : ''}>Cancelled</option>
               </select>
 
-              <input type="text" id="report-order-search" placeholder="Search order # or customer..." value="${escapeHtml(orderSearchQuery)}" style="background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 4px; padding: 4px 8px; font-size: 0.75rem; width: 180px;" />
+              <input type="text" id="report-order-search" class="rep-search-input" placeholder="Search order # or customer..." value="${escapeHtml(orderSearchQuery)}" aria-label="Search orders" />
 
-              <button type="button" id="btn-filter-orders" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 4px; padding: 4px 10px; font-size: 0.75rem; cursor: pointer;">
-                Filter
+              <button type="button" id="btn-filter-orders" class="rep-icon-btn is-apply" data-tooltip="Filter orders" aria-label="Filter orders" title="Filter orders">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               </button>
             </div>
           </div>
 
-          <!-- Order Economics Table -->
-          <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <!-- Desktop Order Economics Table (Rule 1: Zero horizontal scroll) -->
+          <div class="rep-table-wrap rep-table-desktop">
+            <table class="admin-table">
               <thead>
-                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; background: rgba(0, 0, 0, 0.2);">
-                  <th style="padding: 10px 8px;">Order #</th>
-                  <th style="padding: 10px 8px;">Customer</th>
-                  <th style="padding: 10px 8px;">Status</th>
-                  <th style="padding: 10px 8px; text-align: right;">Customer Total</th>
-                  <th style="padding: 10px 8px; text-align: right;">COGS</th>
-                  <th style="padding: 10px 8px; text-align: right;">Logistics</th>
-                  <th style="padding: 10px 8px; text-align: right;">Supplier Payables</th>
-                  <th style="padding: 10px 8px; text-align: right;">Est. Contribution</th>
-                  <th style="padding: 10px 8px; text-align: center;">Lines</th>
+                <tr>
+                  <th style="width: 130px;">Order #</th>
+                  <th>Customer</th>
+                  <th style="width: 100px;">Status</th>
+                  <th style="text-align: right; width: 110px;">Total</th>
+                  <th style="text-align: right; width: 100px;">COGS</th>
+                  <th style="text-align: right; width: 100px;">Logistics</th>
+                  <th style="text-align: right; width: 110px;">Payables</th>
+                  <th style="text-align: right; width: 110px;">Contribution</th>
+                  <th style="text-align: center; width: 60px;">Lines</th>
                 </tr>
               </thead>
               <tbody>
-                ${ordersRowsHtml.length ? ordersRowsHtml : '<tr><td colspan="9" style="padding: 32px 8px; text-align: center; color: rgba(255,255,255,0.4);">No orders recorded for this period matching the selected criteria.</td></tr>'}
+                ${ordersRowsHtml.length ? ordersRowsHtml : '<tr><td colspan="9" style="padding: 36px 12px; text-align: center; color: rgba(255,255,255,0.4);">No orders recorded for this period matching the selected criteria.</td></tr>'}
               </tbody>
             </table>
           </div>
 
+          <!-- Mobile Order Cards (Rule 1: Zero horizontal scroll) -->
+          <div class="rep-order-cards">
+            ${ordersCardsHtml.length ? ordersCardsHtml : '<div style="padding: 24px 12px; text-align: center; color: rgba(255,255,255,0.4);">No orders recorded matching criteria.</div>'}
+          </div>
+
           <!-- Total count and pagination -->
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); padding-top: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.06);">
             <div>Showing ${(orderEconomics.orders || []).length} of ${orderEconomics.total_orders || 0} orders</div>
             ${orderEconomics.total_orders > orderLimit ? `
               <div style="display: flex; gap: 6px;">
-                <button type="button" id="btn-orders-prev" ${orderOffset === 0 ? 'disabled' : ''} style="padding: 3px 8px; font-size: 0.72rem; border-radius: 4px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #FFF; cursor: pointer;">Prev</button>
-                <button type="button" id="btn-orders-next" ${orderOffset + orderLimit >= orderEconomics.total_orders ? 'disabled' : ''} style="padding: 3px 8px; font-size: 0.72rem; border-radius: 4px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #FFF; cursor: pointer;">Next</button>
+                <button type="button" id="btn-orders-prev" ${orderOffset === 0 ? 'disabled' : ''} class="rep-icon-btn" data-tooltip="Previous page" style="width: auto; padding: 4px 10px; font-size: 0.75rem;">Prev</button>
+                <button type="button" id="btn-orders-next" ${orderOffset + orderLimit >= orderEconomics.total_orders ? 'disabled' : ''} class="rep-icon-btn" data-tooltip="Next page" style="width: auto; padding: 4px 10px; font-size: 0.75rem;">Next</button>
               </div>
             ` : ''}
           </div>
 
         </div>
 
-        <!-- Section 4: Marketing Attribution & Campaign Conversion -->
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
-          <h4 style="font-size: 0.875rem; font-weight: 700; color: #FFFFFF; margin: 0;">Marketing Attribution & Campaign Conversion (UTM)</h4>
-          <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <!-- Section 4: Marketing Attribution & Campaign Conversion (UTM) -->
+        <div class="rep-card">
+          <div class="rep-card-header">
+            <h3 class="rep-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #38BDF8;"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+              Marketing Attribution & Campaign Conversion (UTM)
+            </h3>
+            <span class="rep-card-tag">${((marketingAnalytics && marketingAnalytics.channels) || []).length} Channels</span>
+          </div>
+
+          <!-- Desktop UTM Table -->
+          <div class="rep-table-wrap rep-table-desktop">
+            <table class="admin-table">
               <thead>
-                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
-                  <th style="padding: 8px;">UTM Source</th>
-                  <th style="padding: 8px;">Medium</th>
-                  <th style="padding: 8px;">Campaign</th>
-                  <th style="padding: 8px; text-align: center;">Orders</th>
-                  <th style="padding: 8px; text-align: right;">Delivered Sales</th>
-                  <th style="padding: 8px; text-align: right;">Discounts</th>
+                <tr>
+                  <th>UTM Source</th>
+                  <th>Medium</th>
+                  <th>Campaign</th>
+                  <th style="text-align: center; width: 90px;">Orders</th>
+                  <th style="text-align: right; width: 130px;">Delivered Sales</th>
+                  <th style="text-align: right; width: 120px;">Discounts</th>
                 </tr>
               </thead>
               <tbody>
-                ${marketingRowsHtml.length ? marketingRowsHtml : '<tr><td colspan="6" style="padding: 16px 8px; text-align: center; color: rgba(255,255,255,0.4);">No UTM attribution data recorded for this period.</td></tr>'}
+                ${marketingRowsHtml.length ? marketingRowsHtml : '<tr><td colspan="6" style="padding: 24px 12px; text-align: center; color: rgba(255,255,255,0.4);">No UTM attribution data recorded for this period.</td></tr>'}
               </tbody>
             </table>
+          </div>
+
+          <!-- Mobile UTM Cards -->
+          <div class="rep-order-cards">
+            ${marketingCardsHtml.length ? marketingCardsHtml : '<div style="padding: 16px; text-align: center; color: rgba(255,255,255,0.4);">No UTM attribution data recorded.</div>'}
           </div>
         </div>
 
@@ -665,6 +747,36 @@ export async function renderFinancialReports(container, viewGenerationRef, prefe
     });
 
     // Order Filters
+    const orderStatusSelect = container.querySelector('#report-order-status-filter');
+    if (orderStatusSelect) {
+      orderStatusSelect.addEventListener('change', () => {
+        orderStatusFilter = orderStatusSelect.value || '';
+        orderOffset = 0;
+        loadData();
+      });
+    }
+
+    let searchTimer = null;
+    const orderSearchInput = container.querySelector('#report-order-search');
+    if (orderSearchInput) {
+      orderSearchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          orderSearchQuery = orderSearchInput.value.trim();
+          orderOffset = 0;
+          loadData();
+        }, 300);
+      });
+      orderSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          clearTimeout(searchTimer);
+          orderSearchQuery = orderSearchInput.value.trim();
+          orderOffset = 0;
+          loadData();
+        }
+      });
+    }
+
     container.querySelector('#btn-filter-orders')?.addEventListener('click', () => {
       const sSelect = container.querySelector('#report-order-status-filter');
       const qInput = container.querySelector('#report-order-search');
