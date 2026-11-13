@@ -17,6 +17,15 @@ class VendorSessionResponse(BaseModel):
     vendor_id: uuid.UUID
     vendor_name: str
     vendor_slug: str
+    onboarding_status: str = "active"
+    whatsapp_number: Optional[str] = None
+    contact_person: Optional[str] = None
+    city: Optional[str] = None
+    warehouse_address: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account_title: Optional[str] = None
+    bank_iban: Optional[str] = None
+    cnic: Optional[str] = None
     csrf_token: str
     authenticated: bool = True
 

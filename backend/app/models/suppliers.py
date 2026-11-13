@@ -18,6 +18,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
@@ -33,6 +34,7 @@ def _utcnow() -> datetime:
 
 
 ALLOWED_SUPPLIER_STATUSES = {"active", "inactive", "suspended"}
+ALLOWED_ONBOARDING_STATUSES = {"pending_profile", "active", "suspended"}
 ALLOWED_SUPPLIER_TYPES = {"external_vendor", "alphazee_internal"}
 INTERNAL_SUPPLIER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
@@ -106,10 +108,16 @@ class Supplier(Base):
             name="ck_suppliers_status",
         ),
         CheckConstraint(
+            "onboarding_status IN ('pending_profile', 'active', 'suspended')",
+            name="ck_suppliers_onboarding_status",
+        ),
+        CheckConstraint(
             "supplier_type IN ('external_vendor', 'alphazee_internal')",
             name="ck_suppliers_supplier_type",
         ),
         Index("idx_suppliers_status", "status"),
+        Index("idx_suppliers_onboarding_status", "onboarding_status"),
+        Index("idx_suppliers_whatsapp", "whatsapp_number"),
         Index("idx_suppliers_type", "supplier_type"),
     )
 
@@ -140,6 +148,31 @@ class Supplier(Base):
         server_default=text("'external_vendor'"),
     )
     """'external_vendor' for third-party shops; 'alphazee_internal' for internal inventory source."""
+
+    # Business Profile & Onboarding Fields
+    whatsapp_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    contact_person: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    business_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cnic: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ntn: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    warehouse_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    city: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bank_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bank_account_title: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bank_iban: Mapped[str | None] = mapped_column(String(34), nullable=True)
+    lead_time_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=2,
+        server_default=text("2"),
+    )
+    onboarding_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="pending_profile",
+        server_default=text("'pending_profile'"),
+    )
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Private owner notes (payment arrangements, contact info, WhatsApp number)."""
@@ -175,6 +208,14 @@ class Supplier(Base):
         if value not in ALLOWED_SUPPLIER_STATUSES:
             raise ValueError(
                 f"Invalid supplier status {value!r}. Must be one of {sorted(ALLOWED_SUPPLIER_STATUSES)}."
+            )
+        return value
+
+    @validates("onboarding_status")
+    def validate_onboarding_status(self, key: str, value: str) -> str:
+        if value not in ALLOWED_ONBOARDING_STATUSES:
+            raise ValueError(
+                f"Invalid onboarding status {value!r}. Must be one of {sorted(ALLOWED_ONBOARDING_STATUSES)}."
             )
         return value
 

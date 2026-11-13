@@ -6,6 +6,7 @@ const sections = new Set(['overview', 'products', 'collections', 'hero', 'media'
 export function adminSection(pathname) {
   const path = pathname.replace(/\/+$/, '');
   if (path === '/admin') return 'overview';
+  if (/^\/admin\/suppliers\/[^/]+\/ledger$/.test(path)) return 'suppliers';
   const section = path.slice('/admin/'.length);
   return path.startsWith('/admin/') && sections.has(section) ? section : 'not-found';
 }

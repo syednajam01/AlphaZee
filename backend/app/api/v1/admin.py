@@ -26,6 +26,7 @@ from app.models.inventory import InventoryBalance, SupplierVariant
 from app.models.orders import Order
 from app.models.shipments import Shipment
 from app.models.suppliers import Supplier, UserAccount
+from app.models.vendor_portal import VendorUser
 from app.queries.inventory import StaleInventoryError, adjust_inventory
 from app.queries.reservations import InsufficientStockError, get_inventory_summary as get_stock_summary
 from app.schemas.admin import (
@@ -46,6 +47,7 @@ from app.schemas.admin import (
     ShipmentCreateRequest,
     ShipmentStatusUpdateRequest,
     SupplierCreateRequest,
+    SupplierQuickProvisionRequest,
     SupplierListResponse,
     SupplierResponseSchema,
     SupplierVariantAssignRequest,
@@ -680,6 +682,30 @@ def list_suppliers_endpoint(
     if not include_internal:
         stmt = stmt.where(Supplier.supplier_type != "alphazee_internal")
     suppliers = db.scalars(stmt).all()
+
+    # Pre-aggregate main product counts and stock units per supplier
+    counts_stmt = (
+        select(
+            SupplierVariant.supplier_id,
+            func.count(func.distinct(Variant.product_id)).label("main_products_count"),
+            func.coalesce(func.sum(InventoryBalance.on_hand), 0).label("total_stock_count"),
+        )
+        .select_from(SupplierVariant)
+        .join(Variant, Variant.id == SupplierVariant.variant_id)
+        .outerjoin(InventoryBalance, InventoryBalance.supplier_variant_id == SupplierVariant.id)
+        .where(SupplierVariant.active.is_(True))
+        .group_by(SupplierVariant.supplier_id)
+    )
+    counts_map = {row.supplier_id: (row.main_products_count, int(row.total_stock_count)) for row in db.execute(counts_stmt).all()}
+
+    # Pre-fetch portal usernames
+    vu_stmt = (
+        select(VendorUser.vendor_id, VendorUser.username)
+        .where(VendorUser.is_active.is_(True))
+        .order_by(VendorUser.created_at.asc())
+    )
+    username_map = {row.vendor_id: row.username for row in db.execute(vu_stmt).all()}
+
     return SupplierListResponse(
         suppliers=[
             SupplierResponseSchema(
@@ -688,6 +714,22 @@ def list_suppliers_endpoint(
                 slug=s.slug,
                 status=s.status,
                 supplier_type=s.supplier_type,
+                whatsapp_number=s.whatsapp_number,
+                contact_person=s.contact_person,
+                business_type=s.business_type,
+                cnic=s.cnic,
+                ntn=s.ntn,
+                email=s.email,
+                warehouse_address=s.warehouse_address,
+                city=s.city,
+                bank_name=s.bank_name,
+                bank_account_title=s.bank_account_title,
+                bank_iban=s.bank_iban,
+                lead_time_days=s.lead_time_days,
+                onboarding_status=s.onboarding_status,
+                portal_username=username_map.get(s.id),
+                main_products_count=counts_map.get(s.id, (0, 0))[0],
+                total_stock_count=counts_map.get(s.id, (0, 0))[1],
                 notes=s.notes,
             )
             for s in suppliers
@@ -718,6 +760,7 @@ def create_supplier_endpoint(
             name=payload.name.strip(),
             slug=payload.slug.strip(),
             status=payload.status.strip(),
+            onboarding_status="active",
             notes=payload.notes.strip() if payload.notes else None,
         )
         db.add(supplier)
@@ -735,6 +778,94 @@ def create_supplier_endpoint(
         name=supplier.name,
         slug=supplier.slug,
         status=supplier.status,
+        onboarding_status=supplier.onboarding_status,
+        notes=supplier.notes,
+    )
+
+
+@router.post(
+    "/suppliers/quick-provision",
+    response_model=SupplierResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+    summary="Atomically register an approved supplier and provision initial vendor user login",
+)
+def quick_provision_supplier_endpoint(
+    payload: SupplierQuickProvisionRequest,
+    db: Session = Depends(get_db),
+) -> SupplierResponseSchema:
+    import re
+    clean_username = payload.username.strip().lower()
+    existing_user = db.scalars(select(VendorUser).where(VendorUser.username == clean_username)).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Portal username '{clean_username}' is already in use.",
+        )
+
+    base_slug = re.sub(r'[^a-z0-9]+', '-', payload.name.lower()).strip('-')
+    if not base_slug:
+        base_slug = re.sub(r'[^a-z0-9]+', '-', clean_username).strip('-')
+    if not base_slug:
+        base_slug = f"sup-{uuid.uuid4().hex[:6]}"
+
+    slug = base_slug
+    counter = 1
+    while db.scalars(select(Supplier).where(Supplier.slug == slug)).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    try:
+        supplier = Supplier(
+            name=payload.name.strip(),
+            slug=slug,
+            whatsapp_number=payload.whatsapp_number.strip(),
+            status="active",
+            onboarding_status="pending_profile",
+            lead_time_days=2,
+            notes=payload.notes.strip() if payload.notes else None,
+        )
+        db.add(supplier)
+        db.flush()
+
+        from app.services import vendor_portal as vp_service
+        from app.services import supplier_finance as sf_service
+
+        vp_service.provision_vendor_user(
+            db,
+            vendor_id=supplier.id,
+            username=clean_username,
+            password=payload.password,
+            allow_short_local=False,
+        )
+
+        sf_service.get_or_create_supplier_agreement(db, supplier.id)
+
+        db.commit()
+        db.refresh(supplier)
+    except ValueError as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(err),
+        ) from err
+    except Exception as err:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to provision supplier: {str(err)}",
+        )
+
+    return SupplierResponseSchema(
+        id=supplier.id,
+        name=supplier.name,
+        slug=supplier.slug,
+        status=supplier.status,
+        supplier_type=supplier.supplier_type,
+        whatsapp_number=supplier.whatsapp_number,
+        onboarding_status=supplier.onboarding_status,
+        portal_username=clean_username,
+        main_products_count=0,
+        total_stock_count=0,
         notes=supplier.notes,
     )
 

@@ -23,6 +23,8 @@ from app.schemas.supplier_finance import (
     SupplierAdvanceRequest,
     SupplierAgreementSchema,
     SupplierAgreementUpdateRequest,
+    SupplierDedicatedLedgerResponse,
+    SupplierHeaderInfoSchema,
     SupplierLedgerEntrySchema,
     SupplierLedgerListResponse,
     SupplierLedgerSummarySchema,
@@ -31,6 +33,9 @@ from app.schemas.supplier_finance import (
     SupplierRefundRequest,
     SupplierStatementResponse,
 )
+from app.models.suppliers import Supplier
+from app.models.vendor_portal import VendorUser
+from sqlalchemy import func, select
 from app.services import supplier_finance as service
 
 router = APIRouter(
@@ -38,6 +43,82 @@ router = APIRouter(
     tags=["Supplier Agreements & Finance"],
     dependencies=[Depends(require_owner_session)],
 )
+
+
+def resolve_supplier_by_handle(db: Session, handle: str) -> tuple[Supplier, Optional[str]]:
+    clean_handle = handle.strip()
+
+    # 1. Try UUID
+    try:
+        sup_uuid = uuid.UUID(clean_handle)
+        sup = db.get(Supplier, sup_uuid)
+        if sup:
+            vu = db.scalars(select(VendorUser).where(VendorUser.vendor_id == sup.id, VendorUser.is_active.is_(True))).first()
+            return sup, (vu.username if vu else None)
+    except (ValueError, AttributeError):
+        pass
+
+    # 2. Try VendorUser username
+    vu = db.scalars(select(VendorUser).where(VendorUser.username == clean_handle.lower(), VendorUser.is_active.is_(True))).first()
+    if vu:
+        sup = db.get(Supplier, vu.vendor_id)
+        if sup:
+            return sup, vu.username
+
+    # 3. Try Supplier slug
+    sup = db.scalars(select(Supplier).where(Supplier.slug == clean_handle.lower())).first()
+    if sup:
+        vu = db.scalars(select(VendorUser).where(VendorUser.vendor_id == sup.id, VendorUser.is_active.is_(True))).first()
+        return sup, (vu.username if vu else None)
+
+    # 4. Try Supplier name (case insensitive)
+    sup = db.scalars(select(Supplier).where(func.lower(Supplier.name) == clean_handle.lower())).first()
+    if sup:
+        vu = db.scalars(select(VendorUser).where(VendorUser.vendor_id == sup.id, VendorUser.is_active.is_(True))).first()
+        return sup, (vu.username if vu else None)
+
+    raise HTTPException(status_code=404, detail=f"Supplier not found for handle '{handle}'")
+
+
+@router.get(
+    "/by-handle/{handle}/ledger",
+    response_model=SupplierDedicatedLedgerResponse,
+    summary="Get dedicated supplier statement and ledger by username or slug",
+)
+def get_supplier_ledger_by_handle_endpoint(
+    handle: str,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    db: Session = Depends(get_db),
+) -> SupplierDedicatedLedgerResponse:
+    supplier, portal_username = resolve_supplier_by_handle(db, handle)
+    entries, total, summary = service.list_supplier_ledger_entries(
+        db,
+        supplier_id=supplier.id,
+        page=page,
+        page_size=page_size,
+    )
+    return SupplierDedicatedLedgerResponse(
+        supplier=SupplierHeaderInfoSchema(
+            id=supplier.id,
+            name=supplier.name,
+            slug=supplier.slug,
+            whatsapp_number=supplier.whatsapp_number,
+            portal_username=portal_username,
+            onboarding_status=supplier.onboarding_status,
+            status=supplier.status,
+            bank_name=supplier.bank_name,
+            bank_account_title=supplier.bank_account_title,
+            bank_iban=supplier.bank_iban,
+            city=supplier.city,
+            contact_person=supplier.contact_person,
+        ),
+        summary=summary,
+        entries=[SupplierLedgerEntrySchema.model_validate(e) for e in entries],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get(

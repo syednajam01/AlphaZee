@@ -219,3 +219,28 @@ class SupplierStatementResponse(BaseModel):
     unallocated_advances_minor: int
     entries: list[SupplierStatementEntrySchema]
 
+
+class SupplierHeaderInfoSchema(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    whatsapp_number: Optional[str] = None
+    portal_username: Optional[str] = None
+    onboarding_status: str = "active"
+    status: str = "active"
+    bank_name: Optional[str] = None
+    bank_account_title: Optional[str] = None
+    bank_iban: Optional[str] = None
+    city: Optional[str] = None
+    contact_person: Optional[str] = None
+
+
+class SupplierDedicatedLedgerResponse(BaseModel):
+    supplier: SupplierHeaderInfoSchema
+    summary: SupplierLedgerSummarySchema
+    entries: list[SupplierLedgerEntrySchema]
+    total: int
+    page: int
+    page_size: int
+
+

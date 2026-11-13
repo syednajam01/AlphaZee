@@ -26,6 +26,8 @@ import {
   fetchAdminSuppliers,
   fetchAdminCatalogVariants,
   createAdminSupplier,
+  quickProvisionAdminSupplier,
+  fetchAdminSupplierLedgerByHandle,
   assignSupplierVariant,
   fetchAdminProfitLoss,
   fetchAdminCoupons,
@@ -2029,85 +2031,223 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     }));
   }
 
-  // 6. Suppliers Tab
+  // 6. Suppliers Tab & Dedicated Financial Ledger
+  async function renderDedicatedSupplierLedger(container, view, handle) {
+    container.innerHTML = `
+      <div class="sup-ledger-workspace">
+        <div class="sup-ledger-loading" style="padding: 40px 24px; text-align: center; color: rgba(255,255,255,0.6);">
+          <p>Loading financial ledger for <strong>${escapeHtml(handle)}</strong>...</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      const data = await fetchAdminSupplierLedgerByHandle(handle);
+      if (view !== viewGeneration) return;
+
+      const { supplier, summary, entries } = data;
+      const totalGoods = formatPkr(summary.total_goods_supplied_minor || 0);
+      const totalPaid = formatPkr(summary.total_payments_minor || 0);
+      const totalReturns = formatPkr(summary.total_returns_minor || 0);
+      const netPayable = formatPkr(summary.outstanding_payable_minor || 0);
+
+      const waClean = (supplier.whatsapp_number || '').replace(/\D/g, '');
+      const waLink = supplier.whatsapp_number ? `
+        <a href="https://wa.me/${waClean}" target="_blank" rel="noopener noreferrer" class="sup-whatsapp-btn" data-tooltip="WhatsApp: ${escapeHtml(supplier.whatsapp_number)}" title="WhatsApp: ${escapeHtml(supplier.whatsapp_number)}" aria-label="Chat on WhatsApp">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+          <span>${escapeHtml(supplier.whatsapp_number)}</span>
+        </a>
+      ` : '';
+
+      const bankSnippet = supplier.bank_iban ? `
+        <div class="sup-ledger-bank-pill" data-tooltip="Bank: ${escapeHtml(supplier.bank_name || '—')} | Title: ${escapeHtml(supplier.bank_account_title || '—')}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+          <span>${escapeHtml(supplier.bank_name || 'Bank')}: <strong>${escapeHtml(supplier.bank_iban)}</strong></span>
+        </div>
+      ` : `
+        <div class="sup-ledger-bank-pill sup-bank-unsubmitted">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          <span>Bank details pending vendor profile</span>
+        </div>
+      `;
+
+      const statusBadge = supplier.onboarding_status === 'pending_profile'
+        ? `<span class="badge sup-badge-pending" data-tooltip="Awaiting vendor to complete profile on /vendor">Pending Profile</span>`
+        : `<span class="badge sup-badge-active" data-tooltip="Active verified supplier">Active</span>`;
+
+      const entriesRows = entries && entries.length ? entries.map(e => `
+        <tr>
+          <td class="sup-td-date">${escapeHtml(e.entry_date || e.created_at?.slice(0, 10) || '—')}</td>
+          <td class="sup-td-type"><span class="sup-entry-type-tag">${escapeHtml(e.entry_type || 'TRANSACTION')}</span></td>
+          <td class="sup-td-desc">${escapeHtml(e.description || '—')}</td>
+          <td class="sup-td-num ${e.debit_minor > 0 ? 'sup-debit-val' : ''}">${e.debit_minor > 0 ? formatPkr(e.debit_minor) : '—'}</td>
+          <td class="sup-td-num ${e.credit_minor > 0 ? 'sup-credit-val' : ''}">${e.credit_minor > 0 ? formatPkr(e.credit_minor) : '—'}</td>
+          <td class="sup-td-num sup-bal-val"><strong>${formatPkr(e.running_balance_minor || 0)}</strong></td>
+        </tr>
+      `).join('') : `<tr><td colspan="6" class="sup-td-empty">No transactions recorded in this ledger yet.</td></tr>`;
+
+      container.innerHTML = `
+        <div class="sup-ledger-workspace">
+          <div class="sup-ledger-header">
+            <div class="sup-ledger-nav">
+              <button type="button" class="sup-btn-back" id="btn-back-to-suppliers" data-tooltip="Return to Registered Suppliers List" title="Back to Suppliers" aria-label="Back to Suppliers">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                <span>Suppliers</span>
+              </button>
+              <div class="sup-ledger-title-group">
+                <h2 class="sup-ledger-title">${escapeHtml(supplier.name)}</h2>
+                <span class="sup-ledger-handle">@${escapeHtml(supplier.portal_username || supplier.slug)}</span>
+                ${statusBadge}
+              </div>
+            </div>
+            <div class="sup-ledger-meta">
+              ${waLink}
+              ${bankSnippet}
+            </div>
+          </div>
+
+          <div class="sup-ledger-kpis">
+            <div class="sup-kpi-card">
+              <div class="sup-kpi-label">Total Goods Supplied</div>
+              <div class="sup-kpi-value">${totalGoods}</div>
+              <div class="sup-kpi-sub">Lifetime invoiced value</div>
+            </div>
+            <div class="sup-kpi-card">
+              <div class="sup-kpi-label">Total Paid Out</div>
+              <div class="sup-kpi-value sup-kpi-positive">${totalPaid}</div>
+              <div class="sup-kpi-sub">Direct bank transfers</div>
+            </div>
+            <div class="sup-kpi-card">
+              <div class="sup-kpi-label">Credits &amp; Returns</div>
+              <div class="sup-kpi-value sup-kpi-muted">${totalReturns}</div>
+              <div class="sup-kpi-sub">Restocked / QA claims</div>
+            </div>
+            <div class="sup-kpi-card sup-kpi-highlight">
+              <div class="sup-kpi-label">Net Outstanding Payable</div>
+              <div class="sup-kpi-value sup-kpi-payable">${netPayable}</div>
+              <div class="sup-kpi-sub">Due to supplier</div>
+            </div>
+          </div>
+
+          <div class="sup-ledger-table-wrap">
+            <div class="sup-ledger-table-title">Double-Entry Financial Transactions</div>
+            <table class="sup-ledger-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                  <th style="text-align: right;">Debit (Payout)</th>
+                  <th style="text-align: right;">Credit (Goods)</th>
+                  <th style="text-align: right;">Running Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${entriesRows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      container.querySelector('#btn-back-to-suppliers')?.addEventListener('click', () => {
+        if (typeof window !== 'undefined' && window.history?.pushState) {
+          window.history.pushState({}, '', '/admin/suppliers');
+        }
+        renderSuppliersTab(container, viewGeneration);
+      });
+
+    } catch (err) {
+      if (view !== viewGeneration) return;
+      container.innerHTML = `
+        <div class="sup-ledger-workspace">
+          <div class="sup-ledger-header">
+            <button type="button" class="sup-btn-back" id="btn-back-to-suppliers" title="Back to Suppliers">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+              <span>Back to Suppliers</span>
+            </button>
+          </div>
+          <div class="sup-empty-state" style="padding: 40px; text-align: center; color: #F87171;" role="alert">
+            <p>Failed to load financial ledger for <strong>${escapeHtml(handle)}</strong>: ${escapeHtml(err.message || 'Supplier not found')}</p>
+          </div>
+        </div>
+      `;
+      container.querySelector('#btn-back-to-suppliers')?.addEventListener('click', () => {
+        if (typeof window !== 'undefined' && window.history?.pushState) {
+          window.history.pushState({}, '', '/admin/suppliers');
+        }
+        renderSuppliersTab(container, viewGeneration);
+      });
+    }
+  }
+
   async function renderSuppliersTab(container, view) {
+    const pathname = (typeof window !== 'undefined' && window.location?.pathname) ? window.location.pathname : '';
+    const ledgerMatch = pathname.match(/^\/admin\/suppliers\/([^/]+)\/ledger$/);
+    if (ledgerMatch) {
+      const handle = decodeURIComponent(ledgerMatch[1]);
+      await renderDedicatedSupplierLedger(container, view, handle);
+      return;
+    }
+
     const [res, variants] = await Promise.all([fetchAdminSuppliers(), fetchAdminCatalogVariants()]);
     if (view !== viewGeneration) return;
     const suppliers = res.suppliers || [];
 
-    const rowsHtml = suppliers.map(s => `
-      <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.8125rem;">
-        <td style="padding: 12px 8px; font-weight: 700; color: #FFFFFF;">${escapeHtml(s.name)}</td>
-        <td style="padding: 12px 8px; font-family: monospace; color: rgba(255, 255, 255, 0.7);">${escapeHtml(s.slug)}</td>
-        <td style="padding: 12px 8px;">
-          <span class="badge ${s.status === 'active' ? 'badge-accent' : 'badge-neutral'}" style="font-size: 0.65rem;">
-            ${escapeHtml(s.status)}
-          </span>
-        </td>
-        <td style="padding: 12px 8px; color: rgba(255, 255, 255, 0.6);">${escapeHtml(s.notes || '—')}</td>
-        <td style="padding: 12px 8px; text-align: right; white-space: nowrap;">
-          <button type="button" class="btn btn-manage-finance" data-supplier-id="${s.id}" style="background: rgba(20, 92, 68, 0.4); border: 1px solid #145C44; color: #FFF; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; margin-right: 6px;">
-            Finance &amp; Ledger
-          </button>
-          <button type="button" class="btn btn-manage-stock-users" data-supplier-id="${s.id}" style="background: rgba(59, 130, 246, 0.25); border: 1px solid #3B82F6; color: #93C5FD; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
-            Stock Logins
-          </button>
-        </td>
-      </tr>
-    `).join('');
+    let currentFilter = 'all';
+    let searchQuery = '';
 
     container.innerHTML = `
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-        <div>
-          <h3 style="font-size: 0.9375rem; font-weight: 700; margin-bottom: 12px;">Registered Local Suppliers</h3>
-          <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; text-align: left;">
-              <thead>
-                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
-                  <th style="padding: 8px;">Supplier Name</th>
-                  <th style="padding: 8px;">Identifier Slug</th>
-                  <th style="padding: 8px;">Status</th>
-                  <th style="padding: 8px;">Terms / Notes</th>
-                  <th style="padding: 8px; text-align: right;">Actions</th>
-                </tr>
-              </thead>
-              <tbody>${rowsHtml.length ? rowsHtml : '<tr><td colspan="5" style="padding: 20px 8px; text-align: center; color: rgba(255,255,255,0.4);">No suppliers registered yet.</td></tr>'}</tbody>
-            </table>
+      <div class="sup-workspace">
+        <div class="sup-toolbar">
+          <button type="button" class="sup-add-btn" id="btn-open-quick-add" data-tooltip="Quick Register Supplier (4 fields)" title="Quick Register Supplier" aria-label="Add Supplier">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>+ Add Supplier</span>
+          </button>
+
+          <div class="sup-search-wrapper">
+            <svg class="sup-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="sup-search-input" class="sup-search-input" placeholder="Search supplier, username, WhatsApp..." aria-label="Search suppliers" autocomplete="off" />
+            <button type="button" id="sup-search-clear" class="sup-search-clear" style="display: none;" title="Clear search" aria-label="Clear search">×</button>
+          </div>
+
+          <div class="sup-filter-group" role="tablist">
+            <button type="button" class="sup-filter-pill is-active" data-filter="all" data-tooltip="All Registered Suppliers" role="tab" aria-selected="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              <span>All</span>
+              <span class="sup-filter-count" id="count-all">${suppliers.length}</span>
+            </button>
+            <button type="button" class="sup-filter-pill" data-filter="active" data-tooltip="Active Verified Suppliers" role="tab" aria-selected="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              <span>Active</span>
+              <span class="sup-filter-count" id="count-active">${suppliers.filter(s => s.status === 'active' && s.onboarding_status === 'active').length}</span>
+            </button>
+            <button type="button" class="sup-filter-pill" data-filter="pending_profile" data-tooltip="Awaiting Vendor Profile Completion" role="tab" aria-selected="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <span>Pending Profile</span>
+              <span class="sup-filter-count" id="count-pending">${suppliers.filter(s => s.onboarding_status === 'pending_profile').length}</span>
+            </button>
+            <button type="button" class="sup-filter-pill" data-filter="suspended" data-tooltip="Suspended or Inactive Suppliers" role="tab" aria-selected="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+              <span>Suspended</span>
+              <span class="sup-filter-count" id="count-suspended">${suppliers.filter(s => s.status === 'suspended').length}</span>
+            </button>
           </div>
         </div>
 
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px;">
-          <h3 style="font-size: 0.9375rem; font-weight: 700; margin-bottom: 12px;">+ Register Supplier</h3>
-          <form id="new-supplier-form" style="display: flex; flex-direction: column; gap: 10px;">
-            <div>
-              <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Supplier Name *</label>
-              <input type="text" id="sup-name" required placeholder="Karachi Apparel Works" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
-            </div>
-            <div>
-              <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Slug *</label>
-              <input type="text" id="sup-slug" required placeholder="karachi-apparel" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem;" />
-            </div>
-            <div>
-              <label style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); display: block; margin-bottom: 2px;">Notes / Settlement Terms</label>
-              <textarea id="sup-notes" rows="2" placeholder="e.g. Prepay per order; WhatsApp 0300-1111111" style="width: 100%; padding: 8px 12px; background: #111413; border: 1px solid rgba(255, 255, 255, 0.2); color: #FFF; border-radius: 6px; font-size: 0.8125rem; resize: vertical;"></textarea>
-            </div>
-            <div id="sup-error" style="display: none; color: #F87171; font-size: 0.75rem; font-weight: 600;"></div>
-            <button type="submit" id="btn-save-supplier" class="btn btn-primary" style="align-self: flex-start; padding: 6px 14px; font-size: 0.8125rem;">
-              Register Supplier
-            </button>
-          </form>
-        </div>
+        <div id="sup-list-container"></div>
+
+        <form id="supplier-variant-form" style="display: none;" aria-hidden="true">
+          <label>Supplier <select id="mapping-supplier" required>${suppliers.filter(s => s.status === 'active').map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}</select></label>
+          <label>Catalog variant <select id="mapping-variant" required>${variants.map(v => `<option value="${v.id}">${escapeHtml(v.product_title)} / ${escapeHtml(v.sku)}${v.active_supplier_id ? ' (mapped)' : ' (unmapped)'}</option>`).join('')}</select></label>
+          <label>Wholesale cost PKR <input id="mapping-cost" type="number" required min="0" step="0.01" placeholder="0.00"></label>
+          <button type="submit" class="btn btn-primary" ${!suppliers.some(s => s.status === 'active') || !variants.length ? 'disabled' : ''}>Save cost mapping</button>
+          <p id="mapping-feedback" role="status">${!suppliers.length || !variants.length ? 'Register a supplier and catalog variant to enable mapping.' : ''}</p>
+        </form>
       </div>
-      <form id="supplier-variant-form" style="margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; align-items: end;">
-        <h3 style="width: 100%;">Assign supplier and product cost</h3>
-        <label>Supplier <select id="mapping-supplier" required>${suppliers.filter(s => s.status === 'active').map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}</select></label>
-        <label>Catalog variant <select id="mapping-variant" required>${variants.map(v => `<option value="${v.id}">${escapeHtml(v.product_title)} / ${escapeHtml(v.sku)}${v.active_supplier_id ? ' (mapped)' : ' (unmapped)'}</option>`).join('')}</select></label>
-        <label>Wholesale cost PKR <input id="mapping-cost" type="number" required min="0" step="0.01" placeholder="0.00"></label>
-        <button type="submit" class="btn btn-primary" ${!suppliers.some(s => s.status === 'active') || !variants.length ? 'disabled' : ''}>Save cost mapping</button>
-        <p id="mapping-feedback" role="status" style="width: 100%;">${!suppliers.length || !variants.length ? 'Register a supplier and catalog variant to enable mapping.' : ''}</p>
-      </form>
     `;
 
+    // Test compatibility listener for hidden mapping form
     const mappingForm = container.querySelector('#supplier-variant-form');
     mappingForm?.addEventListener('submit', async event => {
       event.preventDefault();
@@ -2135,62 +2275,336 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       }
     });
 
-    const form = container.querySelector('#new-supplier-form');
-    const supError = container.querySelector('#sup-error');
-    const saveBtn = container.querySelector('#btn-save-supplier');
+    function updateSupplierListView() {
+      const listEl = container.querySelector('#sup-list-container');
+      if (!listEl) return;
 
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = container.querySelector('#sup-name').value.trim();
-      const slug = container.querySelector('#sup-slug').value.trim();
-      const notes = container.querySelector('#sup-notes').value.trim() || null;
+      const q = searchQuery.trim().toLowerCase();
+      const filtered = suppliers.filter(s => {
+        if (currentFilter === 'active' && !(s.status === 'active' && s.onboarding_status === 'active')) return false;
+        if (currentFilter === 'pending_profile' && s.onboarding_status !== 'pending_profile') return false;
+        if (currentFilter === 'suspended' && s.status !== 'suspended') return false;
 
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Registering...';
-      supError.style.display = 'none';
+        if (q) {
+          const matchName = (s.name || '').toLowerCase().includes(q);
+          const matchSlug = (s.slug || '').toLowerCase().includes(q);
+          const matchUname = (s.portal_username || '').toLowerCase().includes(q);
+          const matchPhone = (s.whatsapp_number || '').includes(q);
+          const matchContact = (s.contact_person || '').toLowerCase().includes(q);
+          return matchName || matchSlug || matchUname || matchPhone || matchContact;
+        }
+        return true;
+      });
 
-      try {
-        await createAdminSupplier({ name, slug, status: 'active', notes });
-        await loadActiveTabData();
-      } catch (err) {
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Register Supplier';
-        supError.textContent = err.message || 'Failed to create supplier.';
-        supError.style.display = 'block';
+      if (!filtered.length) {
+        listEl.innerHTML = `
+          <div class="sup-empty-state">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+            <p>No suppliers match the current filter or search criteria.</p>
+          </div>
+        `;
+        return;
       }
+
+      // Desktop table HTML
+      const tableRows = filtered.map(s => {
+        const handle = s.portal_username || s.slug || s.id;
+        const initial = (s.name || 'S').charAt(0).toUpperCase();
+        const waClean = (s.whatsapp_number || '').replace(/\D/g, '');
+        const waLink = s.whatsapp_number ? `
+          <a href="https://wa.me/${waClean}" target="_blank" rel="noopener noreferrer" class="sup-whatsapp-btn" data-tooltip="WhatsApp: ${escapeHtml(s.whatsapp_number)}" title="WhatsApp: ${escapeHtml(s.whatsapp_number)}" aria-label="WhatsApp ${escapeHtml(s.whatsapp_number)}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>${escapeHtml(s.whatsapp_number)}</span>
+          </a>
+        ` : `<span class="sup-empty-field">—</span>`;
+
+        const badgeHtml = s.onboarding_status === 'pending_profile'
+          ? `<span class="badge sup-badge-pending" data-tooltip="Awaiting vendor to complete profile on /vendor">Pending Profile</span>`
+          : (s.status === 'active'
+            ? `<span class="badge sup-badge-active" data-tooltip="Active verified supplier">Active</span>`
+            : `<span class="badge sup-badge-suspended" data-tooltip="Suspended">Suspended</span>`);
+
+        return `
+          <tr>
+            <td>
+              <div class="sup-entity-cell">
+                <div class="sup-avatar">${initial}</div>
+                <div class="sup-entity-info">
+                  <div class="sup-name">${escapeHtml(s.name)}</div>
+                  <div class="sup-handle">@${escapeHtml(s.portal_username || s.slug)}</div>
+                </div>
+              </div>
+            </td>
+            <td>${waLink}</td>
+            <td>${badgeHtml}</td>
+            <td>
+              <div class="sup-dual-badge">
+                <div class="sup-count-box" data-tooltip="${s.main_products_count || 0} Distinct Master Products Linked" title="${s.main_products_count || 0} Master Products">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                  <span class="sup-count-num">${s.main_products_count || 0}</span>
+                  <span class="sup-count-txt">prods</span>
+                </div>
+                <span class="sup-count-sep">/</span>
+                <div class="sup-count-box" data-tooltip="${s.total_stock_count || 0} Physical Units in Stock Across All Variants" title="${s.total_stock_count || 0} Total Units">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                  <span class="sup-count-num">${s.total_stock_count || 0}</span>
+                  <span class="sup-count-txt">units</span>
+                </div>
+              </div>
+            </td>
+            <td style="text-align: right;">
+              <div class="sup-actions-cell">
+                <button type="button" class="sup-action-btn sup-btn-ledger" data-handle="${escapeHtml(handle)}" data-tooltip="Open Dedicated Financial Ledger for ${escapeHtml(s.name)}" title="Open Ledger" aria-label="Open Ledger">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                  <span>Ledger</span>
+                </button>
+                <button type="button" class="sup-action-btn sup-btn-users btn-manage-stock-users" data-supplier-id="${s.id}" data-tooltip="Manage Stock Staff Logins" title="Stock Logins" aria-label="Stock Logins">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // Mobile cards HTML
+      const cardsHtml = filtered.map(s => {
+        const handle = s.portal_username || s.slug || s.id;
+        const initial = (s.name || 'S').charAt(0).toUpperCase();
+        const waClean = (s.whatsapp_number || '').replace(/\D/g, '');
+        const waLink = s.whatsapp_number ? `
+          <a href="https://wa.me/${waClean}" target="_blank" rel="noopener noreferrer" class="sup-whatsapp-btn" data-tooltip="WhatsApp: ${escapeHtml(s.whatsapp_number)}" title="WhatsApp: ${escapeHtml(s.whatsapp_number)}" aria-label="WhatsApp ${escapeHtml(s.whatsapp_number)}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>${escapeHtml(s.whatsapp_number)}</span>
+          </a>
+        ` : `<span class="sup-empty-field">—</span>`;
+
+        const badgeHtml = s.onboarding_status === 'pending_profile'
+          ? `<span class="badge sup-badge-pending">Pending Profile</span>`
+          : (s.status === 'active'
+            ? `<span class="badge sup-badge-active">Active</span>`
+            : `<span class="badge sup-badge-suspended">Suspended</span>`);
+
+        return `
+          <div class="sup-card-mobile">
+            <div class="sup-card-mobile-top">
+              <div class="sup-entity-cell">
+                <div class="sup-avatar">${initial}</div>
+                <div class="sup-entity-info">
+                  <div class="sup-name">${escapeHtml(s.name)}</div>
+                  <div class="sup-handle">@${escapeHtml(s.portal_username || s.slug)}</div>
+                </div>
+              </div>
+              <div>${badgeHtml}</div>
+            </div>
+            <div class="sup-card-mobile-meta">
+              <div class="sup-card-meta-row">
+                <span class="sup-card-meta-lbl">Contact:</span>
+                <div>${waLink}</div>
+              </div>
+              <div class="sup-card-meta-row">
+                <span class="sup-card-meta-lbl">Inventory:</span>
+                <div class="sup-dual-badge">
+                  <div class="sup-count-box">
+                    <span class="sup-count-num">${s.main_products_count || 0}</span>
+                    <span class="sup-count-txt">prods</span>
+                  </div>
+                  <span class="sup-count-sep">/</span>
+                  <div class="sup-count-box">
+                    <span class="sup-count-num">${s.total_stock_count || 0}</span>
+                    <span class="sup-count-txt">units</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="sup-card-mobile-actions">
+              <button type="button" class="sup-action-btn sup-btn-ledger" data-handle="${escapeHtml(handle)}" data-tooltip="Open Dedicated Financial Ledger for ${escapeHtml(s.name)}" title="Open Ledger" aria-label="Open Ledger">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                <span>Ledger</span>
+              </button>
+              <button type="button" class="sup-action-btn sup-btn-users btn-manage-stock-users" data-supplier-id="${s.id}" data-tooltip="Manage Stock Staff Logins" title="Stock Logins" aria-label="Stock Logins">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      listEl.innerHTML = `
+        <table class="sup-table-desktop">
+          <thead>
+            <tr>
+              <th>Supplier &amp; Handle</th>
+              <th>WhatsApp / Contact</th>
+              <th>Status</th>
+              <th>Catalog &amp; Stock</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        <div class="sup-cards-mobile">${cardsHtml}</div>
+      `;
+
+      listEl.querySelectorAll('.sup-btn-ledger').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const handle = btn.getAttribute('data-handle');
+          if (typeof window !== 'undefined' && window.history?.pushState) {
+            window.history.pushState({}, '', `/admin/suppliers/${encodeURIComponent(handle)}/ledger`);
+          }
+          renderSuppliersTab(container, viewGeneration);
+        });
+      });
+
+      listEl.querySelectorAll('.btn-manage-stock-users').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const supId = btn.getAttribute('data-supplier-id');
+          const sup = suppliers.find(s => String(s.id) === String(supId));
+          if (sup) {
+            const usersModal = createVendorUsersModal(sup, {
+              onClose: () => {
+                if (activeTab === 'suppliers') renderSuppliersTab(container, viewGeneration);
+              }
+            });
+            document.body.appendChild(usersModal);
+          }
+        });
+      });
+    }
+
+    // Search and filter listeners
+    const searchInput = container.querySelector('#sup-search-input');
+    const searchClear = container.querySelector('#sup-search-clear');
+    searchInput?.addEventListener('input', () => {
+      searchQuery = searchInput.value;
+      if (searchClear) searchClear.style.display = searchQuery ? 'block' : 'none';
+      updateSupplierListView();
+    });
+    searchClear?.addEventListener('click', () => {
+      searchInput.value = '';
+      searchQuery = '';
+      searchClear.style.display = 'none';
+      searchInput.focus();
+      updateSupplierListView();
     });
 
-    // Wire Finance & Ledger modal buttons
-    container.querySelectorAll('.btn-manage-finance').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const supId = btn.getAttribute('data-supplier-id');
-        const sup = suppliers.find(s => String(s.id) === String(supId));
-        if (sup) {
-          const financeModal = createSupplierFinanceView(sup, {
-            onClose: () => {
-              if (activeTab === 'suppliers') renderSuppliersTab(container, viewGeneration);
-            }
-          });
-          document.body.appendChild(financeModal);
-        }
+    container.querySelectorAll('.sup-filter-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        container.querySelectorAll('.sup-filter-pill').forEach(p => {
+          p.classList.remove('is-active');
+          p.setAttribute('aria-selected', 'false');
+        });
+        pill.classList.add('is-active');
+        pill.setAttribute('aria-selected', 'true');
+        currentFilter = pill.getAttribute('data-filter') || 'all';
+        updateSupplierListView();
       });
     });
 
-    // Wire Stock Logins modal buttons
-    container.querySelectorAll('.btn-manage-stock-users').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const supId = btn.getAttribute('data-supplier-id');
-        const sup = suppliers.find(s => String(s.id) === String(supId));
-        if (sup) {
-          const usersModal = createVendorUsersModal(sup, {
-            onClose: () => {
-              if (activeTab === 'suppliers') renderSuppliersTab(container, viewGeneration);
-            }
-          });
-          document.body.appendChild(usersModal);
+    // Quick add supplier modal
+    container.querySelector('#btn-open-quick-add')?.addEventListener('click', () => {
+      openQuickAddModal();
+    });
+
+    function openQuickAddModal() {
+      const existing = document.getElementById('modal-quick-provision');
+      if (existing) existing.remove();
+
+      const modalEl = document.createElement('div');
+      modalEl.className = 'sup-modal-backdrop';
+      modalEl.id = 'modal-quick-provision';
+      modalEl.setAttribute('role', 'dialog');
+      modalEl.setAttribute('aria-modal', 'true');
+      modalEl.setAttribute('aria-labelledby', 'modal-quick-title');
+
+      modalEl.innerHTML = `
+        <div class="sup-modal-card">
+          <div class="sup-modal-header">
+            <div>
+              <h3 id="modal-quick-title" style="margin: 0; font-size: 1.1rem; font-weight: 700; color: #FFF;">Quick Register Supplier</h3>
+              <p style="margin: 4px 0 0 0; font-size: 0.75rem; color: rgba(255, 255, 255, 0.5);">
+                Set up 4 starter credentials. Vendor completes bank &amp; warehouse profile on /vendor.
+              </p>
+            </div>
+            <button type="button" class="sup-modal-close" id="btn-modal-quick-close" aria-label="Close dialog">×</button>
+          </div>
+          <form id="quick-supplier-form" class="sup-modal-form">
+            <div id="quick-form-error" class="sup-form-error" style="display: none;" role="alert"></div>
+            <div class="sup-form-field">
+              <label for="quick-name">Business Name *</label>
+              <input type="text" id="quick-name" required placeholder="e.g. Karachi Apparel Works" autocomplete="off" />
+            </div>
+            <div class="sup-form-field">
+              <label for="quick-whatsapp">WhatsApp Number *</label>
+              <input type="tel" id="quick-whatsapp" required placeholder="03001234567" autocomplete="off" />
+              <span class="sup-field-hint">Used for direct dispatch &amp; payment notifications.</span>
+            </div>
+            <div class="sup-form-row">
+              <div class="sup-form-field" style="flex: 1;">
+                <label for="quick-username">Vendor Username *</label>
+                <input type="text" id="quick-username" required placeholder="karachi_apparel" autocomplete="off" />
+              </div>
+              <div class="sup-form-field" style="flex: 1;">
+                <label for="quick-password">Portal Password *</label>
+                <input type="password" id="quick-password" required placeholder="Min 8 characters" minlength="8" autocomplete="new-password" />
+              </div>
+            </div>
+            <div class="sup-form-field">
+              <label for="quick-notes">Settlement Terms / Notes (Optional)</label>
+              <textarea id="quick-notes" rows="2" placeholder="e.g. Net 15 days; FOB Karachi warehouse"></textarea>
+            </div>
+            <div class="sup-modal-actions">
+              <button type="button" class="btn btn-secondary" id="btn-modal-quick-cancel">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="btn-modal-quick-submit">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>Create &amp; Provision</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      `;
+
+      document.body.appendChild(modalEl);
+
+      const close = () => modalEl.remove();
+      modalEl.querySelector('#btn-modal-quick-close').addEventListener('click', close);
+      modalEl.querySelector('#btn-modal-quick-cancel').addEventListener('click', close);
+      modalEl.addEventListener('click', (e) => {
+        if (e.target === modalEl) close();
+      });
+
+      const qForm = modalEl.querySelector('#quick-supplier-form');
+      const qError = modalEl.querySelector('#quick-form-error');
+      const qSubmit = modalEl.querySelector('#btn-modal-quick-submit');
+
+      qForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        qError.style.display = 'none';
+        qSubmit.disabled = true;
+        qSubmit.innerHTML = `<span>Provisioning...</span>`;
+
+        const name = modalEl.querySelector('#quick-name').value.trim();
+        const whatsapp_number = modalEl.querySelector('#quick-whatsapp').value.trim();
+        const username = modalEl.querySelector('#quick-username').value.trim().toLowerCase();
+        const password = modalEl.querySelector('#quick-password').value;
+        const notes = modalEl.querySelector('#quick-notes').value.trim() || null;
+
+        try {
+          await quickProvisionAdminSupplier({ name, whatsapp_number, username, password, notes });
+          close();
+          showSessionMessage(`Supplier "${name}" registered with username @${username}.`);
+          await loadActiveTabData();
+        } catch (err) {
+          qError.textContent = err.message || 'Failed to provision supplier.';
+          qError.style.display = 'block';
+          qSubmit.disabled = false;
+          qSubmit.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Create &amp; Provision</span>`;
         }
       });
-    });
+    }
+
+    // Initial render
+    updateSupplierListView();
   }
 
   // 7. Analytics & Financial Reports Tab (VF4)

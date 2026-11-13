@@ -214,7 +214,110 @@ body:has(.vendor-portal-container) { margin: 0; background: #f6f6f3; }
   .vp-modal-dialog { max-height: calc(100dvh - 24px); }
   .vp-modal-body { padding: 20px; }
   .vp-modal-header { padding: 12px 20px; }
+  .vp-onboard-grid { grid-template-columns: 1fr !important; }
 }
+
+/* ==========================================================================
+   Vendor Onboarding Form (Pending Profile Gating)
+   ========================================================================== */
+.vp-onboard-container {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0 48px;
+}
+.vp-onboard-card {
+  width: 100%;
+  max-width: 680px;
+  background: #ffffff;
+  border: 1px solid var(--vp-line);
+  border-radius: 8px;
+  padding: 32px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+.vp-onboard-header {
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--vp-line);
+  padding-bottom: 20px;
+}
+.vp-onboard-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #B45309;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  margin-bottom: 12px;
+}
+.vp-onboard-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--vp-ink);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+.vp-onboard-desc {
+  font-size: 13px;
+  color: var(--vp-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+.vp-onboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.vp-col-span-2 {
+  grid-column: 1 / -1;
+}
+.vp-onboard-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vp-muted);
+  margin: 16px 0 4px;
+  border-bottom: 1px dashed var(--vp-line);
+  padding-bottom: 6px;
+}
+.vp-terms-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px;
+  background: #fafaf8;
+  border: 1px solid var(--vp-line);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--vp-ink);
+  line-height: 1.4;
+}
+.vp-terms-row input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--vp-accent);
+  width: 16px;
+  height: 16px;
+}
+
+/* Zero visible scrollbar invariant across vendor portal */
+.vendor-portal-container,
+.vendor-portal-container * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.vendor-portal-container::-webkit-scrollbar,
+.vendor-portal-container *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vendor-portal-container * { animation: none; transition: none; }
 }

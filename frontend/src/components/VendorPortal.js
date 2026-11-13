@@ -15,6 +15,8 @@ import {
   reportVendorShortage,
   fetchVendorStockHistory,
   onVendorSessionExpired,
+  updateVendorProfile,
+  fetchVendorProfile,
 } from '../utils/api.js';
 
 import { sanitizeMediaUrl } from '../utils/dom.js';
@@ -100,6 +102,11 @@ export function initVendorPortal() {
       const restored = await fetchVendorSession();
       if (destroyed) return;
       session = restored;
+      if (session.onboarding_status === 'pending_profile') {
+        isLoading = false;
+        render();
+        return;
+      }
       await loadStock();
     } catch {
       session = null;
@@ -144,6 +151,9 @@ export function initVendorPortal() {
     if (!session) {
       container.classList.add('vp-login-mode');
       container.appendChild(renderLoginForm());
+    } else if (session.onboarding_status === 'pending_profile') {
+      container.appendChild(renderHeader());
+      container.appendChild(renderOnboardingForm());
     } else {
       container.appendChild(renderHeader());
       if (notice) {
@@ -264,6 +274,11 @@ export function initVendorPortal() {
         const restored = await loginVendor(uname, pwd);
         if (destroyed) return;
         session = restored;
+        if (session.onboarding_status === 'pending_profile') {
+          isLoading = false;
+          render();
+          return;
+        }
         await loadStock();
       } catch (err) {
         errorMsg = err.message || 'Login failed';
@@ -277,6 +292,7 @@ export function initVendorPortal() {
   }
 
   function renderHeader() {
+    const isPending = session.onboarding_status === 'pending_profile';
     const header = document.createElement('header');
     header.className = 'vp-header';
     header.innerHTML = `
@@ -285,18 +301,19 @@ export function initVendorPortal() {
         <div class="vp-role-pill">Stock workspace</div>
       </div>
       <div class="vp-header-right">
+        ${!isPending ? `
         <button type="button" class="vp-btn vp-btn-outline vp-btn-sm" id="vp-refresh-btn" ${saving ? 'disabled' : ''}>Refresh stock</button>
         <button type="button" class="vp-btn vp-btn-outline vp-btn-sm" id="vp-history-btn" ${saving ? 'disabled' : ''}>
           Update history
-        </button>
+        </button>` : ''}
         <button type="button" class="vp-btn vp-btn-subtle vp-btn-sm" id="vp-logout-btn" title="Sign out ${escapeHtml(session.username)}">
           Sign out (${escapeHtml(session.username)})
         </button>
       </div>
     `;
 
-    header.querySelector('#vp-history-btn').addEventListener('click', openHistoryModal);
-    header.querySelector('#vp-refresh-btn').addEventListener('click', () => { notice = ''; loadStock(); });
+    header.querySelector('#vp-history-btn')?.addEventListener('click', openHistoryModal);
+    header.querySelector('#vp-refresh-btn')?.addEventListener('click', () => { notice = ''; loadStock(); });
     header.querySelector('#vp-logout-btn').addEventListener('click', async () => {
       batchGeneration++; stockRequest++;
       drafts.clear();
@@ -315,6 +332,132 @@ export function initVendorPortal() {
     });
 
     return header;
+  }
+
+  function renderOnboardingForm() {
+    const wrap = document.createElement('div');
+    wrap.className = 'vp-onboard-container';
+    wrap.innerHTML = `
+      <div class="vp-onboard-card">
+        <div class="vp-onboard-header">
+          <div class="vp-onboard-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>Action Required · Profile Setup</span>
+          </div>
+          <h2 class="vp-onboard-title">Complete Your Vendor Profile</h2>
+          <p class="vp-onboard-desc">
+            Welcome to AlphaZee! To unlock your stock counting workspace and activate logistics pickups, please provide your representative details, warehouse dispatch address, and settlement bank account.
+          </p>
+        </div>
+
+        <div id="vp-onboard-error" class="vp-alert vp-alert-error" style="display: none; margin-bottom: 20px;" role="alert"></div>
+
+        <form id="vp-onboard-form" class="vp-form">
+          <div class="vp-onboard-section-title">1. Legal &amp; Authorized Representative</div>
+          <div class="vp-onboard-grid">
+            <div class="vp-form-group">
+              <label for="vp-contact-person" class="vp-form-label">Contact Person Name *</label>
+              <input type="text" id="vp-contact-person" class="vp-input" required placeholder="e.g. Muhammad Usman" autocomplete="name" />
+            </div>
+            <div class="vp-form-group">
+              <label for="vp-cnic" class="vp-form-label">CNIC / National Identity *</label>
+              <input type="text" id="vp-cnic" class="vp-input" required placeholder="42101-1234567-1" autocomplete="off" />
+            </div>
+            <div class="vp-form-group">
+              <label for="vp-ntn" class="vp-form-label">NTN / Tax Number (Optional)</label>
+              <input type="text" id="vp-ntn" class="vp-input" placeholder="e.g. 1234567-8" autocomplete="off" />
+            </div>
+            <div class="vp-form-group">
+              <label for="vp-email" class="vp-form-label">Official Email (Optional)</label>
+              <input type="email" id="vp-email" class="vp-input" placeholder="vendor@alphazee.pk" autocomplete="email" />
+            </div>
+          </div>
+
+          <div class="vp-onboard-section-title">2. Warehouse &amp; Logistics</div>
+          <div class="vp-onboard-grid">
+            <div class="vp-form-group vp-col-span-2">
+              <label for="vp-warehouse-address" class="vp-form-label">Warehouse / Dispatch Pickup Address *</label>
+              <textarea id="vp-warehouse-address" class="vp-input" rows="2" required placeholder="Plot #, Street, Industrial Area / Market" style="resize: vertical;"></textarea>
+            </div>
+            <div class="vp-form-group">
+              <label for="vp-city" class="vp-form-label">City *</label>
+              <input type="text" id="vp-city" class="vp-input" required placeholder="e.g. Karachi" />
+            </div>
+            <div class="vp-form-group">
+              <label for="vp-lead-time" class="vp-form-label">Dispatch Lead Time (Days) *</label>
+              <input type="number" id="vp-lead-time" class="vp-input" required min="1" max="14" value="2" />
+            </div>
+          </div>
+
+          <div class="vp-onboard-section-title">3. Settlement Bank Account</div>
+          <div class="vp-onboard-grid">
+            <div class="vp-form-group">
+              <label for="vp-bank-name" class="vp-form-label">Bank Name *</label>
+              <input type="text" id="vp-bank-name" class="vp-input" required placeholder="e.g. Meezan Bank / Bank Alfalah" />
+            </div>
+            <div class="vp-form-group">
+              <label for="vp-bank-title" class="vp-form-label">Account Title *</label>
+              <input type="text" id="vp-bank-title" class="vp-input" required placeholder="Account title as per cheque" />
+            </div>
+            <div class="vp-form-group vp-col-span-2">
+              <label for="vp-bank-iban" class="vp-form-label">Bank IBAN (24 Characters) *</label>
+              <input type="text" id="vp-bank-iban" class="vp-input" required placeholder="PK36MEZN0000001234567890" maxlength="34" style="font-family: monospace; letter-spacing: 0.05em;" />
+            </div>
+          </div>
+
+          <div class="vp-terms-row">
+            <input type="checkbox" id="vp-terms-accept" required />
+            <label for="vp-terms-accept">
+              I certify that all details submitted are accurate and that all merchandise supplied to AlphaZee will strictly match sample quality standards and pass the mandatory 7-day inspection window before settlement payout.
+            </label>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <button type="submit" id="vp-btn-submit-onboard" class="vp-btn vp-btn-primary" style="width: 100%; min-height: 44px; font-weight: 600; font-size: 14px;">
+              Save Profile &amp; Unlock Workspace
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    const form = wrap.querySelector('#vp-onboard-form');
+    const errBox = wrap.querySelector('#vp-onboard-error');
+    const submitBtn = wrap.querySelector('#vp-btn-submit-onboard');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving Profile & Verifying...';
+
+      const payload = {
+        contact_person: form.querySelector('#vp-contact-person').value.trim(),
+        cnic: form.querySelector('#vp-cnic').value.trim(),
+        ntn: form.querySelector('#vp-ntn').value.trim() || null,
+        email: form.querySelector('#vp-email').value.trim() || null,
+        warehouse_address: form.querySelector('#vp-warehouse-address').value.trim(),
+        city: form.querySelector('#vp-city').value.trim(),
+        lead_time_days: parseInt(form.querySelector('#vp-lead-time').value, 10) || 2,
+        bank_name: form.querySelector('#vp-bank-name').value.trim(),
+        bank_account_title: form.querySelector('#vp-bank-title').value.trim(),
+        bank_iban: form.querySelector('#vp-bank-iban').value.trim(),
+      };
+
+      try {
+        await updateVendorProfile(payload);
+        session.onboarding_status = 'active';
+        await loadStock();
+        render();
+      } catch (err) {
+        errBox.textContent = err.message || 'Failed to complete profile onboarding.';
+        errBox.style.display = 'flex';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save Profile & Unlock Workspace';
+      }
+    });
+
+    return wrap;
   }
 
   function renderStatsBar() {

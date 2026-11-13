@@ -614,6 +614,50 @@ export async function createAdminSupplier(supplierData) {
 }
 
 /**
+ * Quick-provision an approved supplier and initial vendor portal login.
+ * @param {Object} payload { name, whatsapp_number, username, password, notes }
+ * @returns {Promise<Object>}
+ */
+export async function quickProvisionAdminSupplier(payload) {
+  return request('/admin/suppliers/quick-provision', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Fetch dedicated supplier statement and ledger by username or slug.
+ * @param {string} handle
+ * @param {Object} [options]
+ * @returns {Promise<Object>}
+ */
+export async function fetchAdminSupplierLedgerByHandle(handle, { page = 1, pageSize = 50 } = {}) {
+  return request(`/admin/suppliers/by-handle/${encodeURIComponent(handle)}/ledger?page=${page}&page_size=${pageSize}`);
+}
+
+/**
+ * Fetch authenticated vendor profile and onboarding status.
+ * @returns {Promise<Object>}
+ */
+export async function fetchVendorProfile() {
+  return request('/vendor/profile');
+}
+
+/**
+ * Submit vendor onboarding and profile details.
+ * @param {Object} payload
+ * @returns {Promise<Object>}
+ */
+export async function updateVendorProfile(payload) {
+  return request('/vendor/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
  * Assign a catalog variant to a supplier.
  * @param {string} supplierId
  * @param {Object} payload { variant_id, supplier_cost_minor, active }

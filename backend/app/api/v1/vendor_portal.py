@@ -17,6 +17,7 @@ from app.dependencies.vendor_auth import (
 from app.models.suppliers import Supplier
 from app.models.vendor_portal import VendorSession, VendorUser
 from app.queries.inventory import StaleInventoryError
+from app.schemas.admin import VendorProfileUpdateRequest
 from app.schemas.vendor_portal import (
     ReportShortageRequest,
     VendorAuditHistoryResponse,
@@ -110,6 +111,15 @@ def vendor_login_endpoint(
         vendor_id=vendor.id,
         vendor_name=vendor.name,
         vendor_slug=vendor.slug,
+        onboarding_status=vendor.onboarding_status,
+        whatsapp_number=vendor.whatsapp_number,
+        contact_person=vendor.contact_person,
+        city=vendor.city,
+        warehouse_address=vendor.warehouse_address,
+        bank_name=vendor.bank_name,
+        bank_account_title=vendor.bank_account_title,
+        bank_iban=vendor.bank_iban,
+        lead_time_days=vendor.lead_time_days,
         csrf_token=c_token,
         authenticated=True,
     )
@@ -124,14 +134,74 @@ def vendor_session_endpoint(
     principal: VendorPrincipal = Depends(require_vendor_session),
 ) -> VendorSessionResponse:
     c_token = csrf_token(principal.token)
+    v = principal.vendor
     return VendorSessionResponse(
         username=principal.vendor_user.username,
-        vendor_id=principal.vendor.id,
-        vendor_name=principal.vendor.name,
-        vendor_slug=principal.vendor.slug,
+        vendor_id=v.id,
+        vendor_name=v.name,
+        vendor_slug=v.slug,
+        onboarding_status=v.onboarding_status,
+        whatsapp_number=v.whatsapp_number,
+        contact_person=v.contact_person,
+        city=v.city,
+        warehouse_address=v.warehouse_address,
+        bank_name=v.bank_name,
+        bank_account_title=v.bank_account_title,
+        bank_iban=v.bank_iban,
+        cnic=v.cnic,
         csrf_token=c_token,
         authenticated=True,
     )
+
+
+@router.get(
+    "/profile",
+    response_model=VendorSessionResponse,
+    summary="Get authenticated vendor profile and onboarding status",
+)
+def get_vendor_profile_endpoint(
+    principal: VendorPrincipal = Depends(require_vendor_session),
+) -> VendorSessionResponse:
+    return vendor_session_endpoint(principal)
+
+
+@router.put(
+    "/profile",
+    response_model=VendorSessionResponse,
+    summary="Complete vendor onboarding and update profile",
+)
+def update_vendor_profile_endpoint(
+    payload: VendorProfileUpdateRequest,
+    principal: VendorPrincipal = Depends(require_vendor_session),
+    db: Session = Depends(get_db),
+) -> VendorSessionResponse:
+    vendor = db.get(Supplier, principal.vendor.id)
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    vendor.contact_person = payload.contact_person.strip()
+    if payload.business_type:
+        vendor.business_type = payload.business_type.strip()
+    vendor.cnic = payload.cnic.strip()
+    if payload.ntn:
+        vendor.ntn = payload.ntn.strip()
+    if payload.email:
+        vendor.email = payload.email.strip().lower()
+    vendor.warehouse_address = payload.warehouse_address.strip()
+    vendor.city = payload.city.strip()
+    vendor.bank_name = payload.bank_name.strip()
+    vendor.bank_account_title = payload.account_title.strip()
+    vendor.bank_iban = payload.iban.strip()
+    if payload.lead_time_days is not None:
+        vendor.lead_time_days = payload.lead_time_days
+
+    # Mark onboarding as completed
+    vendor.onboarding_status = "active"
+
+    db.commit()
+    db.refresh(vendor)
+    principal.vendor = vendor
+    return vendor_session_endpoint(principal)
 
 
 @router.post(

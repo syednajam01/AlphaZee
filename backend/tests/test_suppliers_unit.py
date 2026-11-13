@@ -53,4 +53,15 @@ def test_supplier_membership_instantiation():
     assert sm.user_id == user_id
     assert sm.supplier_id == supplier_id
     assert sm.active is True
-    assert repr(sm).startswith("<SupplierMembership")
+    assert "active=True" in repr(sm)
+
+
+def test_supplier_onboarding_status_validates_allowed_values():
+    s_pending = Supplier(name="Test A", slug="test-a", status="active", onboarding_status="pending_profile")
+    assert s_pending.onboarding_status == "pending_profile"
+
+    s_active = Supplier(name="Test B", slug="test-b", status="active", onboarding_status="active")
+    assert s_active.onboarding_status == "active"
+
+    with pytest.raises(ValueError, match="Invalid onboarding status"):
+        Supplier(name="Test C", slug="test-c", status="active", onboarding_status="invalid_status")

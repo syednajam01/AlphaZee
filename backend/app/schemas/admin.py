@@ -74,6 +74,34 @@ class SupplierCreateRequest(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500, description="Contact/settlement notes")
 
 
+class SupplierQuickProvisionRequest(BaseModel):
+    """Payload to atomically create an approved supplier and vendor user login."""
+
+    name: str = Field(min_length=2, max_length=200, description="Supplier trade name")
+    whatsapp_number: str = Field(min_length=7, max_length=32, description="WhatsApp phone number")
+    username: str = Field(min_length=3, max_length=50, pattern=r'^[a-zA-Z0-9_\-\.]+$', description="Portal login handle")
+    password: str = Field(min_length=6, max_length=128, description="Initial portal password")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class VendorProfileUpdateRequest(BaseModel):
+    """Payload submitted by vendor to complete onboarding and update business profile."""
+
+    contact_person: str = Field(min_length=2, max_length=128)
+    business_type: Optional[str] = Field(default=None, max_length=64)
+    cnic: str = Field(min_length=13, max_length=32, description="CNIC number")
+    ntn: Optional[str] = Field(default=None, max_length=32)
+    email: Optional[str] = Field(default=None, max_length=128)
+    alt_phone: Optional[str] = Field(default=None, max_length=32)
+    warehouse_address: str = Field(min_length=5, max_length=500)
+    city: str = Field(min_length=2, max_length=64)
+    bank_name: str = Field(min_length=2, max_length=64)
+    account_title: str = Field(min_length=2, max_length=128)
+    iban: str = Field(min_length=14, max_length=34)
+    lead_time_days: Optional[int] = Field(default=2, ge=0, le=60)
+    terms_accepted: bool = Field(default=True)
+
+
 class SupplierResponseSchema(BaseModel):
     """Approved supplier details."""
 
@@ -84,6 +112,22 @@ class SupplierResponseSchema(BaseModel):
     slug: str
     status: str
     supplier_type: str = "external_vendor"
+    whatsapp_number: Optional[str] = None
+    contact_person: Optional[str] = None
+    business_type: Optional[str] = None
+    cnic: Optional[str] = None
+    ntn: Optional[str] = None
+    email: Optional[str] = None
+    warehouse_address: Optional[str] = None
+    city: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account_title: Optional[str] = None
+    bank_iban: Optional[str] = None
+    lead_time_days: int = 2
+    onboarding_status: str = "pending_profile"
+    portal_username: Optional[str] = None
+    main_products_count: int = 0
+    total_stock_count: int = 0
     notes: Optional[str] = None
 
 
