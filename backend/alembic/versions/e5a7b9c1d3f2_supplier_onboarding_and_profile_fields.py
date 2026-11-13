@@ -59,3 +59,4 @@ def downgrade():
     op.drop_column('suppliers', 'business_type')
     op.drop_column('suppliers', 'contact_person')
     op.drop_column('suppliers', 'whatsapp_number')
+
