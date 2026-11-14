@@ -10,7 +10,7 @@
     "test": "node --import tsx --test tests/*.test.js react-tests/*.test.jsx"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "jsdom": "^26.1.0",
     "tsx": "^4.23.15",
     "vite": "^7.3.0"
