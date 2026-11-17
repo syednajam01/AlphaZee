@@ -18,13 +18,22 @@ export function createHero(onProductClick) {
   let heroItems = [];
   let catalogProducts = [];
   let isUserPaused = false;
+  let isHovered = false;
   let isTabHidden = false;
   let isIntersecting = true;
   let imageTimer = null;
+  let videoWatchdogTimer = null;
   let generation = 0;
   let alive = true;
   let intersectionObserver = null;
   let autoDismissTimer = null;
+
+  function clearVideoWatchdog() {
+    if (videoWatchdogTimer) {
+      clearTimeout(videoWatchdogTimer);
+      videoWatchdogTimer = null;
+    }
+  }
 
   function toggleOverlay(forceState) {
     const active = typeof forceState === 'boolean'
@@ -43,6 +52,20 @@ export function createHero(onProductClick) {
       }, 6000);
     }
   }
+
+  // Hover pauses image slide transition so user can read overlay text
+  section.addEventListener('mouseenter', () => {
+    isHovered = true;
+    clearImageTimer();
+  });
+
+  section.addEventListener('mouseleave', () => {
+    isHovered = false;
+    const activeMedia = section.querySelectorAll('.hero-bg-media')[currentSlide];
+    if (activeMedia && activeMedia.tagName !== 'VIDEO') {
+      scheduleImageSlide();
+    }
+  });
 
   // Tap-to-toggle overlay on touch or click on banner background
   section.addEventListener('click', (e) => {
@@ -117,8 +140,11 @@ export function createHero(onProductClick) {
         video.className = `hero-bg-media hero-video-media hero-bg-video ${index === 0 ? 'is-active' : ''}`;
         if (posterUrl) video.poster = posterUrl;
         video.muted = true;
+        video.defaultMuted = true;
         video.playsInline = true;
-        video.preload = 'none';
+        video.setAttribute('playsinline', '');
+        video.setAttribute('muted', '');
+        video.preload = index === 0 ? 'auto' : 'metadata';
         video.setAttribute('aria-hidden', 'true');
         video.dataset.videoSrc = videoUrl;
         video.dataset.slideIndex = String(index);
@@ -127,15 +153,23 @@ export function createHero(onProductClick) {
         video.loop = isSingle;
 
         video.addEventListener('ended', () => {
-          if (!alive || isSingle || isUserPaused) return;
-          goToSlide(currentSlide + 1);
+          clearVideoWatchdog();
+          if (!alive || isUserPaused) return;
+          if (isSingle) {
+            try {
+              video.currentTime = 0;
+              video.play().catch(handleAutoplayReject);
+            } catch {}
+          } else {
+            goToSlide(currentSlide + 1);
+          }
         });
 
         video.addEventListener('error', () => {
+          clearVideoWatchdog();
           console.warn(`[Hero] Video playback failed for slide #${index + 1}`);
-          video.style.display = 'none';
           if (!isSingle && !isUserPaused) {
-            setTimeout(() => { if (alive) goToSlide(currentSlide + 1); }, 3000);
+            setTimeout(() => { if (alive && !isUserPaused) goToSlide(currentSlide + 1); }, 3000);
           }
         });
 
@@ -152,7 +186,11 @@ export function createHero(onProductClick) {
         img.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
         img.src = imageUrl;
         img.alt = item.title || 'AlphaZee featured piece';
-        img.loading = index === 0 ? 'eager' : 'lazy';
+        img.loading = 'eager';
+        img.decoding = 'async';
+        if (index === 0) {
+          img.setAttribute('fetchpriority', 'high');
+        }
         img.dataset.slideIndex = String(index);
         mediaTrack.appendChild(img);
       } else {
@@ -283,6 +321,10 @@ export function createHero(onProductClick) {
         : null;
       const priceText = priceDisplay && priceDisplay !== 'Price unavailable' ? `From ${priceDisplay}` : '';
 
+      const ctaLabel = item.slug || item.id
+        ? 'View the piece'
+        : (item.collection_slug || item.collection_id ? 'View collection' : 'Explore Pieces');
+
       slide.innerHTML = `
         <div class="hero-text-content">
           <span class="hero-eyebrow">Selected by AlphaZee</span>
@@ -291,7 +333,7 @@ export function createHero(onProductClick) {
           ${priceText ? `<div class="hero-price-tag">${priceText}</div>` : ''}
           <div class="hero-cta-group">
             <button class="btn btn-hero hero-cta-btn" data-slug="${escapeHtml(item.slug || '')}" data-id="${escapeHtml(item.id || '')}">
-              ${item.slug || item.id ? 'View the piece' : 'Explore Pieces'}
+              ${ctaLabel}
             </button>
             <a href="#collections" class="btn btn-secondary hero-secondary-btn">
               Browse collections
@@ -303,6 +345,14 @@ export function createHero(onProductClick) {
       slide.querySelector('.hero-cta-btn')?.addEventListener('click', () => {
         if (onProductClick && (item.slug || item.id)) {
           onProductClick(item.slug || item.id);
+        } else if (item.collection_slug || item.collection_id) {
+          const colSlug = item.collection_slug || item.collection_id;
+          const colSection = document.querySelector('#collections');
+          if (colSection) {
+            colSection.scrollIntoView({ behavior: 'smooth' });
+          } else if (typeof window !== 'undefined') {
+            window.location.href = `/collections/${encodeURIComponent(colSlug)}`;
+          }
         } else {
           const featured = document.querySelector('#featured');
           if (featured) featured.scrollIntoView({ behavior: 'smooth' });
@@ -346,9 +396,12 @@ export function createHero(onProductClick) {
     scheduleImageSlide();
   }
 
-  function handleAutoplayReject() {
-    isUserPaused = true;
-    updatePlayPauseButton();
+  function handleAutoplayReject(err) {
+    console.warn('[Hero] Video autoplay was prevented or interrupted:', err?.message || err);
+    // If autoplay was blocked, don't freeze the carousel: advance after 5s
+    if (!isSingle && !isUserPaused) {
+      scheduleImageSlide(5000);
+    }
   }
 
   function updatePlayPauseButton() {
@@ -371,6 +424,7 @@ export function createHero(onProductClick) {
     const activeMedia = section.querySelectorAll('.hero-bg-media')[currentSlide];
     if (activeMedia && activeMedia.tagName === 'VIDEO') {
       if (isUserPaused) {
+        clearVideoWatchdog();
         activeMedia.pause();
       } else {
         activeMedia.play().catch(handleAutoplayReject);
@@ -391,14 +445,14 @@ export function createHero(onProductClick) {
     }
   }
 
-  function scheduleImageSlide() {
+  function scheduleImageSlide(delay = 5000) {
     clearImageTimer();
-    if (!alive || isUserPaused || heroItems.length <= 1) return;
+    if (!alive || isUserPaused || isHovered || heroItems.length <= 1) return;
     const activeMedia = section.querySelectorAll('.hero-bg-media')[currentSlide];
     if (activeMedia && activeMedia.tagName !== 'VIDEO') {
       imageTimer = setTimeout(() => {
-        if (alive && !isUserPaused) goToSlide(currentSlide + 1);
-      }, 5000);
+        if (alive && !isUserPaused && !isHovered) goToSlide(currentSlide + 1);
+      }, delay);
       if (imageTimer && typeof imageTimer.unref === 'function') {
         imageTimer.unref();
       }
@@ -408,6 +462,7 @@ export function createHero(onProductClick) {
   function goToSlide(index) {
     if (!heroItems || heroItems.length <= 1) return;
     clearImageTimer();
+    clearVideoWatchdog();
     const count = heroItems.length;
     currentSlide = (index + count) % count;
 
@@ -430,14 +485,34 @@ export function createHero(onProductClick) {
         if (isActive) {
           if (!media.src && media.dataset.videoSrc) {
             media.src = media.dataset.videoSrc;
+            try { media.load(); } catch {}
           }
-          media.currentTime = 0;
+          try {
+            media.currentTime = 0;
+          } catch {}
           if (!isUserPaused && isIntersecting && !isTabHidden) {
-            media.play().catch(handleAutoplayReject);
+            const playPromise = media.play();
+            if (playPromise !== undefined) {
+              playPromise.catch(handleAutoplayReject);
+            }
+          }
+
+          // Safety watchdog in case ended event is missed
+          const durationSec = Number(media.duration);
+          const watchdogMs = (!isNaN(durationSec) && durationSec > 0)
+            ? (durationSec + 2) * 1000
+            : 15000;
+          videoWatchdogTimer = setTimeout(() => {
+            if (alive && !isUserPaused && !isSingle && currentSlide === i) {
+              goToSlide(currentSlide + 1);
+            }
+          }, watchdogMs);
+          if (videoWatchdogTimer && typeof videoWatchdogTimer.unref === 'function') {
+            videoWatchdogTimer.unref();
           }
         } else {
           if (!media.paused) {
-            media.pause();
+            try { media.pause(); } catch {}
           }
         }
       }
@@ -503,17 +578,22 @@ export function createHero(onProductClick) {
         const slidesRes = await fetchHeroSlides();
         const slides = Array.isArray(slidesRes) ? slidesRes : (slidesRes?.slides || []);
         if (slides.length > 0) {
-          items = slides.map(s => ({
-            id: s.target_product_id || null,
-            collection_id: s.target_collection_id || null,
-            slug: s.target_product_slug || s.product?.slug || null,
-            title: s.title || s.product?.title || 'Selected by AlphaZee',
-            benefit: s.benefit || s.product?.hero_benefit || 'Clothing and accessories for your next look.',
-            video_url: s.video_url,
-            poster_url: s.poster_url,
-            image_url: s.image_url,
-            min_price: s.product?.min_price ?? s.product?.min_price_minor,
-          }));
+          items = slides.map(s => {
+            const hasTitle = s.title && s.title.trim().length > 0;
+            const hasBenefit = s.benefit && s.benefit.trim().length > 0;
+            return {
+              id: s.target_product_id || null,
+              collection_id: s.target_collection_id || null,
+              slug: s.target_product_slug || s.product?.slug || null,
+              collection_slug: s.target_collection_slug || s.collection?.slug || null,
+              title: hasTitle ? s.title.trim() : (s.product?.title || s.collection?.name || 'Selected by AlphaZee'),
+              benefit: hasBenefit ? s.benefit.trim() : (s.product?.hero_benefit || s.collection?.description || 'Clothing and accessories for your next look.'),
+              video_url: s.video_url,
+              poster_url: s.poster_url,
+              image_url: s.image_url,
+              min_price: s.product?.min_price ?? s.product?.min_price_minor,
+            };
+          });
         }
       } catch {
         // Fallback to legacy hero products route
@@ -552,6 +632,7 @@ export function createHero(onProductClick) {
     alive = false;
     generation++;
     clearImageTimer();
+    clearVideoWatchdog();
     if (autoDismissTimer) {
       clearTimeout(autoDismissTimer);
       autoDismissTimer = null;
