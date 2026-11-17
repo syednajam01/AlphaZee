@@ -109,6 +109,27 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         <div id="admin-sidebar-header" style="height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: none; overflow: hidden;">
           <div id="admin-expanded-logo-slot"></div>
           <div id="admin-collapsed-logo-slot"></div>
+
+          <!-- Mobile Section Title + Refresh Button (Row 1 Left) -->
+          <div class="admin-mobile-header-title-slot" style="display: none; align-items: center; gap: 8px;">
+            <button type="button" id="btn-refresh-admin-tab-mobile" class="admin-header-title-btn" aria-label="Refresh view" title="Click to refresh">
+              <h2 id="admin-mobile-view-title" class="admin-header-title">Store overview</h2>
+              <svg class="admin-header-refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Mobile Sign Out Icon Button (Row 1 Right) -->
+          <div class="admin-mobile-header-actions" style="display: none; align-items: center; gap: 6px;">
+            <button type="button" id="btn-admin-logout-mobile" class="btn-icon admin-logout-btn" title="Sign out" aria-label="Sign out" data-tooltip="Sign out">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+            </button>
+          </div>
           
           <div class="admin-mobile-nav-arrows" id="admin-mobile-nav-arrows" style="display: none; align-items: center; gap: 4px;">
             <button type="button" id="btn-nav-scroll-left" class="btn-icon admin-nav-scroll-btn" aria-label="Scroll tabs left" title="Scroll tabs left">
@@ -243,7 +264,7 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
           </button>
         </nav>
 
-        <div style="padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: rgba(255, 255, 255, 0.4);">
+        <div id="admin-sidebar-footer" style="padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: rgba(255, 255, 255, 0.4);">
           <span class="admin-nav-label">Owner Ops v1.2</span>
           <button id="btn-admin-logout" title="Sign out" style="background: none; border: none; color: rgba(255, 255, 255, 0.5); cursor: pointer; padding: 2px 4px; font-size: 0.75rem;">Sign out</button>
         </div>
@@ -491,6 +512,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       settings: 'Store Configuration & Admin Preferences'
     };
     viewTitle.textContent = titles[activeTab] || 'Section not found';
+    const mobileViewTitle = modal.querySelector('#admin-mobile-view-title');
+    if (mobileViewTitle) mobileViewTitle.textContent = titles[activeTab] || 'Section not found';
     tabBtns.forEach(button => {
       const selected = button.getAttribute('data-tab') === activeTab;
       button.setAttribute('aria-current', selected ? 'page' : 'false');
@@ -542,26 +565,30 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         settings: 'Store Configuration & Admin Preferences',
       };
       if (viewTitle) viewTitle.textContent = titles[tab] || 'Store Management';
+      const mobileViewTitle = modal.querySelector('#admin-mobile-view-title');
+      if (mobileViewTitle) mobileViewTitle.textContent = titles[tab] || 'Store Management';
 
       loadActiveTabData();
     });
   });
 
-  modal.querySelector('#btn-refresh-admin-tab')?.addEventListener('click', () => {
+  const handleRefresh = () => {
     if (canLeave()) {
-      const btn = modal.querySelector('#btn-refresh-admin-tab');
-      btn?.querySelector('svg')?.animate?.([
-        { transform: 'rotate(0deg)' },
-        { transform: 'rotate(360deg)' }
-      ], { duration: 500, iterations: 1 });
+      modal.querySelectorAll('.admin-header-refresh-icon').forEach(icon => {
+        icon?.animate?.([
+          { transform: 'rotate(0deg)' },
+          { transform: 'rotate(360deg)' }
+        ], { duration: 500, iterations: 1 });
+      });
       loadActiveTabData();
     }
-  });
+  };
+  modal.querySelector('#btn-refresh-admin-tab')?.addEventListener('click', handleRefresh);
+  modal.querySelector('#btn-refresh-admin-tab-mobile')?.addEventListener('click', handleRefresh);
 
-  modal.querySelector('#btn-admin-logout')?.addEventListener('click', async () => {
+  const handleLogout = async (button) => {
     if (!canLeave()) return;
-    const button = modal.querySelector('#btn-admin-logout');
-    button.disabled = true;
+    if (button) button.disabled = true;
     try {
       await logoutOwner();
       authenticated = false;
@@ -571,8 +598,13 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         // Keep the session visible if the server could not confirm revocation.
         showSessionMessage('Could not sign out. Please try again.');
       }
-    } finally { button.disabled = false; }
-  });
+    } finally {
+      if (button) button.disabled = false;
+    }
+  };
+
+  modal.querySelector('#btn-admin-logout')?.addEventListener('click', () => handleLogout(modal.querySelector('#btn-admin-logout')));
+  modal.querySelector('#btn-admin-logout-mobile')?.addEventListener('click', () => handleLogout(modal.querySelector('#btn-admin-logout-mobile')));
 
   function showSessionMessage(message) {
     const status = modal.querySelector('#admin-session-message');
@@ -594,8 +626,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
     modal.querySelector('#remit-summary').textContent = '';
     showSessionMessage(message);
     if (page) sidebar.hidden = true;
-    modal.querySelector('#btn-refresh-admin-tab').hidden = true;
-    modal.querySelector('#btn-admin-logout').hidden = true;
+    modal.querySelectorAll('#btn-refresh-admin-tab, #btn-refresh-admin-tab-mobile').forEach(b => { b.hidden = true; });
+    modal.querySelectorAll('#btn-admin-logout, #btn-admin-logout-mobile').forEach(b => { b.hidden = true; });
     contentArea.innerHTML = `
       <div class="admin-login-stage">
         <div class="admin-login-card">
@@ -686,9 +718,9 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
         authenticated = true;
         await applyOwnerPreferences();
         if (page) sidebar.hidden = false;
-        modal.querySelector('#btn-refresh-admin-tab').hidden = false;
+        modal.querySelectorAll('#btn-refresh-admin-tab, #btn-refresh-admin-tab-mobile').forEach(b => { b.hidden = false; });
         showSessionMessage('');
-        modal.querySelector('#btn-admin-logout').hidden = false;
+        modal.querySelectorAll('#btn-admin-logout, #btn-admin-logout-mobile').forEach(b => { b.hidden = false; });
         await loadActiveTabData();
       } catch (error) {
         passwordInput.value = '';
@@ -3094,8 +3126,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
   async function open() {
     if (!page) overlay.open();
     if (page) sidebar.hidden = true;
-    modal.querySelector('#btn-admin-logout').hidden = true;
-    modal.querySelector('#btn-refresh-admin-tab').hidden = true;
+    modal.querySelectorAll('#btn-admin-logout, #btn-admin-logout-mobile').forEach(b => { b.hidden = true; });
+    modal.querySelectorAll('#btn-refresh-admin-tab, #btn-refresh-admin-tab-mobile').forEach(b => { b.hidden = true; });
     const generation = ++authGeneration;
     contentArea.innerHTML = '<p role="status">Checking owner session...</p>';
     try {
@@ -3104,8 +3136,8 @@ export function createAdminConsoleModal({ page = false, initialTab = 'overview',
       authenticated = true;
       await applyOwnerPreferences();
       if (page) sidebar.hidden = false;
-      modal.querySelector('#btn-refresh-admin-tab').hidden = false;
-      modal.querySelector('#btn-admin-logout').hidden = false;
+      modal.querySelectorAll('#btn-refresh-admin-tab, #btn-refresh-admin-tab-mobile').forEach(b => { b.hidden = false; });
+      modal.querySelectorAll('#btn-admin-logout, #btn-admin-logout-mobile').forEach(b => { b.hidden = false; });
       showSessionMessage('');
       await loadActiveTabData();
     } catch (error) {

@@ -91,8 +91,8 @@ export function createCollectionsPage({ onSelectCollection, onNavigate }) {
               alt: col.name || 'Collection',
               className: 'collection-img',
               loading: 'lazy',
-              width: 400,
-              height: 300,
+              width: 450,
+              height: 800,
             })
           );
         }

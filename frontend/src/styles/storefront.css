@@ -25,7 +25,7 @@
 .storefront :is(.collection-card,.collection-img,.product-card,.product-card-img,.product-card-btn,.product-related-card,.product-related-img,.reassurance-icon,.option-chip,.product-gallery-thumb) { will-change: auto; transition: opacity 180ms ease, border-color 160ms ease, background-color 160ms ease, color 160ms ease; }
 .storefront :is(.collection-card,.product-card,.product-related-card,.reassurance-item,.option-chip,.product-gallery-thumb):hover { transform: none; box-shadow: none; }
 .storefront .collection-card { padding: 0; aspect-ratio: auto; border: 0; border-radius: 0; background: transparent; overflow: visible; }
-.storefront .collection-img { position: relative; aspect-ratio: 4/3; width: 100%; height: auto; object-fit: contain; background: #eeece6; border-radius: 2px; }
+.storefront .collection-img { position: relative; aspect-ratio: 9 / 16; width: 100%; height: auto; object-fit: cover; background: #eeece6; border-radius: 2px; }
 .storefront .collection-card-overlay { display: none; }
 .storefront .collection-card-content { padding: 20px 0 0; color: var(--color-text); }
 .storefront .collection-caption { display: block; font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px; }

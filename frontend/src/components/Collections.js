@@ -82,8 +82,8 @@ export function createCollectionsSection(onSelectCollection, { limit = 3, onNavi
               alt: col.name || 'Collection',
               className: 'collection-img',
               loading: 'lazy',
-              width: 400,
-              height: 300,
+              width: 450,
+              height: 800,
             })
           );
         }
