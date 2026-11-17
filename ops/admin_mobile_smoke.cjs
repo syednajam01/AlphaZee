@@ -28,11 +28,12 @@ const captureOnly=process.env.ADMIN_MOBILE_CAPTURE_ONLY==='true';
       await page.goto(origin+'/admin/products');
       await page.locator('.catalog-card').first().waitFor({state:'attached'});
       const geometry=await page.evaluate(()=>{
-        const main=document.querySelector('.admin-page main'),nav=document.querySelector('#admin-sidebar nav'),sidebar=document.querySelector('#admin-sidebar'),content=document.querySelector('#admin-tab-content');
+        const main=document.querySelector('.admin-page main'),nav=document.querySelector('#admin-sidebar nav'),sidebar=document.querySelector('#admin-sidebar'),content=document.querySelector('#admin-tab-content'),modal=document.querySelector('.admin-page > .modal-content');
         const box=main.getBoundingClientRect();
-        return {direction:getComputedStyle(document.querySelector('.admin-page > .modal-content')).flexDirection,
+        return {direction:getComputedStyle(modal).flexDirection,
           sidebarHeight:sidebar.getBoundingClientRect().height,navHeight:nav.getBoundingClientRect().height,
           contentHeight:content.clientHeight,mainTop:box.top,mainBottom:box.bottom,
+          modalBottom:modal.getBoundingClientRect().bottom,
           pageOverflow:document.documentElement.scrollWidth>innerWidth,
           visibleLogos:[...sidebar.querySelectorAll('[id$="logo-slot"]')].filter(el=>el.getBoundingClientRect().width>0&&el.getBoundingClientRect().height>0).length};
       });
@@ -44,17 +45,20 @@ const captureOnly=process.env.ADMIN_MOBILE_CAPTURE_ONLY==='true';
       if(!captureOnly) {
         assert(!geometry.pageOverflow,`page overflow at ${width}`);
         assert(geometry.contentHeight>150,`content squeezed out at ${width}: ${JSON.stringify(geometry)}`);
-        assert(geometry.mainBottom<=height+1,`main clipped below viewport at ${width}`);
         if(width<=760) {
+          assert(geometry.modalBottom<=height+1,`modal clipped below viewport at ${width}`);
           assert.equal(geometry.direction,'column');
           assert(geometry.sidebarHeight<=200,'mobile navigation occupies the screen');
           assert(geometry.navHeight<=72,'navigation buttons stretched vertically');
+          assert.equal(geometry.visibleLogos,0,'mobile logo removed in favor of title and actions');
+        } else {
+          assert(geometry.mainBottom<=height+1,`main clipped below viewport at ${width}`);
           assert.equal(geometry.visibleLogos,1,'duplicate sidebar branding');
         }
-        const content=page.locator('#admin-tab-content');
-        await content.hover();
+        const scrollTarget=width<=760?page.locator('.admin-page > .modal-content'):page.locator('#admin-tab-content');
+        await scrollTarget.hover();
         if(width<=760) {
-          const box=await content.boundingBox();
+          const box=await scrollTarget.boundingBox();
           const cdp=await context.newCDPSession(page);
           const x=Math.round(box.x+6),y=Math.round(box.y+box.height-24);
           await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
@@ -66,20 +70,20 @@ const captureOnly=process.env.ADMIN_MOBILE_CAPTURE_ONLY==='true';
           await cdp.detach();
         } else await page.mouse.wheel(0,500);
         await page.waitForTimeout(350);
-        if(await content.evaluate(el=>el.scrollTop)===0) {
-          console.log('Scroll diagnostic',await content.evaluate(el=>{const r=el.getBoundingClientRect();return {scrollHeight:el.scrollHeight,height:el.clientHeight,overflow:getComputedStyle(el).overflowY,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,180)};}));
+        if(await scrollTarget.evaluate(el=>el.scrollTop)===0) {
+          console.log('Scroll diagnostic',await scrollTarget.evaluate(el=>{const r=el.getBoundingClientRect();return {scrollHeight:el.scrollHeight,height:el.clientHeight,overflow:getComputedStyle(el).overflowY,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,180)};}));
         }
-        assert(await content.evaluate(el=>el.scrollTop)>0,`content does not respond to scrolling at ${width}`);
-        await content.evaluate(el=>{el.scrollTop=el.scrollHeight;});
-        assert(await content.evaluate(el=>el.scrollTop+el.clientHeight>=el.scrollHeight-2),'bottom content is unreachable');
+        assert(await scrollTarget.evaluate(el=>el.scrollTop)>0,`content does not respond to scrolling at ${width}`);
+        await scrollTarget.evaluate(el=>{el.scrollTop=el.scrollHeight;});
+        assert(await scrollTarget.evaluate(el=>el.scrollTop+el.clientHeight>=el.scrollHeight-2),'bottom content is unreachable');
         if(width<=760) {
           await page.locator('#admin-sidebar [data-tab=settings]').scrollIntoViewIfNeeded();
           assert(await page.locator('#admin-sidebar nav').evaluate(el=>el.scrollLeft)>0,'last navigation item is unreachable');
           await page.setViewportSize({width,height:480});
-          assert(await content.evaluate(el=>el.clientHeight)>100,'short viewport loses scrolling area');
+          assert(await scrollTarget.evaluate(el=>el.clientHeight)>100,'short viewport loses scrolling area');
           await page.setViewportSize({width,height});
           await page.evaluate(()=>{const banner=document.createElement('div');banner.style.height='72px';document.body.prepend(banner);document.documentElement.style.setProperty('--lab-notice-height','72px');});
-          assert(await page.locator('.admin-page main').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight+1),'lab banner pushes content below the viewport');
+          assert(await page.locator('.admin-page > .modal-content').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight+1),'lab banner pushes content below the viewport');
         }
         assert.deepEqual(errors,[]);
       }
