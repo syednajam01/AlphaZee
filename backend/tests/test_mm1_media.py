@@ -306,3 +306,47 @@ def test_media_rename_and_library_filtering(admin_client, isolated_media):
     assert kind_vid_res.status_code == 200
     assert not any(a['id'] == asset_id for a in kind_vid_res.json()['assets'])
 
+
+def test_hero_slide_auto_increment_and_order(admin_client, client, isolated_media):
+    img1 = upload(admin_client)
+    img2 = upload(admin_client)
+    img3 = upload(admin_client)
+
+    # Create slide 1 without display_order -> must get order 0
+    res1 = admin_client.post('/api/v1/admin/media/hero/slides', json={
+        'title': 'Picture Banner 1',
+        'image_asset_id': img1['id'],
+    })
+    assert res1.status_code == 201
+    s1 = res1.json()
+
+    # Create slide 2 without display_order -> must get order 1 (not 0)
+    res2 = admin_client.post('/api/v1/admin/media/hero/slides', json={
+        'title': 'Picture Banner 2',
+        'image_asset_id': img2['id'],
+    })
+    assert res2.status_code == 201
+    s2 = res2.json()
+
+    # Create slide 3 without display_order -> must get order 2
+    res3 = admin_client.post('/api/v1/admin/media/hero/slides', json={
+        'title': 'Picture Banner 3',
+        'image_asset_id': img3['id'],
+    })
+    assert res3.status_code == 201
+    s3 = res3.json()
+
+    assert s1['display_order'] == 0
+    assert s2['display_order'] == 1
+    assert s3['display_order'] == 2
+
+    # Query public hero slides: must strictly return in display_order
+    pub = client.get('/api/v1/hero/slides').json()
+    created_ids = [s1['id'], s2['id'], s3['id']]
+    matching = [s for s in pub if s['id'] in created_ids]
+    assert len(matching) == 3
+    assert matching[0]['id'] == s1['id']
+    assert matching[1]['id'] == s2['id']
+    assert matching[2]['id'] == s3['id']
+
+

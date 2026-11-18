@@ -75,6 +75,30 @@ export function createHero(onProductClick) {
     toggleOverlay();
   });
 
+  // Touch swipe support for mobile devices
+  let touchStartX = 0;
+  let touchStartY = 0;
+  section.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  section.addEventListener('touchend', (e) => {
+    if (e.changedTouches && e.changedTouches.length === 1) {
+      const deltaX = e.changedTouches[0].clientX - touchStartX;
+      const deltaY = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+        if (deltaX < 0) {
+          goToSlide(currentSlide + 1);
+        } else {
+          goToSlide(currentSlide - 1);
+        }
+      }
+    }
+  }, { passive: true });
+
   const prefersReducedMotion = typeof window !== 'undefined' &&
     window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const saveData = typeof navigator !== 'undefined' &&
@@ -393,14 +417,21 @@ export function createHero(onProductClick) {
     }
 
     setupObserver();
-    scheduleImageSlide();
+    goToSlide(0);
   }
 
   function handleAutoplayReject(err) {
     console.warn('[Hero] Video autoplay was prevented or interrupted:', err?.message || err);
     // If autoplay was blocked, don't freeze the carousel: advance after 5s
-    if (!isSingle && !isUserPaused) {
-      scheduleImageSlide(5000);
+    if (heroItems.length > 1 && !isUserPaused) {
+      clearImageTimer();
+      clearVideoWatchdog();
+      imageTimer = setTimeout(() => {
+        if (alive && !isUserPaused && !isHovered) goToSlide(currentSlide + 1);
+      }, 5000);
+      if (imageTimer && typeof imageTimer.unref === 'function') {
+        imageTimer.unref();
+      }
     }
   }
 
@@ -498,18 +529,23 @@ export function createHero(onProductClick) {
           }
 
           // Safety watchdog in case ended event is missed
-          const durationSec = Number(media.duration);
-          const watchdogMs = (!isNaN(durationSec) && durationSec > 0)
-            ? (durationSec + 2) * 1000
-            : 15000;
-          videoWatchdogTimer = setTimeout(() => {
-            if (alive && !isUserPaused && !isSingle && currentSlide === i) {
-              goToSlide(currentSlide + 1);
+          const setWatchdog = () => {
+            clearVideoWatchdog();
+            const durationSec = Number(media.duration);
+            const watchdogMs = (!isNaN(durationSec) && durationSec > 0)
+              ? (durationSec + 2) * 1000
+              : 15000;
+            videoWatchdogTimer = setTimeout(() => {
+              if (alive && !isUserPaused && heroItems.length > 1 && currentSlide === i) {
+                goToSlide(currentSlide + 1);
+              }
+            }, watchdogMs);
+            if (videoWatchdogTimer && typeof videoWatchdogTimer.unref === 'function') {
+              videoWatchdogTimer.unref();
             }
-          }, watchdogMs);
-          if (videoWatchdogTimer && typeof videoWatchdogTimer.unref === 'function') {
-            videoWatchdogTimer.unref();
-          }
+          };
+          setWatchdog();
+          media.onloadedmetadata = setWatchdog;
         } else {
           if (!media.paused) {
             try { media.pause(); } catch {}

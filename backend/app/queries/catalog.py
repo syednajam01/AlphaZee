@@ -187,7 +187,7 @@ def get_active_hero_slides(db: Session):
             selectinload(HeroSlide.product).selectinload(Product.media_links).selectinload(ProductMedia.asset),
             selectinload(HeroSlide.collection),
         )
-        .order_by(HeroSlide.display_order.asc(), HeroSlide.id.asc())
+        .order_by(HeroSlide.display_order.asc(), HeroSlide.created_at.asc(), HeroSlide.id.asc())
     )
     return list(db.scalars(stmt).all())
 

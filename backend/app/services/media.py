@@ -345,7 +345,7 @@ def list_hero_slides(db, include_disabled=True):
     )
     if not include_disabled:
         stmt = stmt.where(HeroSlide.is_enabled.is_(True))
-    slides = list(db.scalars(stmt.order_by(HeroSlide.display_order.asc(), HeroSlide.id.asc())))
+    slides = list(db.scalars(stmt.order_by(HeroSlide.display_order.asc(), HeroSlide.created_at.asc(), HeroSlide.id.asc())))
     return [hero_slide_response(s) for s in slides]
 
 

@@ -2491,6 +2491,7 @@ export function mountCatalogSection(section, container, context) {
               target_product_id: value(form, 'target_product_id') || null,
               target_collection_id: value(form, 'target_collection_id') || null,
               is_enabled: form.querySelector('[name="is_enabled"]').checked,
+              display_order: slides.length,
             };
 
             if (isNew) {
