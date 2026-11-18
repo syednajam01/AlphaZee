@@ -1,6 +1,6 @@
 import { fetchCollections, fetchProducts } from '../utils/api.js';
 import { formatDisplayPrice } from '../utils/money.js';
-import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
+import { escapeHtml, sanitizeMediaUrl, createSafeImageElement, toVariantUrl } from '../utils/dom.js';
 
 export function createCollectionProductsPage({ onOpenProductModal, onNavigate }) {
   const container = document.createElement('div');
@@ -130,11 +130,12 @@ export function createCollectionProductsPage({ onOpenProductModal, onNavigate })
         const hoverUrl = product.hover_image_url || product.secondary_image_url || null;
 
         const primaryImg = createSafeImageElement({
-          src: product.image_url,
+          src: toVariantUrl(product.image_url, 'card'),
           fallback: '/images/storefront-empty.svg',
           alt: product.image_alt || product.title || 'Product',
           className: 'product-card-img product-card-img-primary' + (hoverUrl ? ' has-secondary' : ''),
           loading: 'lazy',
+          shimmer: true,
           width: 320,
           height: 426,
         });
@@ -142,10 +143,11 @@ export function createCollectionProductsPage({ onOpenProductModal, onNavigate })
 
         if (hoverUrl) {
           const secondaryImg = createSafeImageElement({
-            src: hoverUrl,
+            src: toVariantUrl(hoverUrl, 'card'),
             alt: `${product.title} alternate view`,
             className: 'product-card-img product-card-img-secondary',
             loading: 'lazy',
+            shimmer: true,
             width: 320,
             height: 426,
           });

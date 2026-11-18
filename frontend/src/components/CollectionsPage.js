@@ -1,5 +1,5 @@
 import { fetchCollections } from '../utils/api.js';
-import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
+import { escapeHtml, sanitizeMediaUrl, createSafeImageElement, toVariantUrl } from '../utils/dom.js';
 
 export function createCollectionsPage({ onSelectCollection, onNavigate }) {
   const container = document.createElement('div');
@@ -86,11 +86,12 @@ export function createCollectionsPage({ onSelectCollection, onNavigate }) {
         if (card) {
           card.prepend(
             createSafeImageElement({
-              src: col.image_url,
+              src: toVariantUrl(col.image_url, 'card'),
               fallback: '/images/storefront-empty.svg',
               alt: col.name || 'Collection',
               className: 'collection-img',
               loading: 'lazy',
+              shimmer: true,
               width: 450,
               height: 800,
             })

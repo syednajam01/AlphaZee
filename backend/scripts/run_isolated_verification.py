@@ -26,10 +26,11 @@ def main():
     try:
         print(f'Running against new disposable database {name}; evidence: .local/vf-terminal-verification.txt', flush=True)
         args = sys.argv[1:] or ['backend/tests']
+        basetemp = root / '.local' / f'vf-temp-{secrets.token_hex(4)}'
         with target.open('w', encoding='utf-8') as output:
             result = subprocess.run([sys.executable, '-u', '-m', 'pytest', *args,
                 '-vv', '--tb=short', '-p', 'no:cacheprovider', '-o', 'faulthandler_timeout=120',
-                '--basetemp=.local/vf-isolated-pytest', '--junitxml=.local/vf-terminal-verification.xml'],
+                f'--basetemp={basetemp}', '--junitxml=.local/vf-terminal-verification.xml'],
                 cwd=root, env=env, stdout=output, stderr=subprocess.STDOUT)
         print('\n'.join(target.read_text(encoding='utf-8').splitlines()[-18:]), flush=True)
         return result.returncode

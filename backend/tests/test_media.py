@@ -287,3 +287,33 @@ def test_production_rejects_local_only_credentials_and_reset_restores_policy(db_
     provision_owner(db_session, 'sample_local', 'SAMPLE-strong-password', reset_password=True)
     assert db_session.get(UserAccount, owner.user_id).auth_subject == 'local-owner:sample_local'
     assert client.post('/api/v1/auth/login', json={'username': 'sample_local', 'password': 'SAMPLE-strong-password'}, headers={'Origin': 'http://localhost:3000'}).status_code == 200
+
+
+def test_image_variants_generation_and_delivery(admin_client, client):
+    # Upload a test PNG image
+    asset = upload(admin_client, 'PNG')
+    asset_id = asset['id']
+    
+    # 1. Master content without variant preserves original image/png
+    res_master = client.get(f'/api/v1/media/{asset_id}/content')
+    assert res_master.status_code == 200
+    assert res_master.headers['content-type'] == 'image/png'
+    
+    # 2. Variants return WebP with immutable caching
+    for variant in ('thumb', 'card', 'full'):
+        res_var = client.get(f'/api/v1/media/{asset_id}/content?variant={variant}')
+        assert res_var.status_code == 200
+        assert res_var.headers['content-type'] == 'image/webp'
+        assert 'immutable' in res_var.headers['cache-control']
+        assert len(res_var.content) > 0
+
+    # 3. Invalid variant returns 400
+    res_bad = client.get(f'/api/v1/media/{asset_id}/content?variant=huge')
+    assert res_bad.status_code == 400
+
+    # 4. Deleting asset deletes variants
+    del_res = admin_client.post(f'/api/v1/admin/media/{asset_id}/delete', json={'expected_version': 1})
+    assert del_res.status_code == 200
+    for variant in ('thumb', 'card', 'full'):
+        vpath = media_storage.variants_dir() / f'{asset_id}_{variant}.webp'
+        assert not vpath.exists()

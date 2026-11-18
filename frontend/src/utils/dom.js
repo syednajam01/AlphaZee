@@ -66,6 +66,32 @@ export function sanitizeMediaUrl(url, fallback = PLACEHOLDER_IMAGE_URL) {
 }
 
 /**
+ * Convert a catalog media URL to a responsive variant URL (?variant=thumb|card|full).
+ * @param {string|null|undefined} url
+ * @param {'thumb'|'card'|'full'} variant
+ * @returns {string}
+ */
+export function toVariantUrl(url, variant) {
+  if (!url || typeof url !== 'string') return url;
+  if (!url.includes('/api/v1/media/')) return url;
+  if (url.includes('variant=')) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}variant=${variant}`;
+}
+
+/**
+ * Generate a responsive srcset for a media URL.
+ * @param {string|null|undefined} url
+ * @returns {string}
+ */
+export function generateMediaSrcset(url) {
+  if (!url || typeof url !== 'string' || !url.includes('/api/v1/media/')) return '';
+  const cardUrl = toVariantUrl(url, 'card');
+  const fullUrl = toVariantUrl(url, 'full');
+  return `${cardUrl} 800w, ${fullUrl} 1600w`;
+}
+
+/**
  * Create an HTML <img> element safely by setting src, alt, and attributes via DOM properties.
  * Prevents HTML string concatenation and attribute breakout vulnerabilities.
  * @param {Object} options
@@ -75,6 +101,10 @@ export function sanitizeMediaUrl(url, fallback = PLACEHOLDER_IMAGE_URL) {
  * @param {number|string} [options.width]
  * @param {number|string} [options.height]
  * @param {string} [options.loading='lazy']
+ * @param {string} [options.fetchpriority]
+ * @param {string} [options.srcset]
+ * @param {string} [options.sizes]
+ * @param {boolean} [options.shimmer=false]
  * @param {string} [options.fallback=PLACEHOLDER_IMAGE_URL]
  * @returns {HTMLImageElement}
  */
@@ -85,6 +115,10 @@ export function createSafeImageElement({
   width,
   height,
   loading = 'lazy',
+  fetchpriority,
+  srcset,
+  sizes,
+  shimmer = false,
   fallback = PLACEHOLDER_IMAGE_URL,
 } = {}) {
   const img = document.createElement('img');
@@ -92,17 +126,38 @@ export function createSafeImageElement({
   let replaced = false;
   img.addEventListener?.('error', () => {
     if (!replaced && fallback) { replaced = true; img.src = sanitizeMediaUrl(fallback); }
+    img.classList?.remove?.('media-shimmer');
+  });
+  img.addEventListener?.('load', () => {
+    img.classList?.remove?.('media-shimmer');
+    img.classList?.add?.('media-loaded');
   });
   const safeSrc = sanitizeMediaUrl(src, fallback);
   if (safeSrc) {
     img.src = safeSrc;
   }
   img.alt = alt || '';
-  if (className) {
-    img.className = className;
+  const classes = [];
+  if (className) classes.push(className);
+  if (shimmer) classes.push('media-shimmer');
+  if (classes.length > 0) {
+    img.className = classes.join(' ');
   }
   if (loading) {
     img.loading = loading;
+  }
+  if (fetchpriority) {
+    if (typeof img.setAttribute === 'function') {
+      img.setAttribute('fetchpriority', fetchpriority);
+    } else {
+      img.fetchpriority = fetchpriority;
+    }
+  }
+  if (srcset) {
+    img.srcset = srcset;
+  }
+  if (sizes) {
+    img.sizes = sizes;
   }
   if (width !== undefined) {
     img.width = width;

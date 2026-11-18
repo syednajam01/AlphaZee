@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import uuid
 import warnings
 from PIL import Image, ImageOps, UnidentifiedImageError
 from app.config import settings
@@ -41,6 +42,93 @@ def object_path(key):
     if path.is_symlink() or path.resolve().parent != objects:
         raise CatalogError('invalid_storage_key', 'Unsafe media path', 404)
     return path
+
+
+VARIANT_SPECS = {
+    'thumb': {'max_dim': 300, 'quality': 80},
+    'card': {'max_dim': 800, 'quality': 82},
+    'full': {'max_dim': 1600, 'quality': 82},
+}
+
+
+def variants_dir():
+    root = settings.catalog_media_root.expanduser().resolve()
+    vdir = root / 'variants'
+    if vdir.is_symlink():
+        raise RuntimeError('Media directories must not be symlinks')
+    vdir.mkdir(exist_ok=True)
+    if vdir.resolve().parent != root:
+        raise RuntimeError('Unsafe media directory')
+    return vdir
+
+
+def variant_path(key, variant):
+    if variant not in VARIANT_SPECS:
+        raise CatalogError('invalid_variant', 'Invalid image variant requested', 400)
+    stem = Path(key).stem
+    if not re.fullmatch(r'[a-f0-9]{32}', stem):
+        raise CatalogError('invalid_storage_key', 'Invalid media key', 404)
+    vdir = variants_dir()
+    path = vdir / f'{stem}_{variant}.webp'
+    if path.is_symlink() or path.resolve().parent != vdir:
+        raise CatalogError('invalid_storage_key', 'Unsafe media path', 404)
+    return path
+
+
+def ensure_image_variant(key, variant):
+    target = variant_path(key, variant)
+    if target.is_file():
+        return target
+    src = object_path(key)
+    if not src.is_file():
+        raise CatalogError('media_not_found', 'Master media file not found', 404)
+    spec = VARIANT_SPECS[variant]
+    max_dim = spec['max_dim']
+    quality = spec['quality']
+    vdir = variants_dir()
+    tmp = vdir / f'{target.stem}_{os.getpid()}_{uuid.uuid4().hex[:6]}.tmp'
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', Image.DecompressionBombWarning)
+            with Image.open(src) as img:
+                img.load()
+                clean = ImageOps.exif_transpose(img)
+                if clean.mode in ('RGBA', 'LA') or (clean.mode == 'P' and 'transparency' in clean.info):
+                    clean = clean.convert('RGBA')
+                else:
+                    clean = clean.convert('RGB')
+                w, h = clean.size
+                if max(w, h) > max_dim:
+                    clean.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+                clean.save(tmp, format='WEBP', quality=quality, method=6)
+                os.replace(tmp, target)
+                return target
+    except Exception as e:
+        tmp.unlink(missing_ok=True)
+        if isinstance(e, CatalogError):
+            raise
+        raise CatalogError('variant_generation_failed', f'Could not generate image variant: {e}', 500) from e
+
+
+def generate_all_variants(key):
+    ext = Path(key).suffix.lower()
+    if ext in ('.jpg', '.jpeg', '.png', '.webp'):
+        for variant in VARIANT_SPECS:
+            try:
+                ensure_image_variant(key, variant)
+            except Exception:
+                pass
+
+
+def delete_variants(key):
+    stem = Path(key).stem
+    if not re.fullmatch(r'[a-f0-9]{32}', stem):
+        return
+    vdir = variants_dir()
+    for variant in VARIANT_SPECS:
+        vfile = vdir / f'{stem}_{variant}.webp'
+        if vfile.is_file():
+            vfile.unlink(missing_ok=True)
 
 
 def upload_type(filename, declared_type):

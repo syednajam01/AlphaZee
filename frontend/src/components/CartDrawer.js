@@ -3,7 +3,7 @@ import { cart } from '../utils/cart.js';
 import { capabilities, CHECKOUT_UNAVAILABLE } from '../utils/capabilities.js';
 import { storeConfig } from '../data/store-config.js';
 import { formatPkr } from '../utils/money.js';
-import { escapeHtml, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
+import { escapeHtml, sanitizeMediaUrl, createSafeImageElement, toVariantUrl } from '../utils/dom.js';
 
 export function createCartDrawer(onCheckout, onExplore) {
   const backdrop = document.createElement('div');
@@ -161,7 +161,7 @@ export function createCartDrawer(onCheckout, onExplore) {
         const itemEl = itemsContainer.querySelector(`[data-variant-id="${String(item.variant_id)}"]`);
         if (itemEl) {
           const img = createSafeImageElement({
-            src: item.image_url,
+            src: toVariantUrl(item.image_url, 'thumb'),
             alt: item.title || 'Cart item',
             className: 'cart-item-img',
           });

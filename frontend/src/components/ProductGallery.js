@@ -1,4 +1,4 @@
-import { escapeHtml as esc, sanitizeMediaUrl, createSafeImageElement } from '../utils/dom.js';
+import { escapeHtml as esc, sanitizeMediaUrl, createSafeImageElement, toVariantUrl, generateMediaSrcset } from '../utils/dom.js';
 import { mediaForVariant } from '../utils/productMedia.js';
 
 export function mountProductGallery(host, product, variantId) {
@@ -9,6 +9,20 @@ export function mountProductGallery(host, product, variantId) {
   let alive = true;
   let lightboxElement = null;
   let lastFocusedTrigger = null;
+  let preloadLink = null;
+
+  // Preload first slide image if available
+  const initialItem = media[index];
+  if (initialItem && initialItem.kind !== 'video' && typeof document !== 'undefined' && document.head?.appendChild) {
+    try {
+      preloadLink = document.createElement('link');
+      preloadLink.rel = 'preload';
+      preloadLink.as = 'image';
+      preloadLink.href = toVariantUrl(initialItem.url, 'card');
+      preloadLink.setAttribute('fetchpriority', 'high');
+      document.head.appendChild(preloadLink);
+    } catch {}
+  }
 
   host.innerHTML = `
     <div class="product-gallery-stage" tabindex="0" role="region" aria-roledescription="carousel" aria-label="Product media gallery">
@@ -43,7 +57,8 @@ export function mountProductGallery(host, product, variantId) {
     <div class="product-gallery-thumbs" role="group" aria-label="Product media gallery thumbnails">
       ${media.map((m, i) => {
         const isVideo = m.kind === 'video';
-        const thumbSrc = sanitizeMediaUrl(isVideo ? (m.poster_url || m.url) : m.url, '');
+        const rawThumb = isVideo ? (m.poster_url || m.url) : m.url;
+        const thumbSrc = rawThumb ? sanitizeMediaUrl(toVariantUrl(rawThumb, 'thumb'), '') : '';
         const label = esc((isVideo ? 'Play video: ' : 'View image: ') + (m.alt_text || product.title));
         return `
         <button type="button" class="option-pill product-gallery-thumb ${i === index ? 'is-active' : ''}" data-gallery-index="${i}" aria-label="${label}" aria-pressed="${i === index}">
@@ -93,7 +108,7 @@ export function mountProductGallery(host, product, variantId) {
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
         </button>
-        <img class="gallery-lightbox-img" src="${sanitizeMediaUrl(item.url, '')}" alt="${esc(item.alt_text || product.title)}" />
+        <img class="gallery-lightbox-img" src="${sanitizeMediaUrl(toVariantUrl(item.url, 'full'), '')}" alt="${esc(item.alt_text || product.title)}" />
         ${media.length > 1 ? `
           <div class="gallery-lightbox-counter">${mediaIndex + 1} of ${media.length}</div>
         ` : ''}
@@ -185,10 +200,14 @@ export function mountProductGallery(host, product, variantId) {
     } else {
       if (zoomBtn) zoomBtn.style.display = 'flex';
       const image = createSafeImageElement({
-        src: item.url,
+        src: toVariantUrl(item.url, 'card'),
+        srcset: generateMediaSrcset(item.url),
+        sizes: '(max-width: 768px) 100vw, 800px',
         alt: item.alt_text || product.title,
-        className: 'modal-img',
+        className: 'modal-img product-gallery-img',
         loading: index === 0 ? 'eager' : 'lazy',
+        fetchpriority: index === 0 ? 'high' : 'auto',
+        shimmer: true,
         width: item.width,
         height: item.height
       });
@@ -270,6 +289,27 @@ export function mountProductGallery(host, product, variantId) {
     document.addEventListener?.('visibilitychange', handleVisibilityChange);
   }
 
+  // Desktop tactile micro-zoom cursor tracking
+  stage?.addEventListener('mousemove', (e) => {
+    const item = media[index];
+    if (!item || item.kind === 'video') return;
+    const img = stage.querySelector('.product-gallery-img');
+    if (!img) return;
+    const rect = stage.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    img.style.transformOrigin = `${x}% ${y}%`;
+    img.classList.add('is-micro-zoomed');
+  });
+
+  stage?.addEventListener('mouseleave', () => {
+    const img = stage.querySelector('.product-gallery-img');
+    if (img) {
+      img.classList.remove('is-micro-zoomed');
+    }
+  });
+
   // Touch gesture swipe detection
   let touchStartX = 0;
   let touchStartY = 0;
@@ -318,6 +358,9 @@ export function mountProductGallery(host, product, variantId) {
       alive = false;
       pause();
       closeLightbox();
+      if (preloadLink && preloadLink.parentNode) {
+        preloadLink.parentNode.removeChild(preloadLink);
+      }
       if (typeof document !== 'undefined') {
         document.removeEventListener?.('keydown', handleDocumentKeyDown);
         document.removeEventListener?.('visibilitychange', handleVisibilityChange);

@@ -21,7 +21,15 @@ def staging_lock_key(identifier):
 
 
 def public_asset(asset):
-    return {field: getattr(asset, field) for field in ('id', 'kind', 'content_type', 'byte_size', 'width', 'height', 'duration_ms', 'poster_id')} | {'url': f'/api/v1/media/{asset.id}/content'}
+    res = {field: getattr(asset, field) for field in ('id', 'kind', 'content_type', 'byte_size', 'width', 'height', 'duration_ms', 'poster_id')} | {'url': f'/api/v1/media/{asset.id}/content'}
+    if getattr(asset, 'kind', None) == 'image':
+        res['thumb_url'] = f'/api/v1/media/{asset.id}/content?variant=thumb'
+        res['card_url'] = f'/api/v1/media/{asset.id}/content?variant=card'
+        res['full_url'] = f'/api/v1/media/{asset.id}/content?variant=full'
+    elif getattr(asset, 'poster_id', None):
+        res['thumb_url'] = f'/api/v1/media/{asset.id}/content?variant=thumb'
+        res['card_url'] = f'/api/v1/media/{asset.id}/content?variant=card'
+    return res
 
 
 def owner_asset(asset, db=None):
@@ -82,6 +90,8 @@ def ingest(db, upload, owner):
                            creator_id=owner.owner.user_id, state='ready', **metadata)
         db.add(asset)
         db.flush()
+        if kind == 'image':
+            storage.generate_all_variants(key)
         result = owner_asset(asset)
         commit_started = True
         db.commit()
@@ -485,7 +495,9 @@ def delete_asset(db, identifier, command):
     path = storage.object_path(asset.storage_key)
     db.commit()
     # Tombstone first: a failed unlink cannot make deleted bytes publicly accessible.
-    try: path.unlink(missing_ok=True)
+    try:
+        path.unlink(missing_ok=True)
+        storage.delete_variants(asset.storage_key)
     except OSError: pass  # scoped cleanup retries the tombstoned object later
     return {'id': identifier, 'state': 'deleted'}
 

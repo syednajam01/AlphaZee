@@ -161,9 +161,32 @@ def detail(asset_id: str, db: Session = Depends(get_db)):
 
 
 @public_router.api_route('/media/{asset_id}/content', methods=['GET', 'HEAD'])
-def content(asset_id: str, db: Session = Depends(get_db)):
+def content(asset_id: str, variant: str | None = Query(None), db: Session = Depends(get_db)):
     asset = db.get(MediaAsset, asset_id)
     if asset is None or asset.state != 'ready': raise HTTPException(404, 'Media not found')
+    if variant:
+        if variant not in storage.VARIANT_SPECS:
+            raise HTTPException(400, 'Invalid variant requested')
+        if asset.kind != 'image':
+            if asset.poster_id:
+                poster = db.get(MediaAsset, asset.poster_id)
+                if poster and poster.state == 'ready':
+                    try:
+                        vpath = storage.ensure_image_variant(poster.storage_key, variant)
+                        return FileResponse(vpath, media_type='image/webp', headers={
+                            'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=31536000, immutable',
+                            'Content-Disposition': 'inline', 'ETag': f'"{poster.checksum}_{variant}"',
+                        })
+                    except CatalogError: pass
+            raise HTTPException(400, 'Variants are only supported for images')
+        try:
+            vpath = storage.ensure_image_variant(asset.storage_key, variant)
+            return FileResponse(vpath, media_type='image/webp', headers={
+                'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=31536000, immutable',
+                'Content-Disposition': 'inline', 'ETag': f'"{asset.checksum}_{variant}"',
+            })
+        except CatalogError as e:
+            raise HTTPException(e.status, e.detail) from None
     try: path = storage.object_path(asset.storage_key)
     except CatalogError: raise HTTPException(404, 'Media not found') from None
     if not path.is_file(): raise HTTPException(404, 'Media file not found')
