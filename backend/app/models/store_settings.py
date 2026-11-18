@@ -81,6 +81,20 @@ class StoreSettings(Base):
         nullable=False,
     )
 
+    # Storefront Products Page Copy
+    products_page_title: Mapped[str] = mapped_column(
+        String(100),
+        default='All Products',
+        server_default='All Products',
+        nullable=False,
+    )
+    products_page_subtitle: Mapped[str] = mapped_column(
+        String(255),
+        default='Find a piece that feels like you. Explore our complete catalog.',
+        server_default='Find a piece that feels like you. Explore our complete catalog.',
+        nullable=False,
+    )
+
     # Legal & Policies (Draft vs Published)
     delivery_policy_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_policy_status: Mapped[str] = mapped_column(String(20), default='draft', nullable=False)

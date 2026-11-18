@@ -1,4 +1,5 @@
 import { createFeaturedProducts } from './FeaturedProducts.js';
+import { fetchPublicStoreSettings } from '../utils/api.js';
 
 export function createCatalogPage({ onOpenProductModal, onNavigate }) {
   const container = document.createElement('div');
@@ -36,7 +37,7 @@ export function createCatalogPage({ onOpenProductModal, onNavigate }) {
 
   return {
     element: container,
-    load({ collectionId = null } = {}) {
+    async load({ collectionId = null } = {}) {
       if (typeof document !== 'undefined') {
         document.title = 'All Products — AlphaZee';
         let descMeta = document.querySelector('meta[name="description"]');
@@ -48,6 +49,26 @@ export function createCatalogPage({ onOpenProductModal, onNavigate }) {
           canonical.setAttribute('href', `${window.location.origin}/products`);
         }
       }
+
+      try {
+        const settings = await fetchPublicStoreSettings().catch(() => null);
+        if (settings) {
+          const pageTitle = settings.products_page_title || 'All Products';
+          const pageSubtitle = settings.products_page_subtitle || 'Find a piece that feels like you. Explore our complete catalog.';
+          const titleEl = container.querySelector('.section-title');
+          const subtitleEl = container.querySelector('.section-subtitle');
+          const crumbEl = container.querySelector('.product-breadcrumb-current');
+          if (titleEl) titleEl.textContent = pageTitle;
+          if (subtitleEl) subtitleEl.textContent = pageSubtitle;
+          if (crumbEl) crumbEl.textContent = pageTitle;
+          if (typeof document !== 'undefined') {
+            document.title = `${pageTitle} — AlphaZee`;
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load store settings for products page headings', err);
+      }
+
       featured.setFilter(collectionId || 'all');
     },
     destroy() {

@@ -77,6 +77,12 @@ export function mountCatalogSection(section, container, context) {
   let colHeadingsLoaded = false;
   let colHeadingsSaving = false;
   let colHeadingsAlert = '';
+  let prodHeadingsOpen = false;
+  let prodPageTitle = 'All Products';
+  let prodPageSubtitle = 'Find a piece that feels like you. Explore our complete catalog.';
+  let prodHeadingsLoaded = false;
+  let prodHeadingsSaving = false;
+  let prodHeadingsAlert = '';
   const controllers = new Set(), objectUrls = new Set();
   const queue = [];
   let uploading = false;
@@ -137,6 +143,19 @@ export function mountCatalogSection(section, container, context) {
   }
 
   async function products() {
+    if (!prodHeadingsLoaded) {
+      try {
+        const settings = await api.fetchAdminStoreSettings();
+        if (settings) {
+          prodPageTitle = settings.products_page_title || 'All Products';
+          prodPageSubtitle = settings.products_page_subtitle || 'Find a piece that feels like you. Explore our complete catalog.';
+          prodHeadingsLoaded = true;
+        }
+      } catch (err) {
+        console.warn('Could not load store settings for products page headings', err);
+      }
+    }
+
     const pageSize = 10;
     const [data, categories] = await Promise.all([
       api.fetchOwnerProducts({ ...productFilter, page: productsPage, page_size: pageSize }),
@@ -158,6 +177,14 @@ export function mountCatalogSection(section, container, context) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           </button>
           <span class="catalog-total-pill" title="Total products">${total} products</span>
+          <button type="button" class="btn btn-secondary btn-col-headings-toggle ${prodHeadingsOpen ? 'active' : ''}" id="btn-toggle-prod-headings" title="Edit storefront page headings and deck copy" aria-label="Edit storefront page headings" data-tooltip="Edit the title and subtitle displayed on alphazee.tech/products">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 7 4 4 20 4 20 7"></polyline>
+              <line x1="9" y1="20" x2="15" y2="20"></line>
+              <line x1="12" y1="4" x2="12" y2="20"></line>
+            </svg>
+            <span class="btn-col-headings-label">Page Headings</span>
+          </button>
         </div>
         <form id="catalog-search" class="catalog-search-form">
           <div class="search-field-wrap">
@@ -177,6 +204,70 @@ export function mountCatalogSection(section, container, context) {
           </div>
         </form>
       </div>
+
+      ${prodHeadingsOpen ? `
+        <div class="col-headings-studio" id="prod-headings-studio">
+          <div class="col-headings-top-row">
+            <div class="col-headings-title-wrap">
+              <span class="col-headings-icon-badge">Aa</span>
+              <div>
+                <h4 class="col-headings-heading">Storefront Products Page Headings</h4>
+                <p class="col-headings-desc">Configure the hero title and introductory deck text displayed on alphazee.tech/products.</p>
+              </div>
+            </div>
+            <span class="col-headings-live-badge">Live on alphazee.tech/products</span>
+          </div>
+
+          <div class="col-headings-body-grid">
+            <div class="col-headings-inputs">
+              <div class="form-group" style="margin-bottom: 12px;">
+                <div class="col-headings-label-row">
+                  <label for="input-prod-headings-title" class="col-headings-input-label">Page Heading (H1)</label>
+                  <span id="prod-title-counter" class="col-headings-char-counter">${prodPageTitle.length} / 100</span>
+                </div>
+                <input type="text" id="input-prod-headings-title" class="col-headings-input" maxlength="100" value="${esc(prodPageTitle)}" placeholder="All Products" aria-label="Page Heading" />
+              </div>
+
+              <div class="form-group" style="margin-bottom: 14px;">
+                <div class="col-headings-label-row">
+                  <label for="input-prod-headings-subtitle" class="col-headings-input-label">Page Subtitle / Deck Line</label>
+                  <span id="prod-subtitle-counter" class="col-headings-char-counter">${prodPageSubtitle.length} / 255</span>
+                </div>
+                <textarea id="input-prod-headings-subtitle" rows="2" class="col-headings-textarea" maxlength="255" placeholder="Find a piece that feels like you. Explore our complete catalog." aria-label="Page Subtitle">${esc(prodPageSubtitle)}</textarea>
+              </div>
+
+              <div class="col-headings-actions-row">
+                <button type="button" id="btn-save-prod-headings" class="btn btn-primary btn-save-headings" ${prodHeadingsSaving ? 'disabled' : ''}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                  <span>${prodHeadingsSaving ? 'Saving…' : 'Save Headings'}</span>
+                </button>
+                <button type="button" id="btn-reset-prod-headings" class="btn btn-secondary btn-reset-headings" title="Reset to original brand defaults" aria-label="Reset to default headings">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                  <span>Reset Default</span>
+                </button>
+                <span class="col-headings-alert" id="prod-headings-alert">${esc(prodHeadingsAlert || '')}</span>
+              </div>
+            </div>
+
+            <!-- Real-time Preview -->
+            <div class="col-headings-preview-card">
+              <div class="preview-header-bar">
+                <span class="preview-tag">Live Storefront Preview</span>
+                <span class="preview-url">alphazee.tech/products</span>
+              </div>
+              <div class="preview-content">
+                <div class="preview-breadcrumbs">
+                  <span class="preview-crumb-home">Home</span>
+                  <span class="preview-crumb-sep">/</span>
+                  <span class="preview-crumb-curr">Products</span>
+                </div>
+                <h3 id="preview-prod-title" class="preview-col-h1">${esc(prodPageTitle || 'All Products')}</h3>
+                <p id="preview-prod-subtitle" class="preview-col-p">${esc(prodPageSubtitle || 'Find a piece that feels like you. Explore our complete catalog.')}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ` : ''}
 
       ${(data.products || []).length ? `<div class="catalog-grid">${data.products.map(p => {
         const thumbUrl = p.image_url || p.media?.find(m => m.role === 'primary')?.asset?.url || p.media?.[0]?.asset?.url || '';
@@ -298,6 +389,80 @@ export function mountCatalogSection(section, container, context) {
         action(products);
       }
     });
+
+    bind('#btn-toggle-prod-headings', () => {
+      prodHeadingsOpen = !prodHeadingsOpen;
+      products();
+    });
+
+    if (prodHeadingsOpen) {
+      const titleInput = query('#input-prod-headings-title');
+      const subtitleInput = query('#input-prod-headings-subtitle');
+      const previewTitle = query('#preview-prod-title');
+      const previewSubtitle = query('#preview-prod-subtitle');
+      const titleCounter = query('#prod-title-counter');
+      const subtitleCounter = query('#prod-subtitle-counter');
+
+      titleInput?.addEventListener('input', e => {
+        prodPageTitle = e.target.value;
+        if (titleCounter) titleCounter.textContent = `${prodPageTitle.length} / 100`;
+        if (previewTitle) previewTitle.textContent = prodPageTitle || 'All Products';
+      });
+
+      subtitleInput?.addEventListener('input', e => {
+        prodPageSubtitle = e.target.value;
+        if (subtitleCounter) subtitleCounter.textContent = `${prodPageSubtitle.length} / 255`;
+        if (previewSubtitle) previewSubtitle.textContent = prodPageSubtitle || 'Find a piece that feels like you. Explore our complete catalog.';
+      });
+
+      bind('#btn-reset-prod-headings', () => {
+        prodPageTitle = 'All Products';
+        prodPageSubtitle = 'Find a piece that feels like you. Explore our complete catalog.';
+        if (titleInput) titleInput.value = prodPageTitle;
+        if (subtitleInput) subtitleInput.value = prodPageSubtitle;
+        if (titleCounter) titleCounter.textContent = `${prodPageTitle.length} / 100`;
+        if (subtitleCounter) subtitleCounter.textContent = `${prodPageSubtitle.length} / 255`;
+        if (previewTitle) previewTitle.textContent = prodPageTitle;
+        if (previewSubtitle) previewSubtitle.textContent = prodPageSubtitle;
+      });
+
+      bind('#btn-save-prod-headings', async () => {
+        if (prodHeadingsSaving) return;
+        prodHeadingsSaving = true;
+        const saveBtn = query('#btn-save-prod-headings');
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          const labelSpan = saveBtn.querySelector('span');
+          if (labelSpan) labelSpan.textContent = 'Saving…';
+        }
+        try {
+          const payload = {
+            products_page_title: (prodPageTitle || '').trim() || 'All Products',
+            products_page_subtitle: (prodPageSubtitle || '').trim() || 'Find a piece that feels like you. Explore our complete catalog.'
+          };
+          await api.updateAdminStoreSettings(payload);
+          prodHeadingsAlert = 'Headings saved successfully.';
+          status('Storefront product headings saved.');
+          setTimeout(() => {
+            prodHeadingsAlert = '';
+            const alertEl = query('#prod-headings-alert');
+            if (alertEl) alertEl.textContent = '';
+          }, 3500);
+        } catch (err) {
+          prodHeadingsAlert = err.message || 'Failed to save headings';
+          status(err.message || 'Failed to save headings', true);
+        } finally {
+          prodHeadingsSaving = false;
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            const labelSpan = saveBtn.querySelector('span');
+            if (labelSpan) labelSpan.textContent = 'Save Headings';
+          }
+          const alertEl = query('#prod-headings-alert');
+          if (alertEl) alertEl.textContent = prodHeadingsAlert;
+        }
+      });
+    }
   }
 
   const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'One Size'];
