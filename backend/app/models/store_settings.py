@@ -67,6 +67,20 @@ class StoreSettings(Base):
         nullable=False,
     )
 
+    # Storefront Collections Page Copy
+    collections_page_title: Mapped[str] = mapped_column(
+        String(100),
+        default='All Collections',
+        server_default='All Collections',
+        nullable=False,
+    )
+    collections_page_subtitle: Mapped[str] = mapped_column(
+        String(255),
+        default='Explore our complete range of curated wardrobe edits.',
+        server_default='Explore our complete range of curated wardrobe edits.',
+        nullable=False,
+    )
+
     # Legal & Policies (Draft vs Published)
     delivery_policy_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_policy_status: Mapped[str] = mapped_column(String(20), default='draft', nullable=False)

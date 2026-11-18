@@ -1,4 +1,4 @@
-import { fetchCollections } from '../utils/api.js';
+import { fetchCollections, fetchPublicStoreSettings } from '../utils/api.js';
 import { escapeHtml, sanitizeMediaUrl, createSafeImageElement, toVariantUrl } from '../utils/dom.js';
 
 export function createCollectionsPage({ onSelectCollection, onNavigate }) {
@@ -44,7 +44,23 @@ export function createCollectionsPage({ onSelectCollection, onNavigate }) {
     `;
 
     try {
-      const res = await fetchCollections();
+      const [res, settings] = await Promise.all([
+        fetchCollections(),
+        fetchPublicStoreSettings().catch(() => null)
+      ]);
+
+      if (settings) {
+        const pageTitle = settings.collections_page_title || 'All Collections';
+        const pageSubtitle = settings.collections_page_subtitle || 'Explore our complete range of curated wardrobe edits.';
+        const titleEl = container.querySelector('.section-title');
+        const subtitleEl = container.querySelector('.section-subtitle');
+        if (titleEl) titleEl.textContent = pageTitle;
+        if (subtitleEl) subtitleEl.textContent = pageSubtitle;
+        if (typeof document !== 'undefined') {
+          document.title = `${pageTitle} — AlphaZee`;
+        }
+      }
+
       const list = Array.isArray(res) ? res : (Array.isArray(res?.collections) ? res.collections : []);
       if (!list || list.length === 0) {
         grid.innerHTML = `

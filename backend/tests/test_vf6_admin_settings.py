@@ -362,3 +362,37 @@ def test_faq_items_and_support_configuration(client, db):
     assert len(pub_res["faq_items"]) == 1
     assert pub_res["faq_items"][0]["id"] == "faq_1"
 
+
+def test_collections_page_headings_configuration(client, db):
+    """Owner can update collections page title and subtitle, reflected in public store settings."""
+    owner_name, pwd = _create_owner(db, "owner_col_head_test")
+    csrf = _login_owner(client, owner_name, pwd)
+
+    # 1. Check default values on public endpoint
+    pub = client.get("/api/v1/store/settings").json()
+    assert pub["collections_page_title"] == "All Collections"
+    assert pub["collections_page_subtitle"] == "Explore our complete range of curated wardrobe edits."
+
+    # 2. Update via admin settings
+    cur = client.get("/api/v1/admin/settings").json()
+    v = cur["version"]
+    res = client.put(
+        "/api/v1/admin/settings",
+        json={
+            "expected_version": v,
+            "collections_page_title": "Curated Collections",
+            "collections_page_subtitle": "Discover our seasonal drops and bespoke capsule wardrobes.",
+        },
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+    assert res.status_code == 200, res.text
+    adm = res.json()
+    assert adm["collections_page_title"] == "Curated Collections"
+    assert adm["collections_page_subtitle"] == "Discover our seasonal drops and bespoke capsule wardrobes."
+
+    # 3. Public endpoint now serves the updated headings
+    pub_updated = client.get("/api/v1/store/settings").json()
+    assert pub_updated["collections_page_title"] == "Curated Collections"
+    assert pub_updated["collections_page_subtitle"] == "Discover our seasonal drops and bespoke capsule wardrobes."
+
+

@@ -88,6 +88,8 @@ def get_or_create_store_settings(db: Session) -> StoreSettings:
             low_stock_threshold=3,
             stock_staleness_threshold_days=7,
             faq_items=list(DEFAULT_FAQS),
+            collections_page_title='All Collections',
+            collections_page_subtitle='Explore our complete range of curated wardrobe edits.',
             version=1,
             updated_at=utcnow(),
         )
@@ -115,6 +117,8 @@ def get_public_store_settings(db: Session) -> PublicStoreSettingsResponse:
         support_phone=settings.support_phone,
         support_hours=settings.support_hours,
         faq_items=[f for f in (settings.faq_items if settings.faq_items is not None else DEFAULT_FAQS) if f.get('is_enabled', True)],
+        collections_page_title=settings.collections_page_title or 'All Collections',
+        collections_page_subtitle=settings.collections_page_subtitle or 'Explore our complete range of curated wardrobe edits.',
         delivery_policy=settings.delivery_policy_content if settings.delivery_policy_status == 'published' else None,
         return_policy=settings.return_policy_content if settings.return_policy_status == 'published' else None,
         terms_policy=settings.terms_policy_content if settings.terms_policy_status == 'published' else None,
@@ -147,6 +151,8 @@ def get_admin_store_settings(db: Session) -> AdminStoreSettingsResponse:
         support_phone=settings.support_phone,
         support_hours=settings.support_hours,
         faq_items=list(settings.faq_items if settings.faq_items is not None else DEFAULT_FAQS),
+        collections_page_title=settings.collections_page_title or 'All Collections',
+        collections_page_subtitle=settings.collections_page_subtitle or 'Explore our complete range of curated wardrobe edits.',
         delivery_policy_content=settings.delivery_policy_content,
         delivery_policy_status=settings.delivery_policy_status,
         delivery_policy_published_at=settings.delivery_policy_published_at,
@@ -231,6 +237,8 @@ def update_store_settings(
             'free_shipping_threshold_minor': settings.free_shipping_threshold_minor,
             'low_stock_threshold': settings.low_stock_threshold,
             'stock_staleness_threshold_days': settings.stock_staleness_threshold_days,
+            'collections_page_title': settings.collections_page_title,
+            'collections_page_subtitle': settings.collections_page_subtitle,
         }
         audit_log = StoreSettingsAuditLog(
             version=settings.version,

@@ -27,6 +27,8 @@ class PublicStoreSettingsResponse(BaseModel):
     support_phone: str | None
     support_hours: str | None
     faq_items: list[dict[str, Any]] = Field(default_factory=list)
+    collections_page_title: str = 'All Collections'
+    collections_page_subtitle: str = 'Explore our complete range of curated wardrobe edits.'
     delivery_policy: str | None
     return_policy: str | None
     terms_policy: str | None
@@ -57,6 +59,8 @@ class AdminStoreSettingsResponse(BaseModel):
     support_phone: str | None
     support_hours: str | None
     faq_items: list[dict[str, Any]] = Field(default_factory=list)
+    collections_page_title: str = 'All Collections'
+    collections_page_subtitle: str = 'Explore our complete range of curated wardrobe edits.'
     delivery_policy_content: str | None
     delivery_policy_status: str
     delivery_policy_published_at: datetime | None
@@ -110,6 +114,8 @@ class UpdateStoreSettingsRequest(BaseModel):
     support_phone: str | None = Field(default=None, max_length=50)
     support_hours: str | None = Field(default=None, max_length=120)
     faq_items: list[dict[str, Any]] | None = None
+    collections_page_title: str | None = Field(default=None, min_length=1, max_length=100)
+    collections_page_subtitle: str | None = Field(default=None, max_length=255)
     delivery_policy_content: str | None = None
     return_policy_content: str | None = None
     terms_policy_content: str | None = None

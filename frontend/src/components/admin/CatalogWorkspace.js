@@ -71,6 +71,12 @@ export function mountCatalogSection(section, container, context) {
   const posterDrafts = new Map();
   let productsPage = 1, productFilter = { search: '', status: '', collection_id: '' };
   let collectionSearchText = '';
+  let colHeadingsOpen = false;
+  let colPageTitle = 'All Collections';
+  let colPageSubtitle = 'Explore our complete range of curated wardrobe edits.';
+  let colHeadingsLoaded = false;
+  let colHeadingsSaving = false;
+  let colHeadingsAlert = '';
   const controllers = new Set(), objectUrls = new Set();
   const queue = [];
   let uploading = false;
@@ -1241,6 +1247,19 @@ export function mountCatalogSection(section, container, context) {
     if (!current()) return;
     currentCollection = null; collections = data.collections || []; context.setDirty(false);
 
+    if (!colHeadingsLoaded) {
+      try {
+        const settings = await api.fetchAdminStoreSettings();
+        if (settings) {
+          colPageTitle = settings.collections_page_title || 'All Collections';
+          colPageSubtitle = settings.collections_page_subtitle || 'Explore our complete range of curated wardrobe edits.';
+          colHeadingsLoaded = true;
+        }
+      } catch (err) {
+        console.warn('Could not load store settings for collections page headings', err);
+      }
+    }
+
     const q = (collectionSearchText || '').toLowerCase().trim();
     const visibleCollections = q
       ? collections.filter(c => (c.name || '').toLowerCase().includes(q) || (c.slug || '').toLowerCase().includes(q))
@@ -1253,6 +1272,14 @@ export function mountCatalogSection(section, container, context) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           </button>
           <span class="catalog-total-pill" title="Total collections">${collections.length} collection${collections.length === 1 ? '' : 's'}</span>
+          <button type="button" class="btn btn-secondary btn-col-headings-toggle ${colHeadingsOpen ? 'active' : ''}" id="btn-toggle-col-headings" title="Edit storefront page headings and deck copy" aria-label="Edit storefront page headings" data-tooltip="Edit the title and subtitle displayed on alphazee.tech/collections">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 7 4 4 20 4 20 7"></polyline>
+              <line x1="9" y1="20" x2="15" y2="20"></line>
+              <line x1="12" y1="4" x2="12" y2="20"></line>
+            </svg>
+            <span class="btn-col-headings-label">Page Headings</span>
+          </button>
         </div>
         <div class="catalog-search-form" style="margin-left: auto;">
           <div class="search-field-wrap">
@@ -1262,6 +1289,74 @@ export function mountCatalogSection(section, container, context) {
           </div>
         </div>
       </div>
+
+      ${colHeadingsOpen ? `
+        <div class="col-headings-studio" id="col-headings-studio">
+          <div class="col-headings-top-row">
+            <div class="col-headings-title-wrap">
+              <span class="col-headings-icon-badge">Aa</span>
+              <div>
+                <h4 class="col-headings-heading">Storefront Collections Page Headings</h4>
+                <p class="col-headings-desc">Configure the hero title and introductory deck text displayed on alphazee.tech/collections.</p>
+              </div>
+            </div>
+            <span class="col-headings-live-badge">Live on alphazee.tech/collections</span>
+          </div>
+
+          <div class="col-headings-body-grid">
+            <div class="col-headings-inputs">
+              <div class="form-group" style="margin-bottom: 12px;">
+                <div class="col-headings-label-row">
+                  <label for="input-col-headings-title" class="col-headings-input-label">Page Heading (H1)</label>
+                  <span id="col-title-counter" class="col-headings-char-counter">${colPageTitle.length} / 100</span>
+                </div>
+                <input type="text" id="input-col-headings-title" class="col-headings-input" maxlength="100" value="${esc(colPageTitle)}" placeholder="All Collections" aria-label="Page Heading" />
+              </div>
+
+              <div class="form-group" style="margin-bottom: 14px;">
+                <div class="col-headings-label-row">
+                  <label for="input-col-headings-subtitle" class="col-headings-input-label">Page Subtitle / Deck Line</label>
+                  <span id="col-subtitle-counter" class="col-headings-char-counter">${colPageSubtitle.length} / 255</span>
+                </div>
+                <textarea id="input-col-headings-subtitle" rows="2" class="col-headings-textarea" maxlength="255" placeholder="Explore our complete range of curated wardrobe edits." aria-label="Page Subtitle">${esc(colPageSubtitle)}</textarea>
+              </div>
+
+              <div class="col-headings-actions-row">
+                <button type="button" id="btn-save-col-headings" class="btn btn-primary btn-save-headings" ${colHeadingsSaving ? 'disabled' : ''}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                  <span>${colHeadingsSaving ? 'Saving…' : 'Save Headings'}</span>
+                </button>
+                <button type="button" id="btn-reset-col-headings" class="btn btn-secondary btn-reset-headings" title="Reset to original brand defaults" aria-label="Reset to default headings">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                  <span>Reset Default</span>
+                </button>
+                <span class="col-headings-alert" id="col-headings-alert">${esc(colHeadingsAlert || '')}</span>
+              </div>
+            </div>
+
+            <!-- Real-time Preview -->
+            <div class="col-headings-preview-card">
+              <div class="preview-header-bar">
+                <span class="preview-tag">Live Storefront Preview</span>
+                <span class="preview-url">alphazee.tech/collections</span>
+              </div>
+              <div class="preview-content">
+                <div class="preview-breadcrumbs">
+                  <span class="preview-crumb-home">Home</span>
+                  <span class="preview-crumb-sep">/</span>
+                  <span class="preview-crumb-curr">Collections</span>
+                </div>
+                <h3 id="preview-col-title" class="preview-col-h1">${esc(colPageTitle || 'All Collections')}</h3>
+                <p id="preview-col-subtitle" class="preview-col-p">${esc(colPageSubtitle || 'Explore our complete range of curated wardrobe edits.')}</p>
+              </div>
+              <div class="preview-footer-bar">
+                <span>Collections grid renders below</span>
+                <span class="preview-status-pill">✓ Dynamic sync</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ` : ''}
 
       <p class="catalog-hint-text">Deactivating a collection hides its products from customer catalog listings and checkout without deleting them.</p>
 
@@ -1332,6 +1427,80 @@ export function mountCatalogSection(section, container, context) {
     `);
 
     bind('#catalog-new-collection', () => { if (context.canLeave()) collectionEditor({ is_active: true }); });
+
+    bind('#btn-toggle-col-headings', () => {
+      colHeadingsOpen = !colHeadingsOpen;
+      collectionList();
+    });
+
+    if (colHeadingsOpen) {
+      const titleInput = query('#input-col-headings-title');
+      const subtitleInput = query('#input-col-headings-subtitle');
+      const previewTitle = query('#preview-col-title');
+      const previewSubtitle = query('#preview-col-subtitle');
+      const titleCounter = query('#col-title-counter');
+      const subtitleCounter = query('#col-subtitle-counter');
+
+      titleInput?.addEventListener('input', e => {
+        colPageTitle = e.target.value;
+        if (titleCounter) titleCounter.textContent = `${colPageTitle.length} / 100`;
+        if (previewTitle) previewTitle.textContent = colPageTitle || 'All Collections';
+      });
+
+      subtitleInput?.addEventListener('input', e => {
+        colPageSubtitle = e.target.value;
+        if (subtitleCounter) subtitleCounter.textContent = `${colPageSubtitle.length} / 255`;
+        if (previewSubtitle) previewSubtitle.textContent = colPageSubtitle || 'Explore our complete range of curated wardrobe edits.';
+      });
+
+      bind('#btn-reset-col-headings', () => {
+        colPageTitle = 'All Collections';
+        colPageSubtitle = 'Explore our complete range of curated wardrobe edits.';
+        if (titleInput) titleInput.value = colPageTitle;
+        if (subtitleInput) subtitleInput.value = colPageSubtitle;
+        if (titleCounter) titleCounter.textContent = `${colPageTitle.length} / 100`;
+        if (subtitleCounter) subtitleCounter.textContent = `${colPageSubtitle.length} / 255`;
+        if (previewTitle) previewTitle.textContent = colPageTitle;
+        if (previewSubtitle) previewSubtitle.textContent = colPageSubtitle;
+      });
+
+      bind('#btn-save-col-headings', async () => {
+        if (colHeadingsSaving) return;
+        colHeadingsSaving = true;
+        const saveBtn = query('#btn-save-col-headings');
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          const labelSpan = saveBtn.querySelector('span');
+          if (labelSpan) labelSpan.textContent = 'Saving…';
+        }
+        try {
+          const payload = {
+            collections_page_title: (colPageTitle || '').trim() || 'All Collections',
+            collections_page_subtitle: (colPageSubtitle || '').trim() || 'Explore our complete range of curated wardrobe edits.'
+          };
+          await api.updateAdminStoreSettings(payload);
+          colHeadingsAlert = 'Headings saved successfully.';
+          status('Storefront collection headings saved.');
+          setTimeout(() => {
+            colHeadingsAlert = '';
+            const alertEl = query('#col-headings-alert');
+            if (alertEl) alertEl.textContent = '';
+          }, 3500);
+        } catch (err) {
+          colHeadingsAlert = err.message || 'Failed to save headings';
+          status(err.message || 'Failed to save headings', true);
+        } finally {
+          colHeadingsSaving = false;
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            const labelSpan = saveBtn.querySelector('span');
+            if (labelSpan) labelSpan.textContent = 'Save Headings';
+          }
+          const alertEl = query('#col-headings-alert');
+          if (alertEl) alertEl.textContent = colHeadingsAlert;
+        }
+      });
+    }
 
     const searchInput = query('#catalog-collections-search');
     searchInput?.addEventListener('input', e => {
