@@ -307,3 +307,58 @@ def test_per_owner_preferences_isolation(client, db):
     assert reset_data["theme"] == "system"
     assert reset_data["table_density"] == "comfortable"
     assert reset_data["default_date_range"] == "this_month"
+
+
+def test_faq_items_and_support_configuration(client, db):
+    """Owner can update support channels and FAQ items, and public store settings reflect them."""
+    owner_name, pwd = _create_owner(db, "owner_faq_test")
+    csrf = _login_owner(client, owner_name, pwd)
+
+    # 1. Fetch current settings
+    cur = client.get("/api/v1/admin/settings").json()
+    version = cur["version"]
+
+    custom_faqs = [
+        {
+            "id": "faq_1",
+            "question": "Can I exchange for another size?",
+            "answer": "Yes, exchanges are permitted within 7 days of delivery.",
+            "category": "Returns",
+            "is_enabled": True,
+            "display_order": 0,
+        },
+        {
+            "id": "faq_2",
+            "question": "Secret upcoming question",
+            "answer": "Not visible yet",
+            "category": "General",
+            "is_enabled": False,
+            "display_order": 1,
+        },
+    ]
+
+    # 2. Update support channels and FAQ items
+    update_res = client.put(
+        "/api/v1/admin/settings",
+        json={
+            "expected_version": version,
+            "support_email": "care@alphazee.tech",
+            "support_phone": "+923001234567",
+            "support_hours": "Mon-Sat: 10am-7pm PKT",
+            "faq_items": custom_faqs,
+        },
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+    assert update_res.status_code == 200, update_res.text
+    updated = update_res.json()
+    assert updated["support_email"] == "care@alphazee.tech"
+    assert updated["support_phone"] == "+923001234567"
+    assert len(updated["faq_items"]) == 2
+
+    # 3. Public endpoint returns only enabled FAQs and support contacts
+    pub_res = client.get("/api/v1/store/settings").json()
+    assert pub_res["support_email"] == "care@alphazee.tech"
+    assert pub_res["support_phone"] == "+923001234567"
+    assert len(pub_res["faq_items"]) == 1
+    assert pub_res["faq_items"][0]["id"] == "faq_1"
+

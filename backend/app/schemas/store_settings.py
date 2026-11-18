@@ -26,6 +26,7 @@ class PublicStoreSettingsResponse(BaseModel):
     support_email: str | None
     support_phone: str | None
     support_hours: str | None
+    faq_items: list[dict[str, Any]] = Field(default_factory=list)
     delivery_policy: str | None
     return_policy: str | None
     terms_policy: str | None
@@ -55,6 +56,7 @@ class AdminStoreSettingsResponse(BaseModel):
     support_email: str | None
     support_phone: str | None
     support_hours: str | None
+    faq_items: list[dict[str, Any]] = Field(default_factory=list)
     delivery_policy_content: str | None
     delivery_policy_status: str
     delivery_policy_published_at: datetime | None
@@ -107,6 +109,7 @@ class UpdateStoreSettingsRequest(BaseModel):
     support_email: str | None = Field(default=None, max_length=120)
     support_phone: str | None = Field(default=None, max_length=50)
     support_hours: str | None = Field(default=None, max_length=120)
+    faq_items: list[dict[str, Any]] | None = None
     delivery_policy_content: str | None = None
     return_policy_content: str | None = None
     terms_policy_content: str | None = None

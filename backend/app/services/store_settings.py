@@ -22,6 +22,42 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+DEFAULT_FAQS = [
+    {
+        "id": "faq_del_1",
+        "question": "How long does delivery take?",
+        "answer": "Standard delivery across Pakistan takes 2 to 4 working days for major cities (Karachi, Lahore, Islamabad). Regional deliveries take 3 to 6 working days.",
+        "category": "Delivery",
+        "is_enabled": True,
+        "display_order": 0,
+    },
+    {
+        "id": "faq_pay_2",
+        "question": "How can I pay for my order?",
+        "answer": "We accept Cash on Delivery (COD) nationwide and direct bank transfers with verification. Available options appear at checkout.",
+        "category": "Payment",
+        "is_enabled": True,
+        "display_order": 1,
+    },
+    {
+        "id": "faq_ret_3",
+        "question": "What is the return & exchange policy?",
+        "answer": "We offer a 7-day return and exchange window for unworn items in their original packaging with tags attached.",
+        "category": "Returns",
+        "is_enabled": True,
+        "display_order": 2,
+    },
+    {
+        "id": "faq_siz_4",
+        "question": "How do I choose the correct size?",
+        "answer": "Refer to the detailed size chart and measurements published on each product page before selecting your size.",
+        "category": "Sizing",
+        "is_enabled": True,
+        "display_order": 3,
+    },
+]
+
+
 def _resolve_logo_url(logo_media_id: str | None, db: Session) -> str | None:
     if not logo_media_id:
         return None
@@ -51,6 +87,7 @@ def get_or_create_store_settings(db: Session) -> StoreSettings:
             standard_shipping_fee_minor=20000,
             low_stock_threshold=3,
             stock_staleness_threshold_days=7,
+            faq_items=list(DEFAULT_FAQS),
             version=1,
             updated_at=utcnow(),
         )
@@ -77,6 +114,7 @@ def get_public_store_settings(db: Session) -> PublicStoreSettingsResponse:
         support_email=settings.support_email,
         support_phone=settings.support_phone,
         support_hours=settings.support_hours,
+        faq_items=[f for f in (settings.faq_items if settings.faq_items is not None else DEFAULT_FAQS) if f.get('is_enabled', True)],
         delivery_policy=settings.delivery_policy_content if settings.delivery_policy_status == 'published' else None,
         return_policy=settings.return_policy_content if settings.return_policy_status == 'published' else None,
         terms_policy=settings.terms_policy_content if settings.terms_policy_status == 'published' else None,
@@ -108,6 +146,7 @@ def get_admin_store_settings(db: Session) -> AdminStoreSettingsResponse:
         support_email=settings.support_email,
         support_phone=settings.support_phone,
         support_hours=settings.support_hours,
+        faq_items=list(settings.faq_items if settings.faq_items is not None else DEFAULT_FAQS),
         delivery_policy_content=settings.delivery_policy_content,
         delivery_policy_status=settings.delivery_policy_status,
         delivery_policy_published_at=settings.delivery_policy_published_at,

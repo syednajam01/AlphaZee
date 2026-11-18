@@ -20,8 +20,12 @@ export function createStoreSettingsComponent() {
   let currentSettings = null;
   let currentPreferences = null;
   let auditLogs = [];
-  let activeTab = 'storefront'; // 'storefront' | 'shipping' | 'policies' | 'audit' | 'preferences'
+  let activeTab = 'storefront'; // 'storefront' | 'shipping' | 'policies' | 'faq' | 'audit' | 'preferences'
   let activePolicy = 'delivery'; // 'delivery' | 'return' | 'terms' | 'privacy'
+  let faqCategoryFilter = 'all'; // 'all' | 'delivery' | 'payment' | 'returns' | 'sizing' | 'general'
+  let faqSearchQuery = '';
+  let editingFaqId = null; // null | 'new' | string ID
+  let activeMockupFaqIndex = 0;
 
   function render() {
     container.innerHTML = `
@@ -58,6 +62,10 @@ export function createStoreSettingsComponent() {
         <button type="button" class="settings-tab-btn set-tab-btn ${activeTab === 'policies' ? 'active' : ''}" data-tab="policies">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
           Legal Policies
+        </button>
+        <button type="button" class="settings-tab-btn set-tab-btn ${activeTab === 'faq' ? 'active' : ''}" data-tab="faq">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          FAQ & Support
         </button>
         <button type="button" class="settings-tab-btn set-tab-btn ${activeTab === 'audit' ? 'active' : ''}" data-tab="audit">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
@@ -98,6 +106,8 @@ export function createStoreSettingsComponent() {
         return renderShippingTab();
       case 'policies':
         return renderPoliciesTab();
+      case 'faq':
+        return renderFaqTab();
       case 'audit':
         return renderAuditTab();
       case 'preferences':
@@ -425,6 +435,272 @@ export function createStoreSettingsComponent() {
 
           <div>
             <textarea id="textarea-policy-content" class="admin-input" style="width: 100%; min-height: 280px; font-family: monospace; font-size: 0.8125rem; line-height: 1.6; padding: 14px;" placeholder="Draft legal terms, shipping commitments, or return guarantees in Markdown or Plain Text...">${escapeHtml(pol.content)}</textarea>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function persistFaqItems(newFaqItems, reason) {
+    try {
+      const payload = {
+        faq_items: newFaqItems,
+        expected_version: currentSettings.version,
+        change_reason: reason || 'Update storefront FAQ knowledge base',
+      };
+      const res = await updateAdminStoreSettings(payload);
+      currentSettings = res;
+      showAlert('FAQ items updated successfully');
+      render();
+    } catch (err) {
+      showAlert(err.message || 'Failed to update FAQ items', 'error');
+    }
+  }
+
+  function renderFaqTab() {
+    const s = currentSettings;
+    const faqs = Array.isArray(s.faq_items) ? s.faq_items : [];
+
+    const filteredFaqs = faqs.filter(item => {
+      if (faqCategoryFilter !== 'all' && (item.category || '').toLowerCase() !== faqCategoryFilter.toLowerCase()) {
+        return false;
+      }
+      if (faqSearchQuery) {
+        const q = faqSearchQuery.toLowerCase();
+        const qMatch = (item.question || '').toLowerCase().includes(q);
+        const aMatch = (item.answer || '').toLowerCase().includes(q);
+        return qMatch || aMatch;
+      }
+      return true;
+    });
+
+    const isNew = editingFaqId === 'new';
+    const currentEditItem = isNew
+      ? { id: '', question: '', answer: '', category: 'General', is_enabled: true }
+      : (faqs.find(f => f.id === editingFaqId) || null);
+
+    return `
+      <div class="set-grid-2col faq-admin-container">
+        <!-- Left Column: Support Channels & FAQ Management -->
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Customer Support Channels Card -->
+          <div class="set-card">
+            <div class="set-card-header">
+              <h3 class="set-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                Customer Support Channels
+              </h3>
+            </div>
+
+            <form id="form-support-channels" style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;">
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Support Email</label>
+                  <input type="email" id="input-support-email" value="${escapeHtml(s.support_email || '')}" class="admin-input" style="width: 100%;" placeholder="e.g. support@alphazee.tech">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">WhatsApp Phone Number</label>
+                  <input type="text" id="input-support-phone" value="${escapeHtml(s.support_phone || '')}" class="admin-input" style="width: 100%; font-family: monospace;" placeholder="+92 300 1234567">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Operating Hours</label>
+                  <input type="text" id="input-support-hours" value="${escapeHtml(s.support_hours || '')}" class="admin-input" style="width: 100%;" placeholder="Mon-Sat: 10:00 AM – 7:00 PM PKT">
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; margin-top: 2px;">
+                <button type="submit" id="btn-save-support-channels" class="set-action-btn is-save" data-tooltip="Save customer support channels" aria-label="Save support channels" title="Save support channels">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- FAQ Knowledge Base Card -->
+          <div class="set-card">
+            <div class="set-card-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 class="set-card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #38BDF8;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  Storefront FAQ Questions
+                </h3>
+                <span class="faq-count-pill">${faqs.length}</span>
+              </div>
+
+              <!-- Rule 2: Compact 34x34px action button -->
+              <div class="set-action-group">
+                <button type="button" id="btn-add-faq-item" class="set-action-btn is-save" data-tooltip="Add new FAQ question" aria-label="Add new FAQ question" title="Add question">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Search and Category Filters -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
+              <div style="position: relative;">
+                <input type="text" id="input-faq-search" value="${escapeHtml(faqSearchQuery)}" class="admin-input" placeholder="Search questions & answers..." style="width: 100%; padding-left: 34px; font-size: 0.8125rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: rgba(255, 255, 255, 0.4); pointer-events: none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </div>
+
+              <div class="faq-filter-pills">
+                <button type="button" class="faq-pill ${faqCategoryFilter === 'all' ? 'active' : ''}" data-cat="all">All (${faqs.length})</button>
+                <button type="button" class="faq-pill ${faqCategoryFilter === 'delivery' ? 'active' : ''}" data-cat="delivery">Delivery (${faqs.filter(f => (f.category || '').toLowerCase() === 'delivery').length})</button>
+                <button type="button" class="faq-pill ${faqCategoryFilter === 'payment' ? 'active' : ''}" data-cat="payment">Payment (${faqs.filter(f => (f.category || '').toLowerCase() === 'payment').length})</button>
+                <button type="button" class="faq-pill ${faqCategoryFilter === 'returns' ? 'active' : ''}" data-cat="returns">Returns (${faqs.filter(f => (f.category || '').toLowerCase() === 'returns').length})</button>
+                <button type="button" class="faq-pill ${faqCategoryFilter === 'sizing' ? 'active' : ''}" data-cat="sizing">Sizing (${faqs.filter(f => (f.category || '').toLowerCase() === 'sizing').length})</button>
+                <button type="button" class="faq-pill ${faqCategoryFilter === 'general' ? 'active' : ''}" data-cat="general">General (${faqs.filter(f => (f.category || '').toLowerCase() === 'general').length})</button>
+              </div>
+            </div>
+
+            <!-- Inline FAQ Editor -->
+            ${currentEditItem ? `
+              <div id="faq-editor-box" class="faq-editor-box">
+                <div class="faq-editor-header">
+                  <span style="font-size: 0.8125rem; font-weight: 600; color: #fff;">${isNew ? 'New FAQ Question' : 'Edit FAQ Question'}</span>
+                  <button type="button" id="btn-cancel-faq-editor-x" class="set-action-btn" data-tooltip="Close editor" aria-label="Close editor" title="Close editor" style="width: 28px; height: 28px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                    <div>
+                      <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 5px;">Category</label>
+                      <select id="select-faq-category" class="admin-input" style="width: 100%;">
+                        <option value="Delivery" ${(currentEditItem.category || '') === 'Delivery' ? 'selected' : ''}>Delivery</option>
+                        <option value="Payment" ${(currentEditItem.category || '') === 'Payment' ? 'selected' : ''}>Payment</option>
+                        <option value="Returns" ${(currentEditItem.category || '') === 'Returns' ? 'selected' : ''}>Returns</option>
+                        <option value="Sizing" ${(currentEditItem.category || '') === 'Sizing' ? 'selected' : ''}>Sizing</option>
+                        <option value="General" ${(currentEditItem.category || '') === 'General' ? 'selected' : ''}>General</option>
+                      </select>
+                    </div>
+                    <div style="display: flex; align-items: flex-end; padding-bottom: 8px;">
+                      <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--admin-text-secondary); cursor: pointer;">
+                        <input type="checkbox" id="input-faq-active" ${currentEditItem.is_enabled !== false ? 'checked' : ''} style="width: 15px; height: 15px; cursor: pointer;">
+                        <span>Published & active on storefront</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 5px;">Question</label>
+                    <input type="text" id="input-faq-question" value="${escapeHtml(currentEditItem.question || '')}" class="admin-input" style="width: 100%;" placeholder="e.g. How long does standard delivery take?" required>
+                  </div>
+                  <div>
+                    <label style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 5px;">
+                      <span>Answer</span>
+                      <span id="faq-char-count" style="font-family: monospace; font-size: 0.6875rem; color: rgba(255,255,255,0.4);">${(currentEditItem.answer || '').length} / 1000</span>
+                    </label>
+                    <textarea id="textarea-faq-answer" class="admin-input" style="width: 100%; min-height: 90px; font-size: 0.8125rem; line-height: 1.5; padding: 10px;" placeholder="Provide clear, concise information..." required maxlength="1000">${escapeHtml(currentEditItem.answer || '')}</textarea>
+                  </div>
+                  <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+                    <button type="button" id="btn-cancel-faq-editor" class="admin-btn admin-btn-ghost" style="padding: 6px 14px; font-size: 0.75rem;">Cancel</button>
+                    <button type="button" id="btn-save-faq-editor" class="admin-btn admin-btn-primary" style="padding: 6px 16px; font-size: 0.75rem; background: #10B981;">Save Question</button>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- FAQ Items List -->
+            ${filteredFaqs.length === 0 ? `
+              <div style="padding: 30px 14px; text-align: center; color: var(--admin-text-muted); font-size: 0.8125rem; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px dashed rgba(255, 255, 255, 0.08);">
+                No FAQ items found. Click '+' above to create a new question.
+              </div>
+            ` : `
+              <div class="faq-admin-list">
+                ${filteredFaqs.map((item) => {
+                  const cat = (item.category || 'general').toLowerCase();
+                  const globalIndex = faqs.findIndex(f => f.id === item.id);
+                  const isFirst = globalIndex === 0;
+                  const isLast = globalIndex === faqs.length - 1;
+                  return `
+                    <div class="faq-admin-card ${item.is_enabled === false ? 'is-disabled' : ''}" data-id="${escapeHtml(item.id)}">
+                      <div class="faq-admin-card-top">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <span class="faq-item-index">#${globalIndex + 1}</span>
+                          <span class="faq-cat-badge cat-${cat}">${escapeHtml(item.category || 'General')}</span>
+                          <span class="faq-status-pill ${item.is_enabled !== false ? 'is-active' : 'is-disabled'}">${item.is_enabled !== false ? 'Active' : 'Disabled'}</span>
+                        </div>
+                        <div class="set-action-group">
+                          <button type="button" class="set-action-btn btn-faq-up" data-id="${escapeHtml(item.id)}" ${isFirst ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''} data-tooltip="Move up" aria-label="Move up" title="Move up">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+                          </button>
+                          <button type="button" class="set-action-btn btn-faq-down" data-id="${escapeHtml(item.id)}" ${isLast ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : ''} data-tooltip="Move down" aria-label="Move down" title="Move down">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                          </button>
+                          <button type="button" class="set-action-btn btn-faq-toggle" data-id="${escapeHtml(item.id)}" data-tooltip="${item.is_enabled !== false ? 'Disable question' : 'Enable question'}" aria-label="Toggle active" title="Toggle active">
+                            ${item.is_enabled !== false ? `
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            ` : `
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: rgba(255,255,255,0.4);"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                            `}
+                          </button>
+                          <button type="button" class="set-action-btn btn-faq-edit" data-id="${escapeHtml(item.id)}" data-tooltip="Edit question" aria-label="Edit question" title="Edit question">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                          <button type="button" class="set-action-btn btn-faq-delete" data-id="${escapeHtml(item.id)}" data-tooltip="Delete question" aria-label="Delete question" title="Delete question" style="color: #F87171;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="faq-admin-q">${escapeHtml(item.question)}</div>
+                      <div class="faq-admin-a">${escapeHtml(item.answer)}</div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Live Storefront Preview -->
+        <div class="set-preview-mockup">
+          <div class="set-mockup-browser-bar">
+            <span class="set-mockup-dot red"></span>
+            <span class="set-mockup-dot yellow"></span>
+            <span class="set-mockup-dot green"></span>
+            <span class="set-mockup-url">alphazee.tech/faq</span>
+          </div>
+
+          <div class="set-mockup-body" style="padding: 16px;">
+            <div style="margin-bottom: 14px;">
+              <div style="font-size: 0.875rem; font-weight: 600; color: #fff;">Before you order</div>
+              <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5);">A few useful answers, all in one place.</div>
+            </div>
+
+            <div class="set-mockup-faq-accordion">
+              ${faqs.filter(f => f.is_enabled !== false).map((item, idx) => {
+                const isOpen = idx === activeMockupFaqIndex;
+                return `
+                  <div class="mockup-faq-item ${isOpen ? 'is-open' : ''}" data-idx="${idx}">
+                    <div class="mockup-faq-q">
+                      <span>${escapeHtml(item.question)}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 180ms ease; transform: ${isOpen ? 'rotate(180deg)' : 'rotate(0)'}; flex-shrink: 0;"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                    <div class="mockup-faq-a" style="display: ${isOpen ? 'block' : 'none'};">
+                      ${escapeHtml(item.answer)}
+                    </div>
+                  </div>
+                `;
+              }).join('') || '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4); text-align: center; padding: 20px 0;">No active FAQ items to preview</div>'}
+            </div>
+
+            <!-- Customer Care / WhatsApp Mockup Box -->
+            <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+              <div style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-bottom: 4px;">Need Assistance?</div>
+              <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); margin-bottom: 10px; line-height: 1.4;">
+                ${s.support_hours ? `Hours: ${escapeHtml(s.support_hours)}<br>` : ''}
+                ${s.support_email ? `<span style="color: #38BDF8;">${escapeHtml(s.support_email)}</span>` : 'Our support team is available to assist.'}
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                ${s.support_phone ? `
+                  <div style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34D399; font-size: 0.6875rem; font-weight: 500;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                    <span>WhatsApp: ${escapeHtml(s.support_phone)}</span>
+                  </div>
+                ` : `
+                  <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.4); font-style: italic;">WhatsApp support unconfigured</div>
+                `}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -881,6 +1157,218 @@ export function createStoreSettingsComponent() {
         }
       });
     }
+
+    // Customer Support Channels Form
+    const formSupport = container.querySelector('#form-support-channels');
+    if (formSupport) {
+      formSupport.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          const payload = {
+            support_email: container.querySelector('#input-support-email').value.trim() || null,
+            support_phone: container.querySelector('#input-support-phone').value.trim() || null,
+            support_hours: container.querySelector('#input-support-hours').value.trim() || null,
+            expected_version: currentSettings.version,
+            change_reason: 'Update customer support channels',
+          };
+          const res = await updateAdminStoreSettings(payload);
+          currentSettings = res;
+          showAlert('Support channels saved successfully');
+          render();
+        } catch (err) {
+          showAlert(err.message || 'Failed to update support channels', 'error');
+        }
+      });
+    }
+
+    // FAQ Search & Filter
+    const inputFaqSearch = container.querySelector('#input-faq-search');
+    if (inputFaqSearch) {
+      inputFaqSearch.addEventListener('input', (e) => {
+        faqSearchQuery = e.target.value;
+        render();
+        const nextInput = container.querySelector('#input-faq-search');
+        if (nextInput) {
+          nextInput.focus();
+          nextInput.setSelectionRange(nextInput.value.length, nextInput.value.length);
+        }
+      });
+    }
+
+    container.querySelectorAll('.faq-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        faqCategoryFilter = btn.dataset.cat;
+        render();
+      });
+    });
+
+    // Add FAQ Item button
+    const btnAddFaq = container.querySelector('#btn-add-faq-item');
+    if (btnAddFaq) {
+      btnAddFaq.addEventListener('click', () => {
+        editingFaqId = 'new';
+        render();
+        const qInput = container.querySelector('#input-faq-question');
+        if (qInput) qInput.focus();
+      });
+    }
+
+    // Cancel FAQ Editor
+    const btnCancelFaq = container.querySelector('#btn-cancel-faq-editor');
+    const btnCancelFaqX = container.querySelector('#btn-cancel-faq-editor-x');
+    if (btnCancelFaq) {
+      btnCancelFaq.addEventListener('click', () => {
+        editingFaqId = null;
+        render();
+      });
+    }
+    if (btnCancelFaqX) {
+      btnCancelFaqX.addEventListener('click', () => {
+        editingFaqId = null;
+        render();
+      });
+    }
+
+    // FAQ Textarea Char Counter
+    const textareaFaq = container.querySelector('#textarea-faq-answer');
+    const charCounter = container.querySelector('#faq-char-count');
+    if (textareaFaq && charCounter) {
+      textareaFaq.addEventListener('input', () => {
+        charCounter.textContent = `${textareaFaq.value.length} / 1000`;
+      });
+    }
+
+    // Save FAQ Item (from editor)
+    const btnSaveFaqEditor = container.querySelector('#btn-save-faq-editor');
+    if (btnSaveFaqEditor) {
+      btnSaveFaqEditor.addEventListener('click', async () => {
+        const q = (container.querySelector('#input-faq-question')?.value || '').trim();
+        const a = (container.querySelector('#textarea-faq-answer')?.value || '').trim();
+        const cat = container.querySelector('#select-faq-category')?.value || 'General';
+        const active = container.querySelector('#input-faq-active')?.checked ?? true;
+
+        if (!q) {
+          showAlert('FAQ question cannot be empty', 'error');
+          return;
+        }
+        if (!a) {
+          showAlert('FAQ answer cannot be empty', 'error');
+          return;
+        }
+
+        let items = [...(currentSettings.faq_items || [])];
+        const wasNew = editingFaqId === 'new';
+        if (wasNew) {
+          const newId = `faq_${Date.now()}`;
+          items.push({
+            id: newId,
+            question: q,
+            answer: a,
+            category: cat,
+            is_enabled: active,
+            display_order: items.length,
+          });
+        } else {
+          items = items.map(f => {
+            if (f.id === editingFaqId) {
+              return {
+                ...f,
+                question: q,
+                answer: a,
+                category: cat,
+                is_enabled: active,
+              };
+            }
+            return f;
+          });
+        }
+
+        editingFaqId = null;
+        await persistFaqItems(items, wasNew ? 'Add new FAQ item' : 'Update FAQ item');
+      });
+    }
+
+    // Move Up
+    container.querySelectorAll('.btn-faq-up').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const items = [...(currentSettings.faq_items || [])];
+        const idx = items.findIndex(f => f.id === id);
+        if (idx > 0) {
+          const temp = items[idx];
+          items[idx] = items[idx - 1];
+          items[idx - 1] = temp;
+          items.forEach((f, i) => { f.display_order = i; });
+          await persistFaqItems(items, `Move FAQ "${temp.question.slice(0, 30)}" up`);
+        }
+      });
+    });
+
+    // Move Down
+    container.querySelectorAll('.btn-faq-down').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const items = [...(currentSettings.faq_items || [])];
+        const idx = items.findIndex(f => f.id === id);
+        if (idx >= 0 && idx < items.length - 1) {
+          const temp = items[idx];
+          items[idx] = items[idx + 1];
+          items[idx + 1] = temp;
+          items.forEach((f, i) => { f.display_order = i; });
+          await persistFaqItems(items, `Move FAQ "${temp.question.slice(0, 30)}" down`);
+        }
+      });
+    });
+
+    // Toggle Active / Disabled
+    container.querySelectorAll('.btn-faq-toggle').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const items = (currentSettings.faq_items || []).map(f => {
+          if (f.id === id) {
+            return { ...f, is_enabled: f.is_enabled === false ? true : false };
+          }
+          return f;
+        });
+        await persistFaqItems(items, 'Toggle FAQ visibility state');
+      });
+    });
+
+    // Edit Item
+    container.querySelectorAll('.btn-faq-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        editingFaqId = btn.dataset.id;
+        render();
+        const qInput = container.querySelector('#input-faq-question');
+        if (qInput) qInput.focus();
+      });
+    });
+
+    // Delete Item
+    container.querySelectorAll('.btn-faq-delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        if (!confirm('Are you sure you want to delete this FAQ question?')) return;
+        const items = (currentSettings.faq_items || []).filter(f => f.id !== id);
+        items.forEach((f, i) => { f.display_order = i; });
+        if (editingFaqId === id) editingFaqId = null;
+        await persistFaqItems(items, 'Delete FAQ question');
+      });
+    });
+
+    // Mockup Interactive Accordion
+    container.querySelectorAll('.mockup-faq-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.dataset.idx, 10);
+        activeMockupFaqIndex = activeMockupFaqIndex === idx ? -1 : idx;
+        render();
+      });
+    });
 
     // Admin Preferences Form
     const formPrefs = container.querySelector('#form-admin-preferences');

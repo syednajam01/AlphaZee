@@ -56,10 +56,16 @@ class StoreSettings(Base):
         nullable=False,
     )
 
-    # Support Contacts
+    # Support Contacts & FAQ Knowledge Base
     support_email: Mapped[str | None] = mapped_column(String(120), nullable=True)
     support_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     support_hours: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    faq_items: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        default=list,
+        server_default='[]',
+        nullable=False,
+    )
 
     # Legal & Policies (Draft vs Published)
     delivery_policy_content: Mapped[str | None] = mapped_column(Text, nullable=True)

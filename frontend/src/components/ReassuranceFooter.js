@@ -1,5 +1,43 @@
 import { storeConfig } from '../data/store-config.js';
 import { createBrandLogo } from './BrandLogo.js';
+import { fetchPublicStoreSettings } from '../utils/api.js';
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function bindAccordion(root) {
+  root.querySelectorAll('.faq-item').forEach(item => {
+    const btn = item.querySelector('.faq-question');
+    const chevron = item.querySelector('.faq-chevron');
+    if (!btn || !chevron) return;
+
+    btn.onclick = () => {
+      const isOpen = item.classList.contains('is-open');
+
+      // Close others
+      root.querySelectorAll('.faq-item').forEach(other => {
+        other.classList.remove('is-open');
+        const ob = other.querySelector('.faq-question');
+        const oc = other.querySelector('.faq-chevron');
+        if (ob) ob.setAttribute('aria-expanded', 'false');
+        if (oc) oc.style.transform = 'rotate(0deg)';
+      });
+
+      if (!isOpen) {
+        item.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+        chevron.style.transform = 'rotate(180deg)';
+      }
+    };
+  });
+}
 
 export function createReassuranceAndFooter() {
   const wrapper = document.createElement('div');
@@ -88,7 +126,7 @@ export function createReassuranceAndFooter() {
             </ul>
           </div>
 
-          <div>
+          <div id="footer-assistance-slot">
             <h4 class="footer-heading">Need Assistance?</h4>
             <p class="footer-link" style="margin-bottom: 12px; line-height: 1.4;">
               Our support contact is not available yet. Please check the FAQ for sizing and delivery information.
@@ -127,28 +165,67 @@ export function createReassuranceAndFooter() {
     footerLogoSlot.appendChild(footerLogo);
   }
 
-  // Accordion Logic
-  wrapper.querySelectorAll('.faq-item').forEach(item => {
-    const btn = item.querySelector('.faq-question');
-    const chevron = item.querySelector('.faq-chevron');
+  // Bind initial static accordions
+  bindAccordion(wrapper);
 
-    btn.addEventListener('click', () => {
-      const isOpen = item.classList.contains('is-open');
-      
-      // Close others
-      wrapper.querySelectorAll('.faq-item').forEach(other => {
-        other.classList.remove('is-open');
-        other.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
-        other.querySelector('.faq-chevron').style.transform = 'rotate(0deg)';
-      });
+  // Dynamically load live store settings if available
+  fetchPublicStoreSettings().then(settings => {
+    if (!settings) return;
 
-      if (!isOpen) {
-        item.classList.add('is-open');
-        btn.setAttribute('aria-expanded', 'true');
-        chevron.style.transform = 'rotate(180deg)';
+    // 1. Dynamic FAQ Items from Admin Settings
+    if (Array.isArray(settings.faq_items) && settings.faq_items.length > 0) {
+      const activeFaqs = settings.faq_items.filter(f => f.is_enabled !== false);
+      if (activeFaqs.length > 0) {
+        const faqList = wrapper.querySelector('.faq-list');
+        if (faqList) {
+          faqList.innerHTML = activeFaqs.map((faq, index) => `
+            <div class="faq-item ${index === 0 ? 'is-open' : ''}">
+              <button class="faq-question" aria-expanded="${index === 0}">
+                <span>${escapeHtml(faq.question)}</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="faq-chevron" style="transition: transform 200ms ease; transform: ${index === 0 ? 'rotate(180deg)' : 'rotate(0)'};">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="faq-answer">
+                ${escapeHtml(faq.answer)}
+              </div>
+            </div>
+          `).join('');
+          bindAccordion(faqList);
+        }
       }
-    });
-  });
+    }
+
+    // 2. Dynamic Customer Support / WhatsApp Contact
+    const assistanceSlot = wrapper.querySelector('#footer-assistance-slot');
+    if (assistanceSlot && settings.support_phone) {
+      const phone = settings.support_phone.trim();
+      const phoneClean = phone.replace(/[^0-9]/g, '');
+      let infoHtml = '';
+      if (settings.support_hours) {
+        infoHtml += `<span style="display:block; margin-bottom: 4px;">Hours: ${escapeHtml(settings.support_hours)}</span>`;
+      }
+      if (settings.support_email) {
+        infoHtml += `<span style="display:block; margin-bottom: 6px;"><a href="mailto:${escapeHtml(settings.support_email)}" class="footer-link" style="text-decoration: underline;">${escapeHtml(settings.support_email)}</a></span>`;
+      }
+      if (!infoHtml) {
+        infoHtml = '<span style="display:block; margin-bottom: 12px; line-height: 1.4;">Questions about sizing or your order? We are here to help.</span>';
+      }
+
+      assistanceSlot.innerHTML = `
+        <h4 class="footer-heading">Need Assistance?</h4>
+        <div class="footer-link" style="margin-bottom: 12px; line-height: 1.4;">
+          ${infoHtml}
+        </div>
+        <a href="https://wa.me/${phoneClean}?text=Hello%20AlphaZee" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="font-size: 0.875rem; padding: 10px 18px; min-height: 44px; display: inline-flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+          </svg>
+          Chat on WhatsApp
+        </a>
+      `;
+    }
+  }).catch(() => {});
 
   return wrapper;
 }
