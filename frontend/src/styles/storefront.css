@@ -300,7 +300,7 @@
 .storefront .hero-section {
   position: relative;
   width: 100%;
-  margin-top: 16px !important;
+  margin-top: 18px !important;
   margin-bottom: 24px !important;
   aspect-ratio: 16 / 9 !important;
   height: auto !important;
@@ -313,6 +313,14 @@
   color: #ffffff;
   isolation: isolate;
   overflow: hidden;
+  transition: margin-top 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* When navbar is collapsed to half-height line (32px), banner smoothly moves up to meet the 32px line */
+body[data-nav-compact="true"] .hero-section,
+.site-header[data-nav-state="compact"] ~ #main-content .hero-section,
+.storefront:has(.site-header[data-nav-state="compact"]) .hero-section {
+  margin-top: 0 !important;
 }
 
 .storefront .hero-bg-container {
@@ -621,16 +629,22 @@
     height: 32px !important;
     font-size: 11.5px !important;
   }
-  /* True 16:9 Full Widescreen Hero on Mobile - Zero Cropping, Full Graphic View */
+  /* True 16:9 Full Widescreen Hero on Mobile - Zero Cropping, Full Graphic View with breathing space */
   .storefront .hero-section {
     width: 100% !important;
     aspect-ratio: 16 / 9 !important;
     height: auto !important;
     min-height: unset !important;
-    margin-top: 0 !important;
+    margin-top: 14px !important;
+    margin-bottom: 20px !important;
     padding: 0 !important;
     align-items: center !important;
     justify-content: center !important;
+  }
+  body[data-nav-compact="true"] .hero-section,
+  .site-header[data-nav-state="compact"] ~ #main-content .hero-section,
+  .storefront:has(.site-header[data-nav-state="compact"]) .hero-section {
+    margin-top: 0 !important;
   }
   .storefront .hero-bg-container,
   .storefront .hero-media-track,

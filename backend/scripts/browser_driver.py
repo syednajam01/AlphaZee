@@ -14,7 +14,7 @@ class Browser:
             '--no-first-run','--disable-background-networking',f'--remote-debugging-port={self.port}',f'--user-data-dir={self.artifacts/"profile"}','about:blank'],
             stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,creationflags=subprocess.CREATE_NO_WINDOW)
         pages=json.loads(wait_http(f'http://127.0.0.1:{self.port}/json/list'))
-        self.ws=connect(next(p for p in pages if p['type']=='page')['webSocketDebuggerUrl'])
+        self.ws=connect(next(p for p in pages if p['type']=='page')['webSocketDebuggerUrl'], max_size=16*1024*1024)
         for method in ('Page.enable','Runtime.enable','Network.enable'):self.cdp(method)
         self.cdp('Network.setBlockedURLs',{'urls':['*fonts.googleapis.com*','*fonts.gstatic.com*']})
         self.cdp('Emulation.setDeviceMetricsOverride',{'width':1440,'height':1000,'deviceScaleFactor':1,'mobile':False})

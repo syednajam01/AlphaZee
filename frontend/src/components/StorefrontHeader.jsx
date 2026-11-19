@@ -62,18 +62,35 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
 
   useLayoutEffect(() => {
     const measure = () => {
-      const height = panel.current?.offsetHeight || 72;
-      host.style.height = `${height}px`;
-      host.style.setProperty('--nav-announcement-height', `${announcement.current?.offsetHeight || 0}px`);
-      document.documentElement.style.setProperty('--storefront-header-height', `${height}px`);
+      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 600;
+      const floatingTop = isMobile ? 10 : 14;
+      const panelH = panel.current?.offsetHeight || 56;
+      const announcementH = announcement.current?.offsetHeight || 0;
+      host.style.setProperty('--panel-height', `${panelH}px`);
+      host.style.setProperty('--nav-announcement-height', `${announcementH}px`);
+
+      const fullHeight = floatingTop + panelH;
+      const currentHeight = (mode === 'compact') ? 32 : fullHeight;
+      host.style.height = `${currentHeight}px`;
+      document.documentElement.style.setProperty('--storefront-header-height', `${currentHeight}px`);
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(panel.current);
     window.addEventListener('resize', measure);
-    return () => { observer?.disconnect(); window.removeEventListener('resize', measure); document.documentElement.style.removeProperty('--storefront-header-height'); };
-  }, [host, settings, caps.testMode]);
-  useLayoutEffect(() => { host.dataset.navState = mode; }, [host, mode]);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      document.documentElement.style.removeProperty('--storefront-header-height');
+    };
+  }, [host, settings, caps.testMode, mode]);
+
+  useLayoutEffect(() => {
+    host.dataset.navState = mode;
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.dataset.navCompact = (mode === 'compact') ? 'true' : 'false';
+    }
+  }, [host, mode]);
 
   useEffect(() => {
     let frame = 0;

@@ -3,16 +3,22 @@
   --nav-pill-max-width: 1140px;
   --nav-pill-height: 56px;
   --nav-floating-top: 14px;
+  --compact-header-height: 32px;
   position: sticky;
   top: var(--lab-notice-height, 0px);
   left: 0;
   right: 0;
   z-index: var(--z-header);
-  height: var(--header-height);
+  height: calc(var(--nav-floating-top) + var(--panel-height, var(--nav-pill-height)));
   flex-shrink: 0;
   pointer-events: none;
   background: transparent;
   color: var(--color-text);
+  transition: height 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.site-header[data-nav-state="compact"] {
+  height: var(--compact-header-height, 32px) !important;
 }
 
 /* Floating "In Air" Island Navbar */
@@ -78,17 +84,17 @@
   display: none;
 }
 
-/* Scrolled Compact State: Standalone AZ Logo with NO BACKGROUND */
+/* Scrolled Compact State: Standalone AZ Logo with NO BACKGROUND in 32px slim bar */
 .site-header[data-nav-state="compact"] #header-logo-slot {
-  top: calc(var(--lab-notice-height, 0px) + max(8px, env(safe-area-inset-top, 0px)));
+  top: calc(var(--lab-notice-height, 0px) + max(4px, env(safe-area-inset-top, 0px)));
   left: max(16px, env(safe-area-inset-left, 0px));
 }
 
 .site-header[data-nav-state="compact"] .storefront-header-logo {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
   padding: 0;
   background: transparent !important;
   border: none !important;
@@ -110,8 +116,8 @@
 
 .site-header[data-nav-state="compact"] .logo-variant-compact {
   display: block;
-  width: 36px;
-  height: 36px;
+  width: 24px;
+  height: 24px;
   filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.85)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
 }
 
@@ -125,6 +131,7 @@
   .site-header {
     --nav-pill-height: 50px;
     --nav-floating-top: 10px;
+    --compact-header-height: 32px;
   }
   .site-header .header-panel {
     width: calc(100% - 24px);
@@ -132,6 +139,10 @@
   .site-header #header-logo-slot {
     left: calc(50% - (100% - 24px) / 2 + 12px);
     top: calc(var(--lab-notice-height, 0px) + var(--nav-floating-top) + var(--nav-announcement-height, 0px) + (var(--nav-pill-height) - 44px) / 2);
+  }
+  .site-header[data-nav-state="compact"] #header-logo-slot {
+    left: max(12px, env(safe-area-inset-left, 0px));
+    top: calc(var(--lab-notice-height, 0px) + max(4px, env(safe-area-inset-top, 0px)));
   }
   .site-header .container {
     padding-left: 12px;
