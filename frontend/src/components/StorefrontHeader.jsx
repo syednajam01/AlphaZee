@@ -34,7 +34,7 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
       if (!locked) {
         setMode('compact');
       }
-    }, 4500);
+    }, 2500);
   };
 
   const cancelIdleCountdown = () => {
