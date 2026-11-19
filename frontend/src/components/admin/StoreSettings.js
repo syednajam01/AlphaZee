@@ -13,6 +13,194 @@ import {
   resetAdminPreferences,
 } from '../../utils/api.js';
 
+const REASSURANCE_ICONS = [
+  { id: 'truck', label: 'Delivery Truck' },
+  { id: 'shield-check', label: 'Shield Guarantee' },
+  { id: 'message-circle', label: 'Direct Support' },
+  { id: 'refresh-cw', label: 'Easy Returns' },
+  { id: 'package', label: 'Care Packaging' },
+  { id: 'award', label: 'Master Quality' },
+  { id: 'lock', label: 'Secure Checkout' },
+  { id: 'credit-card', label: 'Verified Payments' },
+  { id: 'leaf', label: 'Natural & Eco' },
+  { id: 'zap', label: 'Express Dispatch' },
+  { id: 'heart', label: 'Curated Care' },
+  { id: 'globe', label: 'Nationwide Delivery' },
+  { id: 'clock', label: 'Prompt Support' },
+  { id: 'headphones', label: 'Support Concierge' },
+  { id: 'check-circle', label: 'Inspected & Verified' },
+  { id: 'sparkles', label: 'Luxury Finishing' },
+];
+
+const DEFAULT_REASSURANCE_LIST = [
+  {
+    id: 'delivery',
+    icon: 'truck',
+    title: 'Delivery Information',
+    description: 'Delivery coverage, charges and timing will be published before public ordering opens.',
+  },
+  {
+    id: 'payments',
+    icon: 'shield-check',
+    title: 'Manual Verification',
+    description: 'Enabled payment options appear at checkout. Bank transfers require confirmation of received funds before dispatch.',
+  },
+  {
+    id: 'support',
+    icon: 'message-circle',
+    title: 'Direct Support',
+    description: 'Support contact details will be published before public ordering opens.',
+  },
+];
+
+function getReassuranceSvg(iconName, size = 20) {
+  switch (iconName) {
+    case 'truck':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="1" y="3" width="15" height="13"></rect>
+        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+      </svg>`;
+    case 'shield-check':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        <polyline points="9 12 11 14 15 10"></polyline>
+      </svg>`;
+    case 'message-circle':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+      </svg>`;
+    case 'refresh-cw':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+      </svg>`;
+    case 'package':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line>
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+      </svg>`;
+    case 'award':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="7"></circle>
+        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+      </svg>`;
+    case 'lock':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>`;
+    case 'credit-card':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+        <line x1="1" y1="10" x2="23" y2="10"></line>
+      </svg>`;
+    case 'leaf':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
+        <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
+      </svg>`;
+    case 'zap':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+      </svg>`;
+    case 'heart':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+      </svg>`;
+    case 'globe':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="2" y1="12" x2="22" y2="12"></line>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+      </svg>`;
+    case 'clock':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>`;
+    case 'headphones':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 18v-6a9 9 0 0 1 18 0v6"></path>
+        <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path>
+      </svg>`;
+    case 'check-circle':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </svg>`;
+    case 'sparkles':
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+        <path d="M5 3v4"></path>
+        <path d="M19 17v4"></path>
+        <path d="M3 5h4"></path>
+        <path d="M17 19h4"></path>
+      </svg>`;
+    default:
+      return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>`;
+  }
+}
+
+function suggestIconForText(text) {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  if (t.includes('delivery') || t.includes('ship') || t.includes('courier') || t.includes('dispatch') || t.includes('transit')) {
+    return { id: 'truck', label: 'Delivery Truck' };
+  }
+  if (t.includes('return') || t.includes('exchange') || t.includes('refund') || t.includes('replace')) {
+    return { id: 'refresh-cw', label: 'Easy Returns' };
+  }
+  if (t.includes('support') || t.includes('help') || t.includes('contact') || t.includes('chat') || t.includes('whatsapp')) {
+    return { id: 'message-circle', label: 'Direct Support' };
+  }
+  if (t.includes('secure') || t.includes('protect') || t.includes('safe') || t.includes('authentic') || t.includes('shield')) {
+    return { id: 'shield-check', label: 'Shield Guarantee' };
+  }
+  if (t.includes('pay') || t.includes('card') || t.includes('bank') || t.includes('cod') || t.includes('cash')) {
+    return { id: 'credit-card', label: 'Verified Payments' };
+  }
+  if (t.includes('package') || t.includes('box') || t.includes('wrap') || t.includes('unboxing') || t.includes('parcel')) {
+    return { id: 'package', label: 'Care Packaging' };
+  }
+  if (t.includes('cotton') || t.includes('fabric') || t.includes('craft') || t.includes('quality') || t.includes('luxury') || t.includes('artisan')) {
+    return { id: 'award', label: 'Master Quality' };
+  }
+  if (t.includes('eco') || t.includes('organic') || t.includes('natural') || t.includes('pure') || t.includes('leaf')) {
+    return { id: 'leaf', label: 'Natural & Eco' };
+  }
+  if (t.includes('fast') || t.includes('express') || t.includes('speed') || t.includes('quick') || t.includes('flash')) {
+    return { id: 'zap', label: 'Express Dispatch' };
+  }
+  if (t.includes('heart') || t.includes('love') || t.includes('care') || t.includes('passion')) {
+    return { id: 'heart', label: 'Curated Care' };
+  }
+  if (t.includes('nationwide') || t.includes('pakistan') || t.includes('global') || t.includes('city') || t.includes('cities')) {
+    return { id: 'globe', label: 'Nationwide Delivery' };
+  }
+  if (t.includes('hour') || t.includes('24/7') || t.includes('time') || t.includes('timing') || t.includes('days')) {
+    return { id: 'clock', label: 'Prompt Support' };
+  }
+  if (t.includes('call') || t.includes('phone') || t.includes('hotline') || t.includes('agent')) {
+    return { id: 'headphones', label: 'Support Concierge' };
+  }
+  if (t.includes('check') || t.includes('verify') || t.includes('manual') || t.includes('audit')) {
+    return { id: 'check-circle', label: 'Inspected & Verified' };
+  }
+  if (t.includes('sparkle') || t.includes('shine') || t.includes('new') || t.includes('exclusive')) {
+    return { id: 'sparkles', label: 'Luxury Finishing' };
+  }
+  return null;
+}
+
 export function createStoreSettingsComponent() {
   const container = document.createElement('div');
   container.className = 'admin-settings-container';
@@ -123,6 +311,9 @@ export function createStoreSettingsComponent() {
     const font = s.font_family || 'Outfit, sans-serif';
     const radiusMap = { none: '0px', sm: '4px', md: '8px', lg: '12px', full: '999px' };
     const radiusVal = radiusMap[s.border_radius] || '8px';
+    const reassuranceItems = (Array.isArray(s.reassurance_items) && s.reassurance_items.length > 0)
+      ? s.reassurance_items
+      : DEFAULT_REASSURANCE_LIST;
 
     return `
       <form id="form-storefront-settings" style="display: flex; flex-direction: column; gap: 20px;">
@@ -259,6 +450,112 @@ export function createStoreSettingsComponent() {
                 </div>
               </div>
             </div>
+
+            <!-- Storefront Reassurance & Trust Badges Studio Card -->
+            <div class="set-card">
+              <div class="set-card-header">
+                <h3 class="set-card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                  Storefront Reassurance & Trust Badges Studio
+                </h3>
+                <div class="set-action-group">
+                  <button type="button" id="btn-save-reassurance" class="set-action-btn is-save" data-tooltip="Save reassurance & trust badges" aria-label="Save reassurance badges" title="Save reassurance badges">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <p style="font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 14px; line-height: 1.4;">
+                Configure the 3 reassurance commitments displayed in the storefront footer strip. Click any icon box to choose from 16 curated vector symbols, or type badge copy to see automatic smart suggestions.
+              </p>
+
+              <div style="display: flex; flex-direction: column; gap: 14px;">
+                ${reassuranceItems.map((item, idx) => `
+                  <div class="reassurance-editor-card" id="reassurance-card-${idx}" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--admin-border-subtle); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                      <div style="font-size: 0.75rem; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${idx === 0 ? '#38BDF8' : idx === 1 ? '#10B981' : '#F59E0B'};"></span>
+                        Badge ${idx + 1} • <span style="color: var(--admin-text-secondary);">${escapeHtml(item.id || `badge_${idx+1}`)}</span>
+                      </div>
+                      <input type="hidden" id="reassurance-id-${idx}" value="${escapeHtml(item.id || `badge_${idx+1}`)}">
+                      <input type="hidden" id="reassurance-icon-${idx}" value="${escapeHtml(item.icon || 'truck')}">
+                    </div>
+
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                      <!-- Visual Icon Trigger Button -->
+                      <div style="position: relative;">
+                        <label style="display: block; font-size: 0.6875rem; color: var(--admin-text-secondary); margin-bottom: 4px;">Icon</label>
+                        <button type="button" class="btn-reassurance-icon-picker" data-index="${idx}" id="reassurance-icon-btn-${idx}" style="width: 44px; height: 44px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--admin-border-subtle); border-radius: 6px; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 150ms ease;" data-tooltip="Click to choose icon" title="Click to choose icon">
+                          ${getReassuranceSvg(item.icon || 'truck', 22)}
+                        </button>
+
+                        <!-- Visual Icon Picker Popover -->
+                        <div class="reassurance-icon-popover" id="reassurance-popover-${idx}" style="display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; width: 280px; background: #171816; border: 1px solid var(--admin-border-subtle); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); padding: 10px;">
+                          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 0.6875rem; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 0.05em;">Choose Icon</span>
+                            <button type="button" class="btn-close-popover" data-index="${idx}" style="background: none; border: none; color: var(--admin-text-secondary); cursor: pointer; font-size: 0.75rem; padding: 2px;">✕</button>
+                          </div>
+                          <input type="text" class="input-picker-filter" data-index="${idx}" placeholder="Search 16 icons..." style="width: 100%; height: 28px; font-size: 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid var(--admin-border-subtle); border-radius: 4px; color: #fff; padding: 0 8px; margin-bottom: 8px;">
+                          <div class="reassurance-popover-grid" data-index="${idx}" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-height: 180px; overflow-y: auto;">
+                            ${REASSURANCE_ICONS.map(ic => `
+                              <button type="button" class="reassurance-icon-option ${item.icon === ic.id ? 'is-selected' : ''}" data-index="${idx}" data-icon-id="${ic.id}" data-icon-label="${ic.label}" title="${ic.label}" style="width: 100%; height: 40px; background: ${item.icon === ic.id ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)'}; border: 1px solid ${item.icon === ic.id ? '#10B981' : 'rgba(255, 255, 255, 0.08)'}; border-radius: 4px; color: ${item.icon === ic.id ? '#10B981' : '#fff'}; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 120ms ease;">
+                                ${getReassuranceSvg(ic.id, 18)}
+                              </button>
+                            `).join('')}
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Title & Deck Fields -->
+                      <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                        <div>
+                          <label style="display: block; font-size: 0.6875rem; color: var(--admin-text-secondary); margin-bottom: 4px;">Badge Title</label>
+                          <input type="text" id="input-reassurance-title-${idx}" data-index="${idx}" value="${escapeHtml(item.title || '')}" class="admin-input input-reassurance-text" style="width: 100%; height: 34px;" maxlength="100" placeholder="e.g. Express Nationwide Dispatch">
+                        </div>
+                        <div>
+                          <label style="display: block; font-size: 0.6875rem; color: var(--admin-text-secondary); margin-bottom: 4px;">Description / Terms</label>
+                          <textarea id="input-reassurance-desc-${idx}" data-index="${idx}" class="admin-input input-reassurance-text" style="width: 100%; min-height: 48px; font-size: 0.75rem; resize: vertical;" maxlength="255" placeholder="e.g. Standard delivery across Pakistan in 2-4 working days.">${escapeHtml(item.description || item.desc || '')}</textarea>
+                        </div>
+
+                        <!-- Smart Real-Time Keyword Suggestion Pill -->
+                        <div id="reassurance-suggest-pill-${idx}" style="display: none; align-items: center; gap: 8px; font-size: 0.6875rem; color: #10B981; background: rgba(16, 185, 129, 0.08); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 4px; padding: 4px 8px;">
+                          <span>✨ Smart Suggestion:</span>
+                          <button type="button" class="btn-apply-suggestion" data-index="${idx}" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 3px; color: #10B981; padding: 2px 8px; font-size: 0.6875rem; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            <span class="suggestion-icon-slot"></span>
+                            <span class="suggestion-label-slot"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <!-- Synchronized Live Reassurance Strip Preview -->
+              <div style="margin-top: 16px; background: #0E0F0E; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 14px;">
+                <div style="font-size: 0.6875rem; font-weight: 600; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                  <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10B981;"></span>
+                  Live Reassurance Strip Preview (Storefront Footer)
+                </div>
+                <div id="reassurance-preview-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+                  ${reassuranceItems.map((item, idx) => `
+                    <div class="mockup-reassurance-item" id="preview-reassurance-item-${idx}" style="display: flex; gap: 10px; align-items: flex-start;">
+                      <div class="mockup-reassurance-icon" id="preview-reassurance-icon-${idx}" style="color: rgba(255, 255, 255, 0.7); flex-shrink: 0; padding-top: 2px;">
+                        ${getReassuranceSvg(item.icon || 'truck', 20)}
+                      </div>
+                      <div>
+                        <div class="mockup-reassurance-title" id="preview-reassurance-title-${idx}" style="font-size: 0.75rem; font-weight: 600; color: #fff; margin-bottom: 2px; line-height: 1.3;">
+                          ${escapeHtml(item.title || '')}
+                        </div>
+                        <div class="mockup-reassurance-desc" id="preview-reassurance-desc-${idx}" style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); line-height: 1.4;">
+                          ${escapeHtml(item.description || item.desc || '')}
+                        </div>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Right Column: Interactive Live Mockup Preview Card -->
@@ -299,6 +596,16 @@ export function createStoreSettingsComponent() {
                 <button type="button" id="mockup-sample-btn" class="set-mockup-cta-sample" style="background: ${accent}; border-radius: ${radiusVal}; font-family: ${font};">
                   Explore Capsule
                 </button>
+
+                <!-- Mini Reassurance Strip in Storefront Mockup -->
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, 0.08); display: flex; gap: 8px;">
+                  ${reassuranceItems.map((item, idx) => `
+                    <div style="flex: 1; display: flex; align-items: center; gap: 5px; min-width: 0;">
+                      <span id="mini-mockup-icon-${idx}" style="color: rgba(255, 255, 255, 0.7); flex-shrink: 0;">${getReassuranceSvg(item.icon || 'truck', 12)}</span>
+                      <span id="mini-mockup-title-${idx}" style="font-size: 0.5625rem; color: #fff; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.title || '')}</span>
+                    </div>
+                  `).join('')}
+                </div>
               </div>
 
               <!-- Live Token Chips -->
@@ -1165,6 +1472,12 @@ export function createStoreSettingsComponent() {
             homepage_collections_subtitle: container.querySelector('#input-hp-col-subtitle')?.value.trim() || 'A place for every part of your wardrobe.',
             homepage_products_title: container.querySelector('#input-hp-prod-title')?.value.trim() || 'The current edit',
             homepage_products_subtitle: container.querySelector('#input-hp-prod-subtitle')?.value.trim() || 'A curated selection of our latest pieces.',
+            reassurance_items: [0, 1, 2].map(idx => ({
+              id: container.querySelector(`#reassurance-id-${idx}`)?.value || `badge_${idx+1}`,
+              icon: container.querySelector(`#reassurance-icon-${idx}`)?.value || 'truck',
+              title: container.querySelector(`#input-reassurance-title-${idx}`)?.value.trim() || '',
+              description: container.querySelector(`#input-reassurance-desc-${idx}`)?.value.trim() || '',
+            })),
             change_reason: container.querySelector('#input-change-reason').value.trim() || undefined,
           };
           payload.expected_version = currentSettings.version;
@@ -1177,6 +1490,197 @@ export function createStoreSettingsComponent() {
         }
       });
     }
+
+    // Save Reassurance Badges Button
+    const btnSaveReassurance = container.querySelector('#btn-save-reassurance');
+    if (btnSaveReassurance) {
+      btnSaveReassurance.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          const reassurancePayload = [0, 1, 2].map(idx => ({
+            id: container.querySelector(`#reassurance-id-${idx}`)?.value || `badge_${idx+1}`,
+            icon: container.querySelector(`#reassurance-icon-${idx}`)?.value || 'truck',
+            title: container.querySelector(`#input-reassurance-title-${idx}`)?.value.trim() || '',
+            description: container.querySelector(`#input-reassurance-desc-${idx}`)?.value.trim() || '',
+          }));
+          const payload = {
+            reassurance_items: reassurancePayload,
+            expected_version: currentSettings.version,
+            change_reason: 'Update storefront reassurance & trust badges',
+          };
+          const res = await updateAdminStoreSettings(payload);
+          currentSettings = res;
+          showAlert(`Reassurance badges saved successfully (revision v${res.version})`);
+          render();
+        } catch (err) {
+          showAlert(err.message || 'Failed to save reassurance badges', 'error');
+        }
+      });
+    }
+
+    // Toggle Icon Popovers
+    container.querySelectorAll('.btn-reassurance-icon-picker').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = btn.getAttribute('data-index');
+        const popover = container.querySelector(`#reassurance-popover-${idx}`);
+        // Close all other popovers
+        container.querySelectorAll('.reassurance-icon-popover').forEach(p => {
+          if (p !== popover) p.style.display = 'none';
+        });
+        if (popover) {
+          const isOpen = popover.style.display === 'block';
+          popover.style.display = isOpen ? 'none' : 'block';
+          if (!isOpen) {
+            const filterInput = popover.querySelector('.input-picker-filter');
+            if (filterInput) {
+              filterInput.value = '';
+              setTimeout(() => filterInput.focus(), 50);
+            }
+            popover.querySelectorAll('.reassurance-icon-option').forEach(opt => opt.style.display = 'flex');
+          }
+        }
+      });
+    });
+
+    // Close buttons inside popovers
+    container.querySelectorAll('.btn-close-popover').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = btn.getAttribute('data-index');
+        const popover = container.querySelector(`#reassurance-popover-${idx}`);
+        if (popover) popover.style.display = 'none';
+      });
+    });
+
+    // Popover search filter
+    container.querySelectorAll('.input-picker-filter').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        const popover = e.target.closest('.reassurance-icon-popover');
+        if (!popover) return;
+        popover.querySelectorAll('.reassurance-icon-option').forEach(opt => {
+          const id = opt.getAttribute('data-icon-id') || '';
+          const label = opt.getAttribute('data-icon-label') || '';
+          if (!q || id.toLowerCase().includes(q) || label.toLowerCase().includes(q)) {
+            opt.style.display = 'flex';
+          } else {
+            opt.style.display = 'none';
+          }
+        });
+      });
+    });
+
+    // Icon option selection
+    container.querySelectorAll('.reassurance-icon-option').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = opt.getAttribute('data-index');
+        const iconId = opt.getAttribute('data-icon-id');
+        const hiddenIcon = container.querySelector(`#reassurance-icon-${idx}`);
+        const iconBtn = container.querySelector(`#reassurance-icon-btn-${idx}`);
+        const previewIcon = container.querySelector(`#preview-reassurance-icon-${idx}`);
+        const miniIcon = container.querySelector(`#mini-mockup-icon-${idx}`);
+        const popover = container.querySelector(`#reassurance-popover-${idx}`);
+
+        if (hiddenIcon) hiddenIcon.value = iconId;
+        if (iconBtn) iconBtn.innerHTML = getReassuranceSvg(iconId, 22);
+        if (previewIcon) previewIcon.innerHTML = getReassuranceSvg(iconId, 20);
+        if (miniIcon) miniIcon.innerHTML = getReassuranceSvg(iconId, 12);
+
+        if (popover) {
+          popover.querySelectorAll('.reassurance-icon-option').forEach(o => {
+            const isMatch = o.getAttribute('data-icon-id') === iconId;
+            o.classList.toggle('is-selected', isMatch);
+            o.style.background = isMatch ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)';
+            o.style.borderColor = isMatch ? '#10B981' : 'rgba(255, 255, 255, 0.08)';
+            o.style.color = isMatch ? '#10B981' : '#fff';
+          });
+          popover.style.display = 'none';
+        }
+
+        const suggestPill = container.querySelector(`#reassurance-suggest-pill-${idx}`);
+        if (suggestPill && suggestPill.getAttribute('data-suggested-icon') === iconId) {
+          suggestPill.style.display = 'none';
+        }
+      });
+    });
+
+    // Real-time title and description sync + keyword suggestions
+    container.querySelectorAll('.input-reassurance-text').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const idx = e.target.getAttribute('data-index');
+        const titleVal = container.querySelector(`#input-reassurance-title-${idx}`)?.value || '';
+        const descVal = container.querySelector(`#input-reassurance-desc-${idx}`)?.value || '';
+        const currentIcon = container.querySelector(`#reassurance-icon-${idx}`)?.value || 'truck';
+
+        const previewTitle = container.querySelector(`#preview-reassurance-title-${idx}`);
+        const previewDesc = container.querySelector(`#preview-reassurance-desc-${idx}`);
+        const miniTitle = container.querySelector(`#mini-mockup-title-${idx}`);
+
+        if (previewTitle) previewTitle.textContent = titleVal;
+        if (previewDesc) previewDesc.textContent = descVal;
+        if (miniTitle) miniTitle.textContent = titleVal;
+
+        // Check smart keyword suggestion
+        const combinedText = `${titleVal} ${descVal}`;
+        const suggestion = suggestIconForText(combinedText);
+        const pill = container.querySelector(`#reassurance-suggest-pill-${idx}`);
+        if (pill) {
+          if (suggestion && suggestion.id !== currentIcon) {
+            pill.style.display = 'inline-flex';
+            pill.setAttribute('data-suggested-icon', suggestion.id);
+            const iconSlot = pill.querySelector('.suggestion-icon-slot');
+            const labelSlot = pill.querySelector('.suggestion-label-slot');
+            if (iconSlot) iconSlot.innerHTML = getReassuranceSvg(suggestion.id, 14);
+            if (labelSlot) labelSlot.textContent = suggestion.label;
+          } else {
+            pill.style.display = 'none';
+          }
+        }
+      });
+    });
+
+    // Apply smart suggestion button
+    container.querySelectorAll('.btn-apply-suggestion').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const idx = btn.getAttribute('data-index');
+        const pill = container.querySelector(`#reassurance-suggest-pill-${idx}`);
+        const suggestedIcon = pill?.getAttribute('data-suggested-icon');
+        if (!suggestedIcon) return;
+
+        const hiddenIcon = container.querySelector(`#reassurance-icon-${idx}`);
+        const iconBtn = container.querySelector(`#reassurance-icon-btn-${idx}`);
+        const previewIcon = container.querySelector(`#preview-reassurance-icon-${idx}`);
+        const miniIcon = container.querySelector(`#mini-mockup-icon-${idx}`);
+        const popover = container.querySelector(`#reassurance-popover-${idx}`);
+
+        if (hiddenIcon) hiddenIcon.value = suggestedIcon;
+        if (iconBtn) iconBtn.innerHTML = getReassuranceSvg(suggestedIcon, 22);
+        if (previewIcon) previewIcon.innerHTML = getReassuranceSvg(suggestedIcon, 20);
+        if (miniIcon) miniIcon.innerHTML = getReassuranceSvg(suggestedIcon, 12);
+
+        if (popover) {
+          popover.querySelectorAll('.reassurance-icon-option').forEach(o => {
+            const isMatch = o.getAttribute('data-icon-id') === suggestedIcon;
+            o.classList.toggle('is-selected', isMatch);
+            o.style.background = isMatch ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)';
+            o.style.borderColor = isMatch ? '#10B981' : 'rgba(255, 255, 255, 0.08)';
+            o.style.color = isMatch ? '#10B981' : '#fff';
+          });
+        }
+
+        if (pill) pill.style.display = 'none';
+      });
+    });
+
+    // Close popovers when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.reassurance-icon-popover') && !e.target.closest('.btn-reassurance-icon-picker')) {
+        container.querySelectorAll('.reassurance-icon-popover').forEach(p => p.style.display = 'none');
+      }
+    });
 
     // Save Shipping Form
     const formShipping = container.querySelector('#form-shipping-settings');

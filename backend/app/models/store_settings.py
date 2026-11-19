@@ -66,6 +66,12 @@ class StoreSettings(Base):
         server_default='[]',
         nullable=False,
     )
+    reassurance_items: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        default=list,
+        server_default='[]',
+        nullable=False,
+    )
 
     # Storefront Collections Page Copy
     collections_page_title: Mapped[str] = mapped_column(

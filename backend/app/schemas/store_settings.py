@@ -27,6 +27,7 @@ class PublicStoreSettingsResponse(BaseModel):
     support_phone: str | None
     support_hours: str | None
     faq_items: list[dict[str, Any]] = Field(default_factory=list)
+    reassurance_items: list[dict[str, Any]] = Field(default_factory=list)
     collections_page_title: str = 'All Collections'
     collections_page_subtitle: str = 'Explore our complete range of curated wardrobe edits.'
     products_page_title: str = 'All Products'
@@ -67,6 +68,7 @@ class AdminStoreSettingsResponse(BaseModel):
     support_phone: str | None
     support_hours: str | None
     faq_items: list[dict[str, Any]] = Field(default_factory=list)
+    reassurance_items: list[dict[str, Any]] = Field(default_factory=list)
     collections_page_title: str = 'All Collections'
     collections_page_subtitle: str = 'Explore our complete range of curated wardrobe edits.'
     products_page_title: str = 'All Products'
@@ -130,6 +132,7 @@ class UpdateStoreSettingsRequest(BaseModel):
     support_phone: str | None = Field(default=None, max_length=50)
     support_hours: str | None = Field(default=None, max_length=120)
     faq_items: list[dict[str, Any]] | None = None
+    reassurance_items: list[dict[str, Any]] | None = None
     collections_page_title: str | None = Field(default=None, min_length=1, max_length=100)
     collections_page_subtitle: str | None = Field(default=None, max_length=255)
     products_page_title: str | None = Field(default=None, min_length=1, max_length=100)
@@ -179,6 +182,23 @@ class UpdateStoreSettingsRequest(BaseModel):
     def validate_spacing(cls, v: str | None) -> str | None:
         if v is not None and v not in VALID_SPACING:
             raise ValueError(f'spacing_density must be one of: {", ".join(sorted(VALID_SPACING))}')
+        return v
+
+    @field_validator('reassurance_items')
+    @classmethod
+    def validate_reassurance_items(cls, v: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+        if v is not None:
+            if len(v) > 10:
+                raise ValueError('reassurance_items cannot contain more than 10 items')
+            for item in v:
+                if not isinstance(item, dict):
+                    raise ValueError('Each reassurance item must be an object')
+                if not item.get('id') or not str(item['id']).strip():
+                    raise ValueError('Each reassurance item must have an id')
+                if not item.get('icon') or not str(item['icon']).strip():
+                    raise ValueError('Each reassurance item must have an icon')
+                if not item.get('title') or not str(item['title']).strip():
+                    raise ValueError('Each reassurance item must have a title')
         return v
 
 

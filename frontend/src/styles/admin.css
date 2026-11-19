@@ -8248,3 +8248,33 @@ body.admin-body-lock {
   color: #059669;
   font-weight: 500;
 }
+
+/* Storefront Reassurance & Trust Badges Studio */
+.reassurance-popover-grid {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.reassurance-popover-grid::-webkit-scrollbar {
+  display: none !important;
+}
+
+.reassurance-icon-option:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.reassurance-icon-option.is-selected {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: #10B981 !important;
+  color: #10B981 !important;
+}
+
+.btn-reassurance-icon-picker:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.btn-apply-suggestion:hover {
+  background: rgba(16, 185, 129, 0.25) !important;
+}
+

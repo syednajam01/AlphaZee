@@ -58,6 +58,28 @@ DEFAULT_FAQS = [
 ]
 
 
+DEFAULT_REASSURANCE_ITEMS = [
+    {
+        "id": "delivery",
+        "title": "Delivery Information",
+        "description": "Delivery coverage, charges and timing will be published before public ordering opens.",
+        "icon": "truck",
+    },
+    {
+        "id": "payments",
+        "title": "Manual Verification",
+        "description": "Enabled payment options appear at checkout. Bank transfers require confirmation of received funds before dispatch.",
+        "icon": "shield-check",
+    },
+    {
+        "id": "support",
+        "title": "Direct Support",
+        "description": "Support contact details will be published before public ordering opens.",
+        "icon": "message-circle",
+    },
+]
+
+
 def _resolve_logo_url(logo_media_id: str | None, db: Session) -> str | None:
     if not logo_media_id:
         return None
@@ -88,6 +110,7 @@ def get_or_create_store_settings(db: Session) -> StoreSettings:
             low_stock_threshold=3,
             stock_staleness_threshold_days=7,
             faq_items=list(DEFAULT_FAQS),
+            reassurance_items=list(DEFAULT_REASSURANCE_ITEMS),
             collections_page_title='All Collections',
             collections_page_subtitle='Explore our complete range of curated wardrobe edits.',
             products_page_title='All Products',
@@ -119,6 +142,7 @@ def get_public_store_settings(db: Session) -> PublicStoreSettingsResponse:
         support_phone=settings.support_phone,
         support_hours=settings.support_hours,
         faq_items=[f for f in (settings.faq_items if settings.faq_items is not None else DEFAULT_FAQS) if f.get('is_enabled', True)],
+        reassurance_items=list(settings.reassurance_items if settings.reassurance_items else DEFAULT_REASSURANCE_ITEMS),
         collections_page_title=settings.collections_page_title or 'All Collections',
         collections_page_subtitle=settings.collections_page_subtitle or 'Explore our complete range of curated wardrobe edits.',
         products_page_title=settings.products_page_title or 'All Products',
@@ -161,6 +185,7 @@ def get_admin_store_settings(db: Session) -> AdminStoreSettingsResponse:
         support_phone=settings.support_phone,
         support_hours=settings.support_hours,
         faq_items=list(settings.faq_items if settings.faq_items is not None else DEFAULT_FAQS),
+        reassurance_items=list(settings.reassurance_items if settings.reassurance_items else DEFAULT_REASSURANCE_ITEMS),
         collections_page_title=settings.collections_page_title or 'All Collections',
         collections_page_subtitle=settings.collections_page_subtitle or 'Explore our complete range of curated wardrobe edits.',
         products_page_title=settings.products_page_title or 'All Products',
@@ -265,6 +290,7 @@ def update_store_settings(
             'homepage_products_subtitle': settings.homepage_products_subtitle,
             'faq_section_title': settings.faq_section_title,
             'faq_section_subtitle': settings.faq_section_subtitle,
+            'reassurance_items': settings.reassurance_items,
         }
         audit_log = StoreSettingsAuditLog(
             version=settings.version,

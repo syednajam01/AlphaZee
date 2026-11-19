@@ -487,5 +487,86 @@ def test_homepage_and_faq_headings_configuration(client, db):
     assert "faq_section_title" in latest_entry["changed_fields"]
 
 
+def test_storefront_reassurance_items_crud_and_audit(client, db):
+    """Owner can update storefront reassurance badges, reflected in public store settings and audit logs."""
+    owner_name, pwd = _create_owner(db, "owner_reassurance_test")
+    csrf = _login_owner(client, owner_name, pwd)
+
+    # 1. Verify defaults on public endpoint
+    pub = client.get("/api/v1/store/settings").json()
+    assert "reassurance_items" in pub
+    assert len(pub["reassurance_items"]) == 3
+    assert pub["reassurance_items"][0]["icon"] == "truck"
+    assert pub["reassurance_items"][1]["icon"] == "shield-check"
+    assert pub["reassurance_items"][2]["icon"] == "message-circle"
+
+    # 2. Update reassurance items via admin settings
+    cur = client.get("/api/v1/admin/settings").json()
+    v = cur["version"]
+    new_items = [
+        {
+            "id": "delivery",
+            "icon": "truck",
+            "title": "Express Nationwide Dispatch",
+            "description": "Next-day courier dispatch across all major cities in Pakistan.",
+        },
+        {
+            "id": "returns",
+            "icon": "refresh-cw",
+            "title": "7-Day Seamless Returns",
+            "description": "Hassle-free exchanges and returns with original tags attached.",
+        },
+        {
+            "id": "quality",
+            "icon": "award",
+            "title": "Artisanal Craftsmanship",
+            "description": "100% long-staple combed cotton tailored to exact standards.",
+        },
+    ]
+
+    res = client.put(
+        "/api/v1/admin/settings",
+        json={
+            "expected_version": v,
+            "reassurance_items": new_items,
+            "change_reason": "Configure custom brand reassurance badges",
+        },
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+    assert res.status_code == 200, res.text
+    adm = res.json()
+    assert len(adm["reassurance_items"]) == 3
+    assert adm["reassurance_items"][1]["icon"] == "refresh-cw"
+    assert adm["reassurance_items"][1]["title"] == "7-Day Seamless Returns"
+
+    # 3. Public endpoint serves updated reassurance badges
+    pub_updated = client.get("/api/v1/store/settings").json()
+    assert len(pub_updated["reassurance_items"]) == 3
+    assert pub_updated["reassurance_items"][1]["icon"] == "refresh-cw"
+    assert pub_updated["reassurance_items"][1]["title"] == "7-Day Seamless Returns"
+    assert pub_updated["reassurance_items"][2]["icon"] == "award"
+
+    # 4. Audit log records the reassurance change
+    audit = client.get("/api/v1/admin/settings/audit-logs?limit=5", headers={"Origin": "http://localhost:3000"}).json()
+    assert len(audit) > 0
+    latest_entry = audit[0]
+    assert latest_entry["change_reason"] == "Configure custom brand reassurance badges"
+    assert "reassurance_items" in latest_entry["changed_fields"]
+
+    # 5. Validation rejection on invalid reassurance item
+    cur2 = client.get("/api/v1/admin/settings").json()
+    v2 = cur2["version"]
+    bad_res = client.put(
+        "/api/v1/admin/settings",
+        json={
+            "expected_version": v2,
+            "reassurance_items": [{"id": "bad", "icon": "", "title": ""}],
+        },
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+    assert bad_res.status_code == 422
+
+
+
 
 
