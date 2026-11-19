@@ -55,3 +55,4 @@ def downgrade():
     op.drop_column('store_settings', 'homepage_products_title')
     op.drop_column('store_settings', 'homepage_collections_subtitle')
     op.drop_column('store_settings', 'homepage_collections_title')
+
