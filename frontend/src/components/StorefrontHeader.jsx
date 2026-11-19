@@ -62,17 +62,11 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
 
   useLayoutEffect(() => {
     const measure = () => {
-      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 600;
-      const floatingTop = isMobile ? 10 : 14;
-      const panelH = panel.current?.offsetHeight || 56;
-      const announcementH = announcement.current?.offsetHeight || 0;
-      host.style.setProperty('--panel-height', `${panelH}px`);
-      host.style.setProperty('--nav-announcement-height', `${announcementH}px`);
-
-      const fullHeight = floatingTop + panelH;
-      const currentHeight = (mode === 'compact') ? 32 : fullHeight;
-      host.style.height = `${currentHeight}px`;
-      document.documentElement.style.setProperty('--storefront-header-height', `${currentHeight}px`);
+      const height = panel.current?.offsetHeight || 72;
+      host.style.height = `${height}px`;
+      host.style.setProperty('--panel-height', `${height}px`);
+      host.style.setProperty('--nav-announcement-height', `${announcement.current?.offsetHeight || 0}px`);
+      document.documentElement.style.setProperty('--storefront-header-height', `${height}px`);
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
@@ -83,7 +77,7 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
       window.removeEventListener('resize', measure);
       document.documentElement.style.removeProperty('--storefront-header-height');
     };
-  }, [host, settings, caps.testMode, mode]);
+  }, [host, settings, caps.testMode]);
 
   useLayoutEffect(() => {
     host.dataset.navState = mode;

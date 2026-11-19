@@ -153,3 +153,4 @@ with RedesignBrowser(ROOT / '.local/tmp') as b:
     save_and_copy(b, 'verified_mobile_cards_390.png')
 
     print("\nALL 4 BROWSER ACCEPTANCE GATES PASSED PERFECTLY!", flush=True)
+

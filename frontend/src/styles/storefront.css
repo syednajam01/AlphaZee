@@ -300,7 +300,7 @@
 .storefront .hero-section {
   position: relative;
   width: 100%;
-  margin-top: 18px !important;
+  margin-top: calc(var(--nav-floating-top, 14px) + 18px) !important;
   margin-bottom: 24px !important;
   aspect-ratio: 16 / 9 !important;
   height: auto !important;
@@ -320,7 +320,7 @@
 body[data-nav-compact="true"] .hero-section,
 .site-header[data-nav-state="compact"] ~ #main-content .hero-section,
 .storefront:has(.site-header[data-nav-state="compact"]) .hero-section {
-  margin-top: 0 !important;
+  margin-top: calc(32px - var(--storefront-header-height, var(--header-height, 64px))) !important;
 }
 
 .storefront .hero-bg-container {
@@ -635,7 +635,7 @@ body[data-nav-compact="true"] .hero-section,
     aspect-ratio: 16 / 9 !important;
     height: auto !important;
     min-height: unset !important;
-    margin-top: 14px !important;
+    margin-top: calc(var(--nav-floating-top, 10px) + 14px) !important;
     margin-bottom: 20px !important;
     padding: 0 !important;
     align-items: center !important;
@@ -644,7 +644,7 @@ body[data-nav-compact="true"] .hero-section,
   body[data-nav-compact="true"] .hero-section,
   .site-header[data-nav-state="compact"] ~ #main-content .hero-section,
   .storefront:has(.site-header[data-nav-state="compact"]) .hero-section {
-    margin-top: 0 !important;
+    margin-top: calc(32px - var(--storefront-header-height, var(--header-height, 64px))) !important;
   }
   .storefront .hero-bg-container,
   .storefront .hero-media-track,

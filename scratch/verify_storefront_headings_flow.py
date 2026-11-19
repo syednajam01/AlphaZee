@@ -113,3 +113,4 @@ with RedesignBrowser(ROOT / '.local/tmp') as b:
     save_and_copy(b, "verified_storefront_faq_heading_mobile.png")
 
 print("All browser verification gates passed successfully!", flush=True)
+
