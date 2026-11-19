@@ -224,7 +224,17 @@ class Deployer:
         media_bytes = int(run(['du', '-sb', mount]).split()[0])
         database_bytes = int(self.live('exec', '-T', 'db', 'sh', '-c',
                              'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT pg_database_size(current_database())"'))
-        required = self.config.get('minimum_free_bytes', 3 * 1024**3) + media_bytes + database_bytes * 2
+        required = self.config.get('backup_headroom_bytes', 1024**3) + media_bytes + database_bytes * 2
+        if shutil.disk_usage(self.state).free < required:
+            try:
+                run(['docker', 'image', 'prune', '-f'])
+            except Exception:
+                pass
+            if shutil.disk_usage(self.state).free < required:
+                try:
+                    run(['docker', 'image', 'prune', '-a', '--force', '--filter', 'until=1h'])
+                except Exception:
+                    pass
         if shutil.disk_usage(self.state).free < required:
             raise DeploymentError('Not enough free disk to capture a backup without endangering the running database')
         directory = self.state / 'backups' / (sha + '-' + str(time.time_ns()))
