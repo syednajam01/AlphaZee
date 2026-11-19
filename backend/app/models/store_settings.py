@@ -60,6 +60,24 @@ class StoreSettings(Base):
     support_email: Mapped[str | None] = mapped_column(String(120), nullable=True)
     support_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     support_hours: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    whatsapp_prefill_message: Mapped[str | None] = mapped_column(
+        String(255),
+        default='Hi AlphaZee, I have a question regarding my order:',
+        server_default='Hi AlphaZee, I have a question regarding my order:',
+        nullable=True,
+    )
+    email_subject_template: Mapped[str | None] = mapped_column(
+        String(150),
+        default='AlphaZee Customer Inquiry',
+        server_default='AlphaZee Customer Inquiry',
+        nullable=True,
+    )
+    email_body_template: Mapped[str | None] = mapped_column(
+        Text,
+        default='Hi AlphaZee Team,\n\nI need assistance with:\n\nOrder Number (optional):\n',
+        server_default='Hi AlphaZee Team,\n\nI need assistance with:\n\nOrder Number (optional):\n',
+        nullable=True,
+    )
     faq_items: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         default=list,
@@ -70,6 +88,14 @@ class StoreSettings(Base):
         JSONB,
         default=list,
         server_default='[]',
+        nullable=False,
+    )
+
+    # Storefront Footer Brand Quote
+    footer_quote: Mapped[str] = mapped_column(
+        String(300),
+        default='A considered selection of clothing and accessories. Find your next piece, and make it your own.',
+        server_default='A considered selection of clothing and accessories. Find your next piece, and make it your own.',
         nullable=False,
     )
 

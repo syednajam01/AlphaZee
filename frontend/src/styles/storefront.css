@@ -290,6 +290,8 @@
 .storefront .footer-link { color: #d1d5cc; font-size: 13px; }
 .storefront .footer-bottom { border-color: #4f584b; color: #c0c7b9; font-size: 12px; }
 .storefront .footer-quote-img { max-width: 240px; opacity: .85; }
+.storefront .btn-whatsapp-action:hover { background: #20ba5a !important; transform: translateY(-1px); }
+.storefront .btn-email-action:hover { background: rgba(255, 255, 255, 0.14) !important; border-color: rgba(255, 255, 255, 0.3) !important; transform: translateY(-1px); }
 .storefront .drawer-header { border-bottom: 1px solid #dddfd6; }
 .storefront :is(.checkout-title,.drawer-title,.tracking-title) { font-family: var(--font-family-serif); font-weight: 400; }
 .storefront :is(.cart-item,.checkout-item) { box-shadow: none; }

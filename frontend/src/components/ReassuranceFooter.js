@@ -200,6 +200,14 @@ export function createReassuranceAndFooter() {
       faqSubtitleEl.textContent = settings.faq_section_subtitle;
     }
 
+    // 0c. Dynamic Storefront Footer Brand Quote
+    if (settings.footer_quote) {
+      const quoteEl = wrapper.querySelector('.footer-brand-desc');
+      if (quoteEl) {
+        quoteEl.textContent = settings.footer_quote;
+      }
+    }
+
     // 1. Dynamic FAQ Items from Admin Settings
     if (Array.isArray(settings.faq_items) && settings.faq_items.length > 0) {
       const activeFaqs = settings.faq_items.filter(f => f.is_enabled !== false);
@@ -224,33 +232,51 @@ export function createReassuranceAndFooter() {
       }
     }
 
-    // 2. Dynamic Customer Support / WhatsApp Contact
+    // 2. Dynamic Customer Support (WhatsApp DM with Pre-filled Message & Gmail/Email 1-Click Inquiry)
     const assistanceSlot = wrapper.querySelector('#footer-assistance-slot');
-    if (assistanceSlot && settings.support_phone) {
-      const phone = settings.support_phone.trim();
-      const phoneClean = phone.replace(/[^0-9]/g, '');
-      let infoHtml = '';
-      if (settings.support_hours) {
-        infoHtml += `<span style="display:block; margin-bottom: 4px;">Hours: ${escapeHtml(settings.support_hours)}</span>`;
+    if (assistanceSlot && (settings.support_phone || settings.support_email)) {
+      let buttonsHtml = '';
+
+      if (settings.support_phone) {
+        const phone = settings.support_phone.trim();
+        const phoneClean = phone.replace(/[^0-9]/g, '');
+        const prefillMsg = encodeURIComponent(settings.whatsapp_prefill_message || 'Hi AlphaZee, I have a question regarding my order:');
+        buttonsHtml += `
+          <a href="https://wa.me/${phoneClean}?text=${prefillMsg}" target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp-action" style="font-size: 0.8125rem; font-weight: 600; padding: 10px 16px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #25D366; color: #052e16; border-radius: 6px; text-decoration: none; box-shadow: 0 2px 8px rgba(37, 211, 102, 0.25); transition: transform 0.15s ease, background 0.15s ease;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+            </svg>
+            Chat on WhatsApp
+          </a>
+        `;
       }
+
       if (settings.support_email) {
-        infoHtml += `<span style="display:block; margin-bottom: 6px;"><a href="mailto:${escapeHtml(settings.support_email)}" class="footer-link" style="text-decoration: underline;">${escapeHtml(settings.support_email)}</a></span>`;
+        const email = settings.support_email.trim();
+        const subject = encodeURIComponent(settings.email_subject_template || 'AlphaZee Customer Inquiry');
+        const body = encodeURIComponent(settings.email_body_template || '');
+        buttonsHtml += `
+          <a href="mailto:${email}?subject=${subject}&body=${body}" class="btn btn-email-action" style="font-size: 0.8125rem; font-weight: 500; padding: 10px 16px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: rgba(255, 255, 255, 0.08); color: #F3F4F6; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 6px; text-decoration: none; transition: background 0.15s ease, border-color 0.15s ease;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Email Customer Care
+          </a>
+        `;
       }
-      if (!infoHtml) {
-        infoHtml = '<span style="display:block; margin-bottom: 12px; line-height: 1.4;">Questions about sizing or your order? We are here to help.</span>';
+
+      let hoursHtml = '';
+      if (settings.support_hours) {
+        hoursHtml = `<div style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #10B981; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 4px 10px; border-radius: 4px; margin-bottom: 8px; width: fit-content;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${escapeHtml(settings.support_hours)}</div>`;
       }
 
       assistanceSlot.innerHTML = `
         <h4 class="footer-heading">Need Assistance?</h4>
-        <div class="footer-link" style="margin-bottom: 12px; line-height: 1.4;">
-          ${infoHtml}
+        ${hoursHtml}
+        <p class="footer-link" style="margin-bottom: 12px; line-height: 1.4;">
+          Have questions before ordering? Connect directly with our team.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${buttonsHtml}
         </div>
-        <a href="https://wa.me/${phoneClean}?text=Hello%20AlphaZee" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="font-size: 0.875rem; padding: 10px 18px; min-height: 44px; display: inline-flex; align-items: center; gap: 8px;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
-          </svg>
-          Chat on WhatsApp
-        </a>
       `;
     }
   }).catch(() => {});

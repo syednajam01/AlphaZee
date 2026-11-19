@@ -26,8 +26,12 @@ class PublicStoreSettingsResponse(BaseModel):
     support_email: str | None
     support_phone: str | None
     support_hours: str | None
+    whatsapp_prefill_message: str | None = 'Hi AlphaZee, I have a question regarding my order:'
+    email_subject_template: str | None = 'AlphaZee Customer Inquiry'
+    email_body_template: str | None = 'Hi AlphaZee Team,\n\nI need assistance with:\n\nOrder Number (optional):\n'
     faq_items: list[dict[str, Any]] = Field(default_factory=list)
     reassurance_items: list[dict[str, Any]] = Field(default_factory=list)
+    footer_quote: str = 'A considered selection of clothing and accessories. Find your next piece, and make it your own.'
     collections_page_title: str = 'All Collections'
     collections_page_subtitle: str = 'Explore our complete range of curated wardrobe edits.'
     products_page_title: str = 'All Products'
@@ -67,8 +71,12 @@ class AdminStoreSettingsResponse(BaseModel):
     support_email: str | None
     support_phone: str | None
     support_hours: str | None
+    whatsapp_prefill_message: str | None = 'Hi AlphaZee, I have a question regarding my order:'
+    email_subject_template: str | None = 'AlphaZee Customer Inquiry'
+    email_body_template: str | None = 'Hi AlphaZee Team,\n\nI need assistance with:\n\nOrder Number (optional):\n'
     faq_items: list[dict[str, Any]] = Field(default_factory=list)
     reassurance_items: list[dict[str, Any]] = Field(default_factory=list)
+    footer_quote: str = 'A considered selection of clothing and accessories. Find your next piece, and make it your own.'
     collections_page_title: str = 'All Collections'
     collections_page_subtitle: str = 'Explore our complete range of curated wardrobe edits.'
     products_page_title: str = 'All Products'
@@ -131,8 +139,12 @@ class UpdateStoreSettingsRequest(BaseModel):
     support_email: str | None = Field(default=None, max_length=120)
     support_phone: str | None = Field(default=None, max_length=50)
     support_hours: str | None = Field(default=None, max_length=120)
+    whatsapp_prefill_message: str | None = Field(default=None, max_length=255)
+    email_subject_template: str | None = Field(default=None, max_length=150)
+    email_body_template: str | None = Field(default=None, max_length=2000)
     faq_items: list[dict[str, Any]] | None = None
     reassurance_items: list[dict[str, Any]] | None = None
+    footer_quote: str | None = Field(default=None, min_length=1, max_length=300)
     collections_page_title: str | None = Field(default=None, min_length=1, max_length=100)
     collections_page_subtitle: str | None = Field(default=None, max_length=255)
     products_page_title: str | None = Field(default=None, min_length=1, max_length=100)

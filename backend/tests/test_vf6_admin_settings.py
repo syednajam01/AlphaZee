@@ -567,6 +567,78 @@ def test_storefront_reassurance_items_crud_and_audit(client, db):
     assert bad_res.status_code == 422
 
 
+def test_footer_quote_and_support_channels_configuration(client, db):
+    """Verify owner can configure footer quote and WhatsApp/Email support templates with audit logging."""
+    owner_name, pwd = _create_owner(db, "owner_footer_quote_test")
+    csrf = _login_owner(client, owner_name, pwd)
+
+    # 1. Verify default values on public and admin endpoints
+    pub = client.get("/api/v1/store/settings").json()
+    assert "A considered selection of clothing" in pub["footer_quote"]
+    assert "Hi AlphaZee" in pub["whatsapp_prefill_message"]
+    assert pub["email_subject_template"] == "AlphaZee Customer Inquiry"
+    assert "Order Number" in pub["email_body_template"]
+
+    cur = client.get("/api/v1/admin/settings").json()
+    v = cur["version"]
+    assert "A considered selection of clothing" in cur["footer_quote"]
+    assert "Hi AlphaZee" in cur["whatsapp_prefill_message"]
+
+    # 2. Update footer quote
+    res1 = client.put(
+        "/api/v1/admin/settings",
+        json={
+            "expected_version": v,
+            "footer_quote": "Curated silhouettes crafted for elevated everyday moments. Timeless essentials by AlphaZee.",
+            "change_reason": "Refine footer brand quote",
+        },
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+    assert res1.status_code == 200, res1.text
+    adm1 = res1.json()
+    assert adm1["footer_quote"] == "Curated silhouettes crafted for elevated everyday moments. Timeless essentials by AlphaZee."
+
+    # 3. Update customer support channels (WhatsApp number, message, email, subject, body, hours)
+    v2 = adm1["version"]
+    res2 = client.put(
+        "/api/v1/admin/settings",
+        json={
+            "expected_version": v2,
+            "support_phone": "+92 321 9876543",
+            "whatsapp_prefill_message": "Salam AlphaZee! I need assistance with an urgent order:",
+            "support_email": "concierge@alphazee.tech",
+            "email_subject_template": "Order Concierge Inquiry - AlphaZee",
+            "email_body_template": "Dear AlphaZee Support,\n\nPlease advise regarding the following:\n\nOrder ID:\nQuery Details:\n",
+            "support_hours": "Mon-Sun: 9:00 AM – 11:00 PM PKT",
+            "change_reason": "Enable dedicated WhatsApp concierge & custom email support templates",
+        },
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+    assert res2.status_code == 200, res2.text
+    adm2 = res2.json()
+    assert adm2["support_phone"] == "+92 321 9876543"
+    assert adm2["whatsapp_prefill_message"] == "Salam AlphaZee! I need assistance with an urgent order:"
+    assert adm2["support_email"] == "concierge@alphazee.tech"
+    assert adm2["email_subject_template"] == "Order Concierge Inquiry - AlphaZee"
+    assert adm2["support_hours"] == "Mon-Sun: 9:00 AM – 11:00 PM PKT"
+
+    # 4. Verify public endpoint reflects all updated fields
+    pub_updated = client.get("/api/v1/store/settings").json()
+    assert pub_updated["footer_quote"] == "Curated silhouettes crafted for elevated everyday moments. Timeless essentials by AlphaZee."
+    assert pub_updated["support_phone"] == "+92 321 9876543"
+    assert pub_updated["whatsapp_prefill_message"] == "Salam AlphaZee! I need assistance with an urgent order:"
+    assert pub_updated["support_email"] == "concierge@alphazee.tech"
+    assert pub_updated["email_subject_template"] == "Order Concierge Inquiry - AlphaZee"
+    assert "Dear AlphaZee Support" in pub_updated["email_body_template"]
+
+    # 5. Audit logs verify entries for both updates
+    audit = client.get("/api/v1/admin/settings/audit-logs?limit=5", headers={"Origin": "http://localhost:3000"}).json()
+    assert len(audit) >= 2
+    assert "whatsapp_prefill_message" in audit[0]["changed_fields"]
+    assert "footer_quote" in audit[1]["changed_fields"]
+
+
+
 
 
 

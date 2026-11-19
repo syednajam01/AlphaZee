@@ -558,6 +558,45 @@ export function createStoreSettingsComponent() {
             </div>
           </div>
 
+          <!-- Storefront Footer Brand Quote Card -->
+          <div class="set-card">
+            <div class="set-card-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3 class="set-card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #6366F1;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  Storefront Footer Brand Quote & Story
+                </h3>
+              </div>
+              <div class="set-action-group">
+                <button type="button" id="btn-save-footer-quote" class="set-action-btn is-save" data-tooltip="Save footer brand quote" aria-label="Save footer quote" title="Save footer quote">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--admin-border-subtle); border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <label style="font-size: 0.75rem; color: var(--admin-text-secondary); font-weight: 500;">Brand Quote / Description</label>
+                  <span id="counter-footer-quote" style="font-size: 0.6875rem; color: var(--admin-text-muted);">${(s.footer_quote || 'A considered selection of clothing and accessories. Find your next piece, and make it your own.').length} / 300</span>
+                </div>
+                <textarea id="input-footer-quote" class="admin-input" rows="3" maxlength="300" style="width: 100%; resize: vertical; line-height: 1.5;" placeholder="A considered selection of clothing and accessories. Find your next piece, and make it your own.">${escapeHtml(s.footer_quote || 'A considered selection of clothing and accessories. Find your next piece, and make it your own.')}</textarea>
+                <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 4px;">Displayed under the brand logo in the footer section across all storefront pages on alphazee.tech.</div>
+              </div>
+
+              <!-- Live Typography Preview -->
+              <div style="background: #090D16; border: 1px dashed rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 12px;">
+                <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: #10B981; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                  <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10B981;"></span>
+                  Live Typography Preview (Footer Column 1)
+                </div>
+                <p id="preview-footer-quote" style="font-size: 0.8125rem; color: #9CA3AF; line-height: 1.5; font-style: italic;">
+                  "${escapeHtml(s.footer_quote || 'A considered selection of clothing and accessories. Find your next piece, and make it your own.')}"
+                </p>
+              </div>
+            </div>
+          </div>
+
           <!-- Right Column: Interactive Live Mockup Preview Card -->
           <div class="set-preview-mockup">
             <div class="set-mockup-browser-bar">
@@ -875,30 +914,87 @@ export function createStoreSettingsComponent() {
             <div class="set-card-header">
               <h3 class="set-card-title">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #10B981;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                Customer Support Channels
+                Customer Support Channels & Quick Inquiry Hub
               </h3>
+              <div class="set-action-group">
+                <button type="submit" form="form-support-channels" id="btn-save-support-channels" class="set-action-btn is-save" data-tooltip="Save customer support channels & templates" aria-label="Save support channels" title="Save support channels">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                </button>
+              </div>
             </div>
 
             <form id="form-support-channels" style="display: flex; flex-direction: column; gap: 14px;">
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;">
-                <div>
-                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Support Email</label>
-                  <input type="email" id="input-support-email" value="${escapeHtml(s.support_email || '')}" class="admin-input" style="width: 100%;" placeholder="e.g. support@alphazee.tech">
+              <!-- WhatsApp Channel Section -->
+              <div style="background: rgba(37, 211, 102, 0.03); border: 1px solid rgba(37, 211, 102, 0.15); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-size: 0.75rem; font-weight: 600; color: #10B981; display: flex; align-items: center; gap: 6px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+                  </svg>
+                  WhatsApp Direct Message Channel
                 </div>
-                <div>
-                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">WhatsApp Phone Number</label>
-                  <input type="text" id="input-support-phone" value="${escapeHtml(s.support_phone || '')}" class="admin-input" style="width: 100%; font-family: monospace;" placeholder="+92 300 1234567">
-                </div>
-                <div>
-                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Operating Hours</label>
-                  <input type="text" id="input-support-hours" value="${escapeHtml(s.support_hours || '')}" class="admin-input" style="width: 100%;" placeholder="Mon-Sat: 10:00 AM – 7:00 PM PKT">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">WhatsApp Phone Number</label>
+                    <input type="text" id="input-support-phone" value="${escapeHtml(s.support_phone || '')}" class="admin-input" style="width: 100%; font-family: monospace;" placeholder="+92 300 1234567">
+                    <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 4px;">Include country code. Customers tap this to start a direct WhatsApp chat.</div>
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">WhatsApp Pre-filled Message</label>
+                    <input type="text" id="input-whatsapp-prefill" value="${escapeHtml(s.whatsapp_prefill_message || 'Hi AlphaZee, I have a question regarding my order:')}" class="admin-input" style="width: 100%;" placeholder="Hi AlphaZee, I have a question regarding:">
+                    <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 4px;">Automatically placed in the customer's text box when WhatsApp opens.</div>
+                  </div>
                 </div>
               </div>
 
-              <div style="display: flex; justify-content: flex-end; margin-top: 2px;">
-                <button type="submit" id="btn-save-support-channels" class="set-action-btn is-save" data-tooltip="Save customer support channels" aria-label="Save support channels" title="Save support channels">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                </button>
+              <!-- Email / Gmail Channel Section -->
+              <div style="background: rgba(56, 189, 248, 0.03); border: 1px solid rgba(56, 189, 248, 0.15); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-size: 0.75rem; font-weight: 600; color: #38BDF8; display: flex; align-items: center; gap: 6px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  Email & Gmail 1-Click Inquiry Channel
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Support Email (Gmail / Custom)</label>
+                    <input type="email" id="input-support-email" value="${escapeHtml(s.support_email || '')}" class="admin-input" style="width: 100%;" placeholder="e.g. support@alphazee.tech">
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Email Subject Template</label>
+                    <input type="text" id="input-email-subject" value="${escapeHtml(s.email_subject_template || 'AlphaZee Customer Inquiry')}" class="admin-input" style="width: 100%;" placeholder="AlphaZee Customer Inquiry">
+                  </div>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Email Body Template</label>
+                  <textarea id="input-email-body" class="admin-input" rows="2" style="width: 100%; resize: vertical;" placeholder="Hi AlphaZee Team,&#10;&#10;I need assistance with:&#10;Order Number (optional):">${escapeHtml(s.email_body_template || 'Hi AlphaZee Team,\n\nI need assistance with:\n\nOrder Number (optional):\n')}</textarea>
+                  <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 4px;">Pre-fills the email composer so customers just type their inquiry details.</div>
+                </div>
+              </div>
+
+              <!-- Operating Hours -->
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Operating Hours</label>
+                <input type="text" id="input-support-hours" value="${escapeHtml(s.support_hours || '')}" class="admin-input" style="width: 100%;" placeholder="Mon-Sat: 10:00 AM – 7:00 PM PKT">
+                <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 4px;">Shown above the support buttons in the storefront footer.</div>
+              </div>
+
+              <!-- Live Action Buttons Preview -->
+              <div style="background: #090D16; border: 1px dashed rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 12px; margin-top: 2px;">
+                <div style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: #10B981; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                  <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10B981;"></span>
+                  Live Storefront Assistance Buttons Preview
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; max-width: 300px;">
+                  <div id="preview-btn-whatsapp" style="display: ${s.support_phone ? 'inline-flex' : 'none'}; align-items: center; justify-content: center; gap: 8px; background: #25D366; color: #052e16; font-weight: 600; font-size: 0.8125rem; padding: 10px 16px; border-radius: 6px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                    Chat on WhatsApp
+                  </div>
+                  <div id="preview-btn-email" style="display: ${s.support_email ? 'inline-flex' : 'none'}; align-items: center; justify-content: center; gap: 8px; background: rgba(255, 255, 255, 0.08); color: #F3F4F6; font-weight: 500; font-size: 0.8125rem; padding: 10px 16px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.18);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Email Customer Care
+                  </div>
+                  <div id="preview-btn-none" style="display: ${(!s.support_phone && !s.support_email) ? 'inline-flex' : 'none'}; align-items: center; justify-content: center; gap: 8px; background: rgba(255, 255, 255, 0.04); color: rgba(255, 255, 255, 0.4); font-size: 0.8125rem; padding: 10px 16px; border-radius: 6px;">
+                    Support unavailable
+                  </div>
+                </div>
               </div>
             </form>
           </div>
@@ -1518,6 +1614,44 @@ export function createStoreSettingsComponent() {
       });
     }
 
+    // Save Footer Brand Quote
+    const btnSaveFooterQuote = container.querySelector('#btn-save-footer-quote');
+    if (btnSaveFooterQuote) {
+      btnSaveFooterQuote.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          const quoteVal = (container.querySelector('#input-footer-quote')?.value || '').trim();
+          if (!quoteVal) {
+            showAlert('Footer brand quote cannot be empty', 'error');
+            return;
+          }
+          const payload = {
+            footer_quote: quoteVal,
+            expected_version: currentSettings.version,
+            change_reason: 'Update storefront footer brand quote',
+          };
+          const res = await updateAdminStoreSettings(payload);
+          currentSettings = res;
+          showAlert(`Footer brand quote saved successfully (revision v${res.version})`);
+          render();
+        } catch (err) {
+          showAlert(err.message || 'Failed to save footer brand quote', 'error');
+        }
+      });
+    }
+
+    // Footer Brand Quote live typography preview and counter
+    const inputFooterQuote = container.querySelector('#input-footer-quote');
+    const previewFooterQuote = container.querySelector('#preview-footer-quote');
+    const counterFooterQuote = container.querySelector('#counter-footer-quote');
+    if (inputFooterQuote) {
+      inputFooterQuote.addEventListener('input', (e) => {
+        const val = e.target.value;
+        if (previewFooterQuote) previewFooterQuote.textContent = `"${val}"`;
+        if (counterFooterQuote) counterFooterQuote.textContent = `${val.length} / 300`;
+      });
+    }
+
     // Toggle Icon Popovers
     container.querySelectorAll('.btn-reassurance-icon-picker').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1824,21 +1958,40 @@ export function createStoreSettingsComponent() {
         e.preventDefault();
         try {
           const payload = {
-            support_email: container.querySelector('#input-support-email').value.trim() || null,
-            support_phone: container.querySelector('#input-support-phone').value.trim() || null,
-            support_hours: container.querySelector('#input-support-hours').value.trim() || null,
+            support_email: container.querySelector('#input-support-email')?.value.trim() || null,
+            support_phone: container.querySelector('#input-support-phone')?.value.trim() || null,
+            support_hours: container.querySelector('#input-support-hours')?.value.trim() || null,
+            whatsapp_prefill_message: container.querySelector('#input-whatsapp-prefill')?.value.trim() || null,
+            email_subject_template: container.querySelector('#input-email-subject')?.value.trim() || null,
+            email_body_template: container.querySelector('#input-email-body')?.value.trim() || null,
             expected_version: currentSettings.version,
-            change_reason: 'Update customer support channels',
+            change_reason: 'Update customer support channels & templates',
           };
           const res = await updateAdminStoreSettings(payload);
           currentSettings = res;
-          showAlert('Support channels saved successfully');
+          showAlert(`Support channels & templates saved successfully (revision v${res.version})`);
           render();
         } catch (err) {
           showAlert(err.message || 'Failed to update support channels', 'error');
         }
       });
     }
+
+    // Support channels live preview listeners
+    const inputPhone = container.querySelector('#input-support-phone');
+    const inputEmail = container.querySelector('#input-support-email');
+    const previewBtnWa = container.querySelector('#preview-btn-whatsapp');
+    const previewBtnMail = container.querySelector('#preview-btn-email');
+    const previewBtnNone = container.querySelector('#preview-btn-none');
+    const updateSupportPreview = () => {
+      const hasPhone = !!(inputPhone?.value.trim());
+      const hasEmail = !!(inputEmail?.value.trim());
+      if (previewBtnWa) previewBtnWa.style.display = hasPhone ? 'inline-flex' : 'none';
+      if (previewBtnMail) previewBtnMail.style.display = hasEmail ? 'inline-flex' : 'none';
+      if (previewBtnNone) previewBtnNone.style.display = (!hasPhone && !hasEmail) ? 'inline-flex' : 'none';
+    };
+    if (inputPhone) inputPhone.addEventListener('input', updateSupportPreview);
+    if (inputEmail) inputEmail.addEventListener('input', updateSupportPreview);
 
     // FAQ Search & Filter
     const inputFaqSearch = container.querySelector('#input-faq-search');
