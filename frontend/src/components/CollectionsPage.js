@@ -100,18 +100,27 @@ export function createCollectionsPage({ onSelectCollection, onNavigate }) {
       list.forEach(col => {
         const card = grid.querySelector(`[data-collection="${col.id}"]`);
         if (card) {
-          card.prepend(
-            createSafeImageElement({
-              src: toVariantUrl(col.image_url, 'card'),
-              fallback: '/images/storefront-empty.svg',
-              alt: col.name || 'Collection',
-              className: 'collection-img',
-              loading: 'lazy',
-              shimmer: true,
-              width: 450,
-              height: 800,
-            })
-          );
+          const colImg = createSafeImageElement({
+            src: toVariantUrl(col.image_url, 'card'),
+            fallback: '/images/storefront-empty.svg',
+            alt: col.name || 'Collection',
+            className: 'collection-img',
+            loading: 'lazy',
+            shimmer: true,
+            width: 450,
+            height: 800,
+          });
+          const fx = col.focal_x != null ? col.focal_x : 50;
+          const fy = col.focal_y != null ? col.focal_y : 50;
+          const zm = col.zoom_scale != null ? col.zoom_scale : 1.0;
+          if (colImg.style?.setProperty) {
+            colImg.style.setProperty('--card-focal', `${fx}% ${fy}%`);
+            colImg.style.setProperty('--card-zoom', String(zm));
+          } else if (colImg.style) {
+            colImg.style['--card-focal'] = `${fx}% ${fy}%`;
+            colImg.style['--card-zoom'] = String(zm);
+          }
+          card.prepend(colImg);
         }
       });
 

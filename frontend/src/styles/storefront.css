@@ -348,9 +348,9 @@
   height: 100% !important;
   aspect-ratio: 16 / 9 !important;
   object-fit: cover !important;
-  object-position: center top !important;
+  object-position: var(--hero-focal, center top) !important;
   filter: blur(0px) brightness(1);
-  transform: scale(1);
+  transform: scale(var(--hero-zoom, 1));
   transition: filter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   will-change: filter, transform;
   background: #000;
@@ -639,7 +639,8 @@
     height: 100% !important;
     aspect-ratio: 16 / 9 !important;
     object-fit: cover !important;
-    object-position: center center !important;
+    object-position: var(--hero-focal, center center) !important;
+    transform: scale(var(--hero-zoom, 1));
   }
   .storefront .hero-overlay {
     background: linear-gradient(180deg, rgba(8, 14, 11, 0.20) 0%, rgba(8, 14, 11, 0.55) 45%, rgba(8, 14, 11, 0.85) 100%);

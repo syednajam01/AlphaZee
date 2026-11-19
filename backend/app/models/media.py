@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 import uuid
 from typing import TYPE_CHECKING
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -32,6 +32,9 @@ class MediaAsset(Base):
     edit_version: Mapped[int] = mapped_column(Integer, default=1, server_default=text('1'))
     poster_id: Mapped[str | None] = mapped_column(ForeignKey('media_assets.id', ondelete='RESTRICT'))
     poster: Mapped['MediaAsset | None'] = relationship(remote_side='MediaAsset.id')
+    focal_x: Mapped[int] = mapped_column(Integer, default=50, server_default=text('50'))
+    focal_y: Mapped[int] = mapped_column(Integer, default=50, server_default=text('50'))
+    zoom_scale: Mapped[float] = mapped_column(Float, default=1.0, server_default=text('1.0'))
     creator_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('user_accounts.id', ondelete='RESTRICT'))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
@@ -53,6 +56,9 @@ class ProductMedia(Base):
     role: Mapped[str] = mapped_column(String(20))
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     alt_text: Mapped[str] = mapped_column(Text, default='')
+    focal_x: Mapped[int] = mapped_column(Integer, default=50, server_default=text('50'))
+    focal_y: Mapped[int] = mapped_column(Integer, default=50, server_default=text('50'))
+    zoom_scale: Mapped[float] = mapped_column(Float, default=1.0, server_default=text('1.0'))
     asset: Mapped[MediaAsset] = relationship()
     product: Mapped['Product'] = relationship(back_populates='media_links')
 
@@ -73,6 +79,9 @@ class HeroSlide(Base):
     image_asset_id: Mapped[str | None] = mapped_column(ForeignKey('media_assets.id', ondelete='RESTRICT'), nullable=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text('true'))
+    focal_x: Mapped[int] = mapped_column(Integer, default=50, server_default=text('50'))
+    focal_y: Mapped[int] = mapped_column(Integer, default=50, server_default=text('50'))
+    zoom_scale: Mapped[float] = mapped_column(Float, default=1.0, server_default=text('1.0'))
     target_product_id: Mapped[str | None] = mapped_column(ForeignKey('products.id', ondelete='SET NULL'), nullable=True)
     target_collection_id: Mapped[str | None] = mapped_column(ForeignKey('collections.id', ondelete='SET NULL'), nullable=True)
     edit_version: Mapped[int] = mapped_column(Integer, default=1, server_default=text('1'))

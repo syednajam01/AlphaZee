@@ -158,10 +158,15 @@ export function createHero(onProductClick) {
       const posterUrl = sanitizeMediaUrl(item.poster_url || item.hero_poster_url || item.image_url || item.hero_image_url, '');
       const videoUrl = sanitizeMediaUrl(item.video_url || item.hero_video_url, '');
       const imageUrl = sanitizeMediaUrl(item.image_url || item.hero_image_url || posterUrl, '');
+      const fx = item.focal_x != null ? item.focal_x : 50;
+      const fy = item.focal_y != null ? item.focal_y : 50;
+      const zm = item.zoom_scale != null ? item.zoom_scale : 1.0;
+      const focalCss = `--hero-focal: ${fx}% ${fy}%; --hero-zoom: ${zm};`;
 
       if (videoUrl && !prefersReducedMotion && !saveData) {
         const video = document.createElement('video');
         video.className = `hero-bg-media hero-video-media hero-bg-video ${index === 0 ? 'is-active' : ''}`;
+        video.style.cssText = focalCss;
         if (posterUrl) video.poster = posterUrl;
         video.muted = true;
         video.defaultMuted = true;
@@ -208,6 +213,7 @@ export function createHero(onProductClick) {
       } else if (imageUrl) {
         const img = document.createElement('img');
         img.className = `hero-bg-media ${index === 0 ? 'is-active' : ''}`;
+        img.style.cssText = focalCss;
         img.src = imageUrl;
         img.alt = item.title || 'AlphaZee featured piece';
         img.loading = 'eager';
@@ -628,6 +634,9 @@ export function createHero(onProductClick) {
               poster_url: s.poster_url,
               image_url: s.image_url,
               min_price: s.product?.min_price ?? s.product?.min_price_minor,
+              focal_x: s.focal_x != null ? s.focal_x : 50,
+              focal_y: s.focal_y != null ? s.focal_y : 50,
+              zoom_scale: s.zoom_scale != null ? s.zoom_scale : 1.0,
             };
           });
         }

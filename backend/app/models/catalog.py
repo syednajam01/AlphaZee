@@ -27,6 +27,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -96,6 +97,13 @@ class Collection(Base):
     hover_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Secondary / hover collection image URL."""
     hover_image_media_id: Mapped[str | None] = mapped_column(ForeignKey('media_assets.id', ondelete='RESTRICT'), nullable=True)
+
+    focal_x: Mapped[int] = mapped_column(Integer, nullable=False, default=50, server_default=text('50'))
+    focal_y: Mapped[int] = mapped_column(Integer, nullable=False, default=50, server_default=text('50'))
+    zoom_scale: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default=text('1.0'))
+    hover_focal_x: Mapped[int] = mapped_column(Integer, nullable=False, default=50, server_default=text('50'))
+    hover_focal_y: Mapped[int] = mapped_column(Integer, nullable=False, default=50, server_default=text('50'))
+    hover_zoom_scale: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default=text('1.0'))
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     """Inactive collections and their products are excluded from public API responses."""

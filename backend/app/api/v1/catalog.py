@@ -42,7 +42,7 @@ from app.schemas.catalog import (
     VariantSchema,
 )
 
-from app.queries.public_media import product_media, primary_alt, storefront_urls
+from app.queries.public_media import product_media, primary_alt, storefront_urls, storefront_framing
 from app.queries.catalog_stock import public_availability
 
 
@@ -68,6 +68,7 @@ def _slide_media_url(asset):
 def _build_product_summary(product, availability=None) -> ProductSummarySchema:
     min_minor = get_min_price_minor(product)
     urls = storefront_urls(product)
+    framing = storefront_framing(product)
     return ProductSummarySchema(
         id=product.id,
         slug=product.slug,
@@ -77,6 +78,12 @@ def _build_product_summary(product, availability=None) -> ProductSummarySchema:
         collection_ids=product.collection_ids,
         image_url=urls['image_url'],
         hover_image_url=urls.get('hover_image_url'),
+        focal_x=framing['focal_x'],
+        focal_y=framing['focal_y'],
+        zoom_scale=framing['zoom_scale'],
+        hover_focal_x=framing['hover_focal_x'],
+        hover_focal_y=framing['hover_focal_y'],
+        hover_zoom_scale=framing['hover_zoom_scale'],
         badge=product.badge,
         is_hero=product.is_hero,
         min_price=CurrencyAmount.from_minor(min_minor) if min_minor is not None else None,
@@ -180,6 +187,12 @@ def list_collections(db: Session = Depends(get_db)) -> CollectionListResponse:
                 description=c.description,
                 image_url=c.image_url,
                 hover_image_url=c.hover_image_url,
+                focal_x=c.focal_x if getattr(c, 'focal_x', None) is not None else 50,
+                focal_y=c.focal_y if getattr(c, 'focal_y', None) is not None else 50,
+                zoom_scale=c.zoom_scale if getattr(c, 'zoom_scale', None) is not None else 1.0,
+                hover_focal_x=c.hover_focal_x if getattr(c, 'hover_focal_x', None) is not None else 50,
+                hover_focal_y=c.hover_focal_y if getattr(c, 'hover_focal_y', None) is not None else 50,
+                hover_zoom_scale=c.hover_zoom_scale if getattr(c, 'hover_zoom_scale', None) is not None else 1.0,
                 display_order=c.display_order,
                 product_count=counts.get(c.id, 0),
             )
@@ -303,6 +316,9 @@ def list_hero_slides(db: Session = Depends(get_db)) -> list[HeroSlidePublicSchem
             image_url=img_url,
             display_order=s.display_order,
             is_enabled=s.is_enabled,
+            focal_x=s.focal_x if getattr(s, 'focal_x', None) is not None else 50,
+            focal_y=s.focal_y if getattr(s, 'focal_y', None) is not None else 50,
+            zoom_scale=s.zoom_scale if getattr(s, 'zoom_scale', None) is not None else 1.0,
             target_product_id=p.id if p else None,
             target_product_slug=p.slug if p else None,
             target_collection_id=c.id if c else None,

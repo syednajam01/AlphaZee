@@ -3,6 +3,7 @@ import { escapeHtml as esc, sanitizeMediaUrl } from '../../utils/dom.js';
 import { parseCatalogPkr } from '../../utils/money.js';
 import { generateSku } from '../../utils/sku.js';
 import { mountVariantStock } from './VariantStock.js';
+import { openFramingStudio } from './MediaFramingStudio.js';
 
 const button = (label, id = '', extra = '') => `<button type="button" class="btn btn-secondary" ${id ? `id="${id}"` : ''} ${extra}>${esc(label)}</button>`;
 const options = (items, selected) => items.map(([value, label]) => `<option value="${esc(value)}" ${String(selected ?? '') === String(value) ? 'selected' : ''}>${esc(label)}</option>`).join('');
@@ -1082,7 +1083,10 @@ export function mountCatalogSection(section, container, context) {
                   <label class="role-select-label">Select front image:
                     <select id="catalog-select-front"></select>
                   </label>
-                  <button type="button" class="btn btn-secondary btn-clear-role" id="catalog-clear-front">Clear front image</button>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px;">
+                    <button type="button" class="btn btn-secondary btn-clear-role" id="catalog-frame-front" style="display: none;">🎯 Frame Card (9:16)</button>
+                    <button type="button" class="btn btn-secondary btn-clear-role" id="catalog-clear-front">Clear front image</button>
+                  </div>
                 </div>
               </div>
               <div class="role-selector-card" id="card-hover-selector-card">
@@ -1093,7 +1097,10 @@ export function mountCatalogSection(section, container, context) {
                   <label class="role-select-label">Select hover image:
                     <select id="catalog-select-hover"></select>
                   </label>
-                  <button type="button" class="btn btn-secondary btn-clear-role" id="catalog-clear-hover">Clear hover image</button>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px;">
+                    <button type="button" class="btn btn-secondary btn-clear-role" id="catalog-frame-hover" style="display: none;">🎯 Frame Card (9:16)</button>
+                    <button type="button" class="btn btn-secondary btn-clear-role" id="catalog-clear-hover">Clear hover image</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1241,7 +1248,16 @@ export function mountCatalogSection(section, container, context) {
           fields.vendor_id = null;
         }
         syncLinks();
-        const mediaItems = links.map((l, index) => ({ asset_id: l.asset_id, role: l.role, variant_id: l.variant_id, alt_text: l.alt_text, display_order: index }));
+        const mediaItems = links.map((l, index) => ({
+          asset_id: l.asset_id,
+          role: l.role,
+          variant_id: l.variant_id,
+          alt_text: l.alt_text,
+          display_order: index,
+          focal_x: Number.isFinite(l.focal_x) ? l.focal_x : 50,
+          focal_y: Number.isFinite(l.focal_y) ? l.focal_y : 50,
+          zoom_scale: Number.isFinite(l.zoom_scale) ? l.zoom_scale : 1.0,
+        }));
         const untouchedLegacyMedia = currentProduct.image_url && !currentProduct.media?.length && !mediaItems.length;
         return api.updateOwnerProduct(currentProduct.id, { ...fields, expected_version: currentProduct.edit_version,
           ...(!untouchedLegacyMedia ? { media: mediaItems } : {}) });
@@ -1285,6 +1301,8 @@ export function mountCatalogSection(section, container, context) {
     const hoverSelect = query('#catalog-select-hover');
     const clearFrontBtn = query('#catalog-clear-front');
     const clearHoverBtn = query('#catalog-clear-hover');
+    const frameFrontBtn = query('#catalog-frame-front');
+    const frameHoverBtn = query('#catalog-frame-hover');
 
     const frontLink = links.find(l => l.role === 'primary');
     const frontAsset = frontLink?.asset || (frontLink?.asset_id ? knownAssets.get(frontLink.asset_id) : null);
@@ -1302,17 +1320,87 @@ export function mountCatalogSection(section, container, context) {
     if (hoverSelect) hoverSelect.innerHTML = options([['', 'Choose hover image (optional)'], ...imgOpts], hoverAsset?.id);
 
     if (frontNode) {
-      frontNode.innerHTML = frontAsset ? `<img src="${esc(sanitizeMediaUrl(frontAsset.url))}" alt="Card front" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">` : 'No front image';
+      const fx = frontLink?.focal_x ?? 50;
+      const fy = frontLink?.focal_y ?? 50;
+      const zm = frontLink?.zoom_scale ?? 1.0;
+      frontNode.innerHTML = frontAsset ? `<img src="${esc(sanitizeMediaUrl(frontAsset.url))}" alt="Card front" style="width: 100%; height: 100%; object-fit: cover; object-position: ${fx}% ${fy}%; transform: scale(${zm}); border-radius: 4px;">` : 'No front image';
     }
     if (hoverNode) {
-      hoverNode.innerHTML = hoverAsset ? `<img src="${esc(sanitizeMediaUrl(hoverAsset.url))}" alt="Card hover" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">` : 'No hover image';
+      const hfx = hoverLink?.focal_x ?? 50;
+      const hfy = hoverLink?.focal_y ?? 50;
+      const hzm = hoverLink?.zoom_scale ?? 1.0;
+      hoverNode.innerHTML = hoverAsset ? `<img src="${esc(sanitizeMediaUrl(hoverAsset.url))}" alt="Card hover" style="width: 100%; height: 100%; object-fit: cover; object-position: ${hfx}% ${hfy}%; transform: scale(${hzm}); border-radius: 4px;">` : 'No hover image';
     }
 
     if (clearFrontBtn) clearFrontBtn.style.display = frontAsset ? 'inline-block' : 'none';
     if (clearHoverBtn) clearHoverBtn.style.display = hoverAsset ? 'inline-block' : 'none';
+    if (frameFrontBtn) frameFrontBtn.style.display = frontAsset ? 'inline-block' : 'none';
+    if (frameHoverBtn) frameHoverBtn.style.display = hoverAsset ? 'inline-block' : 'none';
   }
 
   function wireRoleSelectors() {
+    query('#catalog-frame-front')?.addEventListener('click', () => {
+      const frontLink = links.find(l => l.role === 'primary');
+      const frontAsset = frontLink?.asset || (frontLink?.asset_id ? knownAssets.get(frontLink.asset_id) : null);
+      if (!frontAsset || !frontAsset.url) {
+        status('Select a front image first to adjust framing.', true);
+        return;
+      }
+      openFramingStudio({
+        mediaUrl: frontAsset.url,
+        isVideo: false,
+        title: 'Card Front (9:16) Framing Studio',
+        aspectRatio: '9:16',
+        initialFocalX: frontLink.focal_x ?? 50,
+        initialFocalY: frontLink.focal_y ?? 50,
+        initialZoom: frontLink.zoom_scale ?? 1.0,
+        cardData: {
+          title: query('#catalog-title')?.value || currentProduct?.title || 'Product Title',
+          badge: 'NEW ARRIVAL',
+          priceFormatted: 'PKR 4,500',
+        },
+        onSave: ({ focalX, focalY, zoom }) => {
+          frontLink.focal_x = focalX;
+          frontLink.focal_y = focalY;
+          frontLink.zoom_scale = zoom;
+          updateRoleSelectors();
+          markDirty();
+          status(`Card front framing updated to (${focalX}%, ${focalY}%, ${zoom}x). Save product to persist.`);
+        }
+      });
+    });
+
+    query('#catalog-frame-hover')?.addEventListener('click', () => {
+      const hoverLink = links.find(l => l.role === 'hover_image');
+      const hoverAsset = hoverLink?.asset || (hoverLink?.asset_id ? knownAssets.get(hoverLink.asset_id) : null);
+      if (!hoverAsset || !hoverAsset.url) {
+        status('Select a hover image first to adjust framing.', true);
+        return;
+      }
+      openFramingStudio({
+        mediaUrl: hoverAsset.url,
+        isVideo: false,
+        title: 'Card Hover (9:16) Framing Studio',
+        aspectRatio: '9:16',
+        initialFocalX: hoverLink.focal_x ?? 50,
+        initialFocalY: hoverLink.focal_y ?? 50,
+        initialZoom: hoverLink.zoom_scale ?? 1.0,
+        cardData: {
+          title: query('#catalog-title')?.value || currentProduct?.title || 'Product Title (Hover State)',
+          badge: 'HOVER VIEW',
+          priceFormatted: 'PKR 4,500',
+        },
+        onSave: ({ focalX, focalY, zoom }) => {
+          hoverLink.focal_x = focalX;
+          hoverLink.focal_y = focalY;
+          hoverLink.zoom_scale = zoom;
+          updateRoleSelectors();
+          markDirty();
+          status(`Card hover framing updated to (${focalX}%, ${focalY}%, ${zoom}x). Save product to persist.`);
+        }
+      });
+    });
+
     query('#catalog-select-front')?.addEventListener('change', event => {
       const assetId = event.target.value;
       const asset = knownAssets.get(assetId) || assets.find(a => a.id === assetId) || links.find(l => l.asset_id === assetId)?.asset;
@@ -1807,6 +1895,12 @@ export function mountCatalogSection(section, container, context) {
   async function collectionEditor(collection) {
     currentCollection = collection;
     context.setDirty(false);
+    let colFocalX = Number.isFinite(collection.focal_x) ? collection.focal_x : 50;
+    let colFocalY = Number.isFinite(collection.focal_y) ? collection.focal_y : 50;
+    let colZoom = Number.isFinite(collection.zoom_scale) ? collection.zoom_scale : 1.0;
+    let colHoverFocalX = Number.isFinite(collection.hover_focal_x) ? collection.hover_focal_x : 50;
+    let colHoverFocalY = Number.isFinite(collection.hover_focal_y) ? collection.hover_focal_y : 50;
+    let colHoverZoom = Number.isFinite(collection.hover_zoom_scale) ? collection.hover_zoom_scale : 1.0;
     let memberProducts = [];
     if (collection.id) {
       try {
@@ -1865,8 +1959,11 @@ export function mountCatalogSection(section, container, context) {
               </select>
             </label>
             <div class="collection-image-preview-box" id="col-primary-preview">
-              ${collection.image_url ? `<img src="${esc(collection.image_url)}" class="collection-preview-thumb">` : '<span class="collection-preview-empty">No primary image</span>'}
+              ${collection.image_url ? `<img src="${esc(collection.image_url)}" class="collection-preview-thumb" style="object-position: ${colFocalX}% ${colFocalY}%; transform: scale(${colZoom});">` : '<span class="collection-preview-empty">No primary image</span>'}
             </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-col-frame-primary" style="margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem;">
+              🎯 Frame Card Front (9:16)
+            </button>
           </div>
           <div class="collection-image-field-wrap">
             <label class="catalog-field-label">Hover Image (Card Back)
@@ -1875,8 +1972,11 @@ export function mountCatalogSection(section, container, context) {
               </select>
             </label>
             <div class="collection-image-preview-box" id="col-hover-preview">
-              ${collection.hover_image_url ? `<img src="${esc(collection.hover_image_url)}" class="collection-preview-thumb">` : '<span class="collection-preview-empty">No hover image</span>'}
+              ${collection.hover_image_url ? `<img src="${esc(collection.hover_image_url)}" class="collection-preview-thumb" style="object-position: ${colHoverFocalX}% ${colHoverFocalY}%; transform: scale(${colHoverZoom});">` : '<span class="collection-preview-empty">No hover image</span>'}
             </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-col-frame-hover" style="margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem;">
+              🎯 Frame Card Hover (9:16)
+            </button>
           </div>
         </div>
 
@@ -1976,6 +2076,78 @@ export function mountCatalogSection(section, container, context) {
     wireImgPreview('#col-primary-media-select', '#col-primary-preview');
     wireImgPreview('#col-hover-media-select', '#col-hover-preview');
 
+    query('#btn-col-frame-primary')?.addEventListener('click', () => {
+      const assetId = form.querySelector('[name="image_media_id"]')?.value;
+      const asset = knownAssets.get(assetId) || assets.find(a => a.id === assetId);
+      const url = asset?.url || collection.image_url;
+      if (!url) {
+        status('Select a primary image first to adjust framing.', true);
+        return;
+      }
+      openFramingStudio({
+        mediaUrl: url,
+        isVideo: false,
+        title: 'Collection Front Card (9:16) Framing Studio',
+        aspectRatio: '9:16',
+        initialFocalX: colFocalX,
+        initialFocalY: colFocalY,
+        initialZoom: colZoom,
+        cardData: {
+          title: form.querySelector('[name="name"]')?.value?.trim() || collection.name || 'Collection Title',
+          badge: 'COLLECTION',
+          priceFormatted: '',
+        },
+        onSave: ({ focalX, focalY, zoom }) => {
+          colFocalX = focalX;
+          colFocalY = focalY;
+          colZoom = zoom;
+          const img = query('#col-primary-preview img');
+          if (img) {
+            img.style.objectPosition = `${focalX}% ${focalY}%`;
+            img.style.transform = `scale(${zoom})`;
+          }
+          markDirty();
+          status(`Collection front framing set to (${focalX}%, ${focalY}%, ${zoom}x). Save to persist.`);
+        }
+      });
+    });
+
+    query('#btn-col-frame-hover')?.addEventListener('click', () => {
+      const assetId = form.querySelector('[name="hover_image_media_id"]')?.value;
+      const asset = knownAssets.get(assetId) || assets.find(a => a.id === assetId);
+      const url = asset?.url || collection.hover_image_url;
+      if (!url) {
+        status('Select a hover image first to adjust framing.', true);
+        return;
+      }
+      openFramingStudio({
+        mediaUrl: url,
+        isVideo: false,
+        title: 'Collection Hover Card (9:16) Framing Studio',
+        aspectRatio: '9:16',
+        initialFocalX: colHoverFocalX,
+        initialFocalY: colHoverFocalY,
+        initialZoom: colHoverZoom,
+        cardData: {
+          title: form.querySelector('[name="name"]')?.value?.trim() || collection.name || 'Collection Title',
+          badge: 'HOVER VIEW',
+          priceFormatted: '',
+        },
+        onSave: ({ focalX, focalY, zoom }) => {
+          colHoverFocalX = focalX;
+          colHoverFocalY = focalY;
+          colHoverZoom = zoom;
+          const img = query('#col-hover-preview img');
+          if (img) {
+            img.style.objectPosition = `${focalX}% ${focalY}%`;
+            img.style.transform = `scale(${zoom})`;
+          }
+          markDirty();
+          status(`Collection hover framing set to (${focalX}%, ${focalY}%, ${zoom}x). Save to persist.`);
+        }
+      });
+    });
+
     container.querySelectorAll('[data-open-member-prod]').forEach(btn => btn.addEventListener('click', () => {
       if (!context.canLeave()) return;
       action(() => api.fetchOwnerProduct(btn.dataset.openMemberProd), p => editProduct(p));
@@ -1988,7 +2160,13 @@ export function mountCatalogSection(section, container, context) {
           name: value(form, 'name').trim(),
           slug: value(form, 'slug').trim(),
           description: value(form, 'description').trim() || null,
-          is_active: form.querySelector('[name="is_active"]').checked
+          is_active: form.querySelector('[name="is_active"]').checked,
+          focal_x: colFocalX,
+          focal_y: colFocalY,
+          zoom_scale: colZoom,
+          hover_focal_x: colHoverFocalX,
+          hover_focal_y: colHoverFocalY,
+          hover_zoom_scale: colHoverZoom,
         };
         if (!fields.name || !fields.slug) throw new Error('Enter a collection name and slug.');
         fields.image_media_id = value(form, 'image_media_id') || null;
@@ -2139,7 +2317,7 @@ export function mountCatalogSection(section, container, context) {
     }
     return `
       <div class="media-thumb-box">
-        <img loading="lazy" decoding="async" src="${esc(sanitizeMediaUrl(asset.url))}" alt="${esc(asset.original_name || 'Media image')}" class="media-thumb-img" />
+        <img loading="lazy" decoding="async" src="${esc(sanitizeMediaUrl(asset.url))}" alt="${esc(asset.original_name || 'Media image')}" class="media-thumb-img" style="object-position: ${asset.focal_x ?? 50}% ${asset.focal_y ?? 50}%; transform: scale(${asset.zoom_scale ?? 1.0});" />
       </div>`;
   }
 
@@ -2341,6 +2519,16 @@ export function mountCatalogSection(section, container, context) {
 
           <!-- Actions -->
           <div class="media-cell-actions">
+            <button type="button" class="btn btn-secondary btn-icon-only btn-row-action" data-frame-asset="${asset.id}" title="Adjust framing & focal point" aria-label="Adjust framing & focal point">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="22" y1="12" x2="18" y2="12"></line>
+                <line x1="6" y1="12" x2="2" y2="12"></line>
+                <line x1="12" y1="6" x2="12" y2="2"></line>
+                <line x1="12" y1="22" x2="12" y2="18"></line>
+              </svg>
+            </button>
+
             <button type="button" class="btn btn-secondary btn-icon-only btn-row-action" data-start-rename="${asset.id}" title="Rename file" aria-label="Rename file">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -2548,6 +2736,43 @@ export function mountCatalogSection(section, container, context) {
       });
     });
 
+    // Wire framing
+    node.querySelectorAll('[data-frame-asset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const asset = libraryAssets.find(a => a.id === btn.dataset.frameAsset);
+        if (!asset || !asset.url) return;
+        const isWidescreen = asset.kind === 'video' || (asset.width && asset.height && asset.width >= asset.height);
+        openFramingStudio({
+          mediaUrl: asset.url,
+          isVideo: asset.kind === 'video',
+          title: `Framing Studio: ${asset.original_name}`,
+          aspectRatio: isWidescreen ? '16:9' : '9:16',
+          initialFocalX: asset.focal_x ?? 50,
+          initialFocalY: asset.focal_y ?? 50,
+          initialZoom: asset.zoom_scale ?? 1.0,
+          onSave: async ({ focalX, focalY, zoom }) => {
+            try {
+              const res = await api.updateOwnerMediaFraming(asset.id, {
+                expected_version: asset.edit_version,
+                focal_x: focalX,
+                focal_y: focalY,
+                zoom_scale: zoom,
+              });
+              asset.focal_x = focalX;
+              asset.focal_y = focalY;
+              asset.zoom_scale = zoom;
+              asset.edit_version = res.edit_version || (asset.edit_version + 1);
+              knownAssets.set(asset.id, asset);
+              renderLibraryCards();
+              status(`Saved framing (${focalX}%, ${focalY}%, ${zoom}x) for "${asset.original_name}".`);
+            } catch (err) {
+              status(catalogError(err), true);
+            }
+          }
+        });
+      });
+    });
+
     // Wire delete
     node.querySelectorAll('[data-delete-asset]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2748,6 +2973,9 @@ export function mountCatalogSection(section, container, context) {
       if (!editorNode) return;
       const isNew = !slide;
       let activeType = (slide && !slide.video_asset_id && slide.image_asset_id) ? 'image' : 'video';
+      let slideFocalX = Number.isFinite(slide?.focal_x) ? slide.focal_x : 50;
+      let slideFocalY = Number.isFinite(slide?.focal_y) ? slide.focal_y : 50;
+      let slideZoom = Number.isFinite(slide?.zoom_scale) ? slide.zoom_scale : 1.0;
 
       const videoAssets = [...knownAssets.values()].filter(a => a.kind === 'video');
       const imageAssets = [...knownAssets.values()].filter(a => a.kind === 'image');
@@ -2803,9 +3031,18 @@ export function mountCatalogSection(section, container, context) {
                     ${(() => {
                       const curVid = slide?.video_asset_id ? knownAssets.get(slide.video_asset_id) : null;
                       return curVid && curVid.url
-                        ? `<video src="${esc(curVid.url)}" muted playsinline controls style="max-height: 200px; width: 100%; object-fit: contain;"></video>`
+                        ? `<video src="${esc(curVid.url)}" muted playsinline controls style="max-height: 200px; width: 100%; object-fit: cover; object-position: ${slideFocalX}% ${slideFocalY}%; transform: scale(${slideZoom});"></video>`
                         : `<p style="padding: 24px; color: var(--admin-text-muted); font-size: 0.8125rem; margin: 0;">No video selected</p>`;
                     })()}
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+                    <span id="col-hero-framing-badge" style="font-size: 0.75rem; color: #38BDF8; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); padding: 4px 10px; border-radius: 4px;">
+                      🎯 Framing: (${slideFocalX}%, ${slideFocalY}%) · ${slideZoom}x
+                    </span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-adjust-hero-framing" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
+                      Adjust 16:9 Banner Framing & Live Preview
+                    </button>
                   </div>
                   <p style="font-size: 0.75rem; color: var(--admin-text-muted); margin: 6px 0 0 0;">
                     ✓ No poster image required. The video autoplays muted in full width and advances to the next banner when completed.
@@ -2823,9 +3060,18 @@ export function mountCatalogSection(section, container, context) {
                     ${(() => {
                       const curImg = slide?.image_asset_id ? knownAssets.get(slide.image_asset_id) : null;
                       return curImg && curImg.url
-                        ? `<img src="${esc(curImg.url)}" style="max-height: 200px; width: 100%; object-fit: contain;">`
+                        ? `<img src="${esc(curImg.url)}" style="max-height: 200px; width: 100%; object-fit: cover; object-position: ${slideFocalX}% ${slideFocalY}%; transform: scale(${slideZoom});">`
                         : `<p style="padding: 24px; color: var(--admin-text-muted); font-size: 0.8125rem; margin: 0;">No image selected</p>`;
                     })()}
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+                    <span id="col-hero-framing-badge" style="font-size: 0.75rem; color: #38BDF8; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); padding: 4px 10px; border-radius: 4px;">
+                      🎯 Framing: (${slideFocalX}%, ${slideFocalY}%) · ${slideZoom}x
+                    </span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-adjust-hero-framing" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
+                      Adjust 16:9 Banner Framing & Live Preview
+                    </button>
                   </div>
                 </div>
               `}
@@ -2882,12 +3128,52 @@ export function mountCatalogSection(section, container, context) {
         bind('#catalog-cancel-hero-slide', () => { editorNode.innerHTML = ''; });
         bind('#catalog-cancel-hero-slide-btn', () => { editorNode.innerHTML = ''; });
 
+        query('#btn-adjust-hero-framing')?.addEventListener('click', () => {
+          const form = query('#catalog-hero-form');
+          const vidId = activeType === 'video' ? (value(form, 'video_asset_id') || null) : null;
+          const imgId = activeType === 'image' ? (value(form, 'image_asset_id') || null) : null;
+          const curAsset = activeType === 'video' ? (vidId ? knownAssets.get(vidId) : null) : (imgId ? knownAssets.get(imgId) : null);
+          const mediaUrl = curAsset?.url || (activeType === 'video' ? slide?.video_url : slide?.image_url);
+
+          if (!mediaUrl) {
+            status(`Please select a ${activeType} asset first to adjust framing.`, true);
+            return;
+          }
+
+          openFramingStudio({
+            mediaUrl,
+            isVideo: activeType === 'video',
+            title: 'Banner 16:9 Smart Framing Studio',
+            aspectRatio: '16:9',
+            initialFocalX: slideFocalX,
+            initialFocalY: slideFocalY,
+            initialZoom: slideZoom,
+            bannerData: {
+              title: (form ? value(form, 'title').trim() : '') || slide?.title || 'AlphaZee Collection',
+              headline: (form ? value(form, 'benefit').trim() : '') || slide?.benefit || 'Exclusive Drop',
+            },
+            onSave: ({ focalX, focalY, zoom }) => {
+              slideFocalX = focalX;
+              slideFocalY = focalY;
+              slideZoom = zoom;
+              const badge = query('#col-hero-framing-badge');
+              if (badge) badge.textContent = `🎯 Framing: (${focalX}%, ${focalY}%) · ${zoom}x`;
+              const previewMedia = query('#col-hero-video-preview video') || query('#col-hero-image-preview img');
+              if (previewMedia) {
+                previewMedia.style.objectPosition = `${focalX}% ${focalY}%`;
+                previewMedia.style.transform = `scale(${zoom})`;
+              }
+              status(`Banner framing updated to (${focalX}%, ${focalY}%, ${zoom}x). Save banner to apply.`);
+            }
+          });
+        });
+
         query('#col-hero-video-select')?.addEventListener('change', e => {
           const asset = knownAssets.get(e.target.value);
           const box = query('#col-hero-video-preview');
           if (box) {
             box.innerHTML = asset && asset.url
-              ? `<video src="${esc(asset.url)}" muted playsinline controls style="max-height: 200px; width: 100%; object-fit: contain;"></video>`
+              ? `<video src="${esc(asset.url)}" muted playsinline controls style="max-height: 200px; width: 100%; object-fit: cover; object-position: ${slideFocalX}% ${slideFocalY}%; transform: scale(${slideZoom});"></video>`
               : `<p style="padding: 24px; color: var(--admin-text-muted); font-size: 0.8125rem; margin: 0;">No video selected</p>`;
           }
         });
@@ -2897,7 +3183,7 @@ export function mountCatalogSection(section, container, context) {
           const box = query('#col-hero-image-preview');
           if (box) {
             box.innerHTML = asset && asset.url
-              ? `<img src="${esc(asset.url)}" style="max-height: 200px; width: 100%; object-fit: contain;">`
+              ? `<img src="${esc(asset.url)}" style="max-height: 200px; width: 100%; object-fit: cover; object-position: ${slideFocalX}% ${slideFocalY}%; transform: scale(${slideZoom});">`
               : `<p style="padding: 24px; color: var(--admin-text-muted); font-size: 0.8125rem; margin: 0;">No image selected</p>`;
           }
         });
@@ -2926,6 +3212,9 @@ export function mountCatalogSection(section, container, context) {
               target_collection_id: value(form, 'target_collection_id') || null,
               is_enabled: form.querySelector('[name="is_enabled"]').checked,
               display_order: slides.length,
+              focal_x: slideFocalX,
+              focal_y: slideFocalY,
+              zoom_scale: slideZoom,
             };
 
             if (isNew) {

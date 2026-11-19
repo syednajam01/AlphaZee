@@ -15,7 +15,7 @@ from app.schemas.media import (
     ProductMediaCommand, CollectionMediaCommand, PosterCommand, StrictCommand,
     AttachMediaCommand, DetachMediaCommand, ReorderMediaCommand, SetRolesCommand,
     HeroSlideCreateCommand, HeroSlideUpdateCommand, HeroSlideReorderCommand,
-    MediaRenameCommand
+    MediaRenameCommand, MediaFramingCommand
 )
 from app.services import media as service
 from app.services import media_storage as storage
@@ -146,6 +146,11 @@ def poster(asset_id: str, payload: PosterCommand, db: Session = Depends(get_db))
 @router.post('/{asset_id}/rename')
 def rename(asset_id: str, payload: MediaRenameCommand, db: Session = Depends(get_db)):
     return persist(db, lambda: service.rename_asset(db, asset_id, payload), lambda a: service.owner_asset(a, db))
+
+
+@router.post('/{asset_id}/framing')
+def framing(asset_id: str, payload: MediaFramingCommand, db: Session = Depends(get_db)):
+    return persist(db, lambda: service.update_media_framing(db, asset_id, payload), lambda a: service.owner_asset(a, db))
 
 
 @router.post('/{asset_id}/delete')

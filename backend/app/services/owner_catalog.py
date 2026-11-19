@@ -121,7 +121,7 @@ def product_response(product):
 
 def collection_response(collection):
     return {field: getattr(collection, field) for field in
-            ('id', 'name', 'slug', 'description', 'display_order', 'is_active', 'edit_version', 'image_url', 'image_media_id', 'hover_image_url', 'hover_image_media_id')}
+            ('id', 'name', 'slug', 'description', 'display_order', 'is_active', 'edit_version', 'image_url', 'image_media_id', 'hover_image_url', 'hover_image_media_id', 'focal_x', 'focal_y', 'zoom_scale', 'hover_focal_x', 'hover_focal_y', 'hover_zoom_scale')}
 
 
 def apply_product(db: Session, product, data):

@@ -88,6 +88,12 @@ class CollectionSchema(BaseModel):
     description: Optional[str] = None
     image_url: Optional[str] = None
     hover_image_url: Optional[str] = None
+    focal_x: int = 50
+    focal_y: int = 50
+    zoom_scale: float = 1.0
+    hover_focal_x: int = 50
+    hover_focal_y: int = 50
+    hover_zoom_scale: float = 1.0
     display_order: int
     product_count: Optional[int] = None
 
@@ -114,6 +120,9 @@ class PublicMediaSchema(BaseModel):
     height: int
     duration_ms: Optional[int] = None
     poster_url: Optional[str] = None
+    focal_x: int = 50
+    focal_y: int = 50
+    zoom_scale: float = 1.0
 
 
 class ProductSummarySchema(BaseModel):
@@ -134,6 +143,12 @@ class ProductSummarySchema(BaseModel):
     collection_ids: list[str] = Field(default_factory=list)
     image_url: Optional[str] = None
     hover_image_url: Optional[str] = None
+    focal_x: int = 50
+    focal_y: int = 50
+    zoom_scale: float = 1.0
+    hover_focal_x: int = 50
+    hover_focal_y: int = 50
+    hover_zoom_scale: float = 1.0
     badge: Optional[str] = None
     is_hero: bool
     image_alt: str = ''
@@ -214,6 +229,9 @@ class HeroSlidePublicSchema(BaseModel):
     image_url: Optional[str] = None
     display_order: int = 0
     is_enabled: bool = True
+    focal_x: int = 50
+    focal_y: int = 50
+    zoom_scale: float = 1.0
     target_product_id: Optional[str] = None
     target_product_slug: Optional[str] = None
     target_collection_id: Optional[str] = None

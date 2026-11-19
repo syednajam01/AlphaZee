@@ -276,6 +276,16 @@ export function createFeaturedProducts(onOpenProductModal, { preview = false, pa
           width: 320,
           height: 426,
         });
+        const fx = product.focal_x != null ? product.focal_x : 50;
+        const fy = product.focal_y != null ? product.focal_y : 50;
+        const zm = product.zoom_scale != null ? product.zoom_scale : 1.0;
+        if (primaryImg.style?.setProperty) {
+          primaryImg.style.setProperty('--card-focal', `${fx}% ${fy}%`);
+          primaryImg.style.setProperty('--card-zoom', String(zm));
+        } else if (primaryImg.style) {
+          primaryImg.style['--card-focal'] = `${fx}% ${fy}%`;
+          primaryImg.style['--card-zoom'] = String(zm);
+        }
         wrapper.appendChild(primaryImg);
 
         if (hoverUrl) {
@@ -288,6 +298,16 @@ export function createFeaturedProducts(onOpenProductModal, { preview = false, pa
             width: 320,
             height: 426,
           });
+          const h_fx = product.hover_focal_x != null ? product.hover_focal_x : 50;
+          const h_fy = product.hover_focal_y != null ? product.hover_focal_y : 50;
+          const h_zm = product.hover_zoom_scale != null ? product.hover_zoom_scale : 1.0;
+          if (secondaryImg.style?.setProperty) {
+            secondaryImg.style.setProperty('--card-hover-focal', `${h_fx}% ${h_fy}%`);
+            secondaryImg.style.setProperty('--card-hover-zoom', String(h_zm));
+          } else if (secondaryImg.style) {
+            secondaryImg.style['--card-hover-focal'] = `${h_fx}% ${h_fy}%`;
+            secondaryImg.style['--card-hover-zoom'] = String(h_zm);
+          }
           wrapper.appendChild(secondaryImg);
         }
       }

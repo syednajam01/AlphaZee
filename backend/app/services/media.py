@@ -22,6 +22,9 @@ def staging_lock_key(identifier):
 
 def public_asset(asset):
     res = {field: getattr(asset, field) for field in ('id', 'kind', 'content_type', 'byte_size', 'width', 'height', 'duration_ms', 'poster_id')} | {'url': f'/api/v1/media/{asset.id}/content'}
+    res['focal_x'] = getattr(asset, 'focal_x', 50) if getattr(asset, 'focal_x', None) is not None else 50
+    res['focal_y'] = getattr(asset, 'focal_y', 50) if getattr(asset, 'focal_y', None) is not None else 50
+    res['zoom_scale'] = getattr(asset, 'zoom_scale', 1.0) if getattr(asset, 'zoom_scale', None) is not None else 1.0
     if getattr(asset, 'kind', None) == 'image':
         res['thumb_url'] = f'/api/v1/media/{asset.id}/content?variant=thumb'
         res['card_url'] = f'/api/v1/media/{asset.id}/content?variant=card'
@@ -45,7 +48,10 @@ def owner_asset(asset, db=None):
 
 def links_response(product):
     return [{'id': link.id, 'asset': public_asset(link.asset), 'role': link.role, 'variant_id': link.variant_id,
-             'display_order': link.display_order, 'alt_text': link.alt_text}
+             'display_order': link.display_order, 'alt_text': link.alt_text,
+             'focal_x': link.focal_x if getattr(link, 'focal_x', None) is not None else 50,
+             'focal_y': link.focal_y if getattr(link, 'focal_y', None) is not None else 50,
+             'zoom_scale': link.zoom_scale if getattr(link, 'zoom_scale', None) is not None else 1.0}
             for link in sorted(product.media_links, key=lambda l: (l.display_order, l.id or 0))]
 
 
@@ -228,6 +234,9 @@ def attach_product_media(db, identifier, command):
         variant_id=command.variant_id,
         display_order=order,
         alt_text=command.alt_text,
+        focal_x=command.focal_x if getattr(command, 'focal_x', None) is not None else getattr(asset, 'focal_x', 50),
+        focal_y=command.focal_y if getattr(command, 'focal_y', None) is not None else getattr(asset, 'focal_y', 50),
+        zoom_scale=command.zoom_scale if getattr(command, 'zoom_scale', None) is not None else getattr(asset, 'zoom_scale', 1.0),
     )
     product.media_links.append(link)
     product.legacy_media = False
@@ -292,12 +301,22 @@ def set_product_roles(db, identifier, command):
                 if l.role == 'primary': db.delete(l)
             db.flush()
             db.expire(product, ['media_links'])
+            fx = command.primary_focal_x if command.primary_focal_x is not None else getattr(primary_asset, 'focal_x', 50)
+            fy = command.primary_focal_y if command.primary_focal_y is not None else getattr(primary_asset, 'focal_y', 50)
+            zm = command.primary_zoom_scale if command.primary_zoom_scale is not None else getattr(primary_asset, 'zoom_scale', 1.0)
             product.media_links.append(ProductMedia(
                 product_id=product.id, asset_id=primary_asset.id, asset=primary_asset,
-                role='primary', display_order=0, alt_text=''
+                role='primary', display_order=0, alt_text='',
+                focal_x=fx, focal_y=fy, zoom_scale=zm
             ))
         elif product.status == 'published':
             raise CatalogError('primary_required', 'Published products require a primary image', 409)
+    else:
+        primary_link = next((l for l in product.media_links if l.role == 'primary'), None)
+        if primary_link:
+            if command.primary_focal_x is not None: primary_link.focal_x = command.primary_focal_x
+            if command.primary_focal_y is not None: primary_link.focal_y = command.primary_focal_y
+            if command.primary_zoom_scale is not None: primary_link.zoom_scale = command.primary_zoom_scale
 
     if 'hover_asset_id' in command.model_fields_set:
         if command.hover_asset_id:
@@ -306,15 +325,25 @@ def set_product_roles(db, identifier, command):
                 if l.role == 'hover_image': db.delete(l)
             db.flush()
             db.expire(product, ['media_links'])
+            h_fx = command.hover_focal_x if command.hover_focal_x is not None else getattr(hover_asset, 'focal_x', 50)
+            h_fy = command.hover_focal_y if command.hover_focal_y is not None else getattr(hover_asset, 'focal_y', 50)
+            h_zm = command.hover_zoom_scale if command.hover_zoom_scale is not None else getattr(hover_asset, 'zoom_scale', 1.0)
             product.media_links.append(ProductMedia(
                 product_id=product.id, asset_id=hover_asset.id, asset=hover_asset,
-                role='hover_image', display_order=0, alt_text=''
+                role='hover_image', display_order=0, alt_text='',
+                focal_x=h_fx, focal_y=h_fy, zoom_scale=h_zm
             ))
         else:
             for l in list(product.media_links):
                 if l.role == 'hover_image': db.delete(l)
             db.flush()
             db.expire(product, ['media_links'])
+    else:
+        hover_link = next((l for l in product.media_links if l.role == 'hover_image'), None)
+        if hover_link:
+            if command.hover_focal_x is not None: hover_link.focal_x = command.hover_focal_x
+            if command.hover_focal_y is not None: hover_link.focal_y = command.hover_focal_y
+            if command.hover_zoom_scale is not None: hover_link.zoom_scale = command.hover_zoom_scale
 
     sync_product_roles(product)
     product.edit_version += 1
@@ -354,6 +383,9 @@ def hero_slide_response(slide):
         'image_url': image['url'] if image else None,
         'display_order': slide.display_order,
         'is_enabled': slide.is_enabled,
+        'focal_x': slide.focal_x if getattr(slide, 'focal_x', None) is not None else 50,
+        'focal_y': slide.focal_y if getattr(slide, 'focal_y', None) is not None else 50,
+        'zoom_scale': slide.zoom_scale if getattr(slide, 'zoom_scale', None) is not None else 1.0,
         'target_product_id': slide.target_product_id,
         'target_collection_id': slide.target_collection_id,
         'product': product_dict,
@@ -403,6 +435,14 @@ def create_hero_slide(db, command):
     current_max = db.scalar(select(func.coalesce(func.max(HeroSlide.display_order), -1)))
     order = command.display_order if command.display_order is not None else current_max + 1
 
+    primary_media = video or poster or image
+    f_x = getattr(command, 'focal_x', None)
+    if f_x is None and primary_media: f_x = getattr(primary_media, 'focal_x', 50)
+    f_y = getattr(command, 'focal_y', None)
+    if f_y is None and primary_media: f_y = getattr(primary_media, 'focal_y', 50)
+    z_m = getattr(command, 'zoom_scale', None)
+    if z_m is None and primary_media: z_m = getattr(primary_media, 'zoom_scale', 1.0)
+
     slide = HeroSlide(
         id=uuid.uuid4().hex,
         title=command.title,
@@ -412,6 +452,9 @@ def create_hero_slide(db, command):
         image_asset_id=image.id if image else None,
         display_order=order,
         is_enabled=command.is_enabled,
+        focal_x=f_x if f_x is not None else 50,
+        focal_y=f_y if f_y is not None else 50,
+        zoom_scale=z_m if z_m is not None else 1.0,
         target_product_id=product.id if product else None,
         target_collection_id=collection.id if collection else None,
         edit_version=1,
@@ -444,6 +487,12 @@ def update_hero_slide(db, identifier, command):
         slide.display_order = command.display_order
     if 'is_enabled' in command.model_fields_set and command.is_enabled is not None:
         slide.is_enabled = command.is_enabled
+    if 'focal_x' in command.model_fields_set and command.focal_x is not None:
+        slide.focal_x = command.focal_x
+    if 'focal_y' in command.model_fields_set and command.focal_y is not None:
+        slide.focal_y = command.focal_y
+    if 'zoom_scale' in command.model_fields_set and command.zoom_scale is not None:
+        slide.zoom_scale = command.zoom_scale
     if 'target_product_id' in command.model_fields_set:
         slide.target_product_id = command.target_product_id
     if 'target_collection_id' in command.model_fields_set:
@@ -480,8 +529,33 @@ def set_collection_media(db, identifier, command):
     asset = ready(db, command.asset_id, 'image') if command.asset_id else None
     collection.image_media_id = asset.id if asset else None
     collection.image_url = public_asset(asset)['url'] if asset else None
+    if command.focal_x is not None:
+        collection.focal_x = command.focal_x
+    elif asset and getattr(asset, 'focal_x', None) is not None:
+        collection.focal_x = asset.focal_x
+    if command.focal_y is not None:
+        collection.focal_y = command.focal_y
+    elif asset and getattr(asset, 'focal_y', None) is not None:
+        collection.focal_y = asset.focal_y
+    if command.zoom_scale is not None:
+        collection.zoom_scale = command.zoom_scale
+    elif asset and getattr(asset, 'zoom_scale', None) is not None:
+        collection.zoom_scale = asset.zoom_scale
     collection.edit_version += 1
     return collection
+
+
+def update_media_framing(db, identifier, command):
+    reference_lock(db)
+    asset = locked(db, MediaAsset, identifier, command.expected_version)
+    if asset.state != 'ready':
+        raise CatalogError('media_not_ready', 'Media asset is not available')
+    asset.focal_x = command.focal_x
+    asset.focal_y = command.focal_y
+    asset.zoom_scale = command.zoom_scale
+    asset.edit_version += 1
+    db.flush()
+    return asset
 
 
 def set_poster(db, identifier, command):

@@ -12,7 +12,11 @@ function createMockElement(tagName) {
     tagName: tagName.toUpperCase(),
     className: '',
     id: '',
-    style: {},
+    style: {
+      setProperty(prop, val) { this[prop] = val; },
+      getPropertyValue(prop) { return this[prop] || ''; },
+      removeProperty(prop) { delete this[prop]; },
+    },
     dataset: {},
     children: [],
     _listeners: {},

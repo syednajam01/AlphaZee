@@ -14,6 +14,9 @@ class MediaLink(BaseModel):
     variant_id: int | None = Field(default=None, strict=True, ge=1)
     display_order: int = Field(default=0, strict=True, ge=0, le=10000)
     alt_text: str = Field(default='', max_length=1000)
+    focal_x: int = Field(default=50, ge=0, le=100)
+    focal_y: int = Field(default=50, ge=0, le=100)
+    zoom_scale: float = Field(default=1.0, ge=1.0, le=2.5)
 
 
 class ProductMediaCommand(StrictCommand):
@@ -22,6 +25,9 @@ class ProductMediaCommand(StrictCommand):
 
 class CollectionMediaCommand(StrictCommand):
     asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+    focal_x: int | None = Field(default=None, ge=0, le=100)
+    focal_y: int | None = Field(default=None, ge=0, le=100)
+    zoom_scale: float | None = Field(default=None, ge=1.0, le=2.5)
 
 
 class PosterCommand(StrictCommand):
@@ -34,6 +40,9 @@ class AttachMediaCommand(StrictCommand):
     variant_id: int | None = Field(default=None, strict=True, ge=1)
     display_order: int | None = Field(default=None, strict=True, ge=0)
     alt_text: str = Field(default='', max_length=1000)
+    focal_x: int = Field(default=50, ge=0, le=100)
+    focal_y: int = Field(default=50, ge=0, le=100)
+    zoom_scale: float = Field(default=1.0, ge=1.0, le=2.5)
 
 
 class DetachMediaCommand(StrictCommand):
@@ -49,6 +58,12 @@ class ReorderMediaCommand(StrictCommand):
 class SetRolesCommand(StrictCommand):
     primary_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     hover_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+    primary_focal_x: int | None = Field(default=None, ge=0, le=100)
+    primary_focal_y: int | None = Field(default=None, ge=0, le=100)
+    primary_zoom_scale: float | None = Field(default=None, ge=1.0, le=2.5)
+    hover_focal_x: int | None = Field(default=None, ge=0, le=100)
+    hover_focal_y: int | None = Field(default=None, ge=0, le=100)
+    hover_zoom_scale: float | None = Field(default=None, ge=1.0, le=2.5)
 
 
 class HeroSlideCreateCommand(BaseModel):
@@ -60,6 +75,9 @@ class HeroSlideCreateCommand(BaseModel):
     image_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     display_order: int | None = Field(default=None, ge=0)
     is_enabled: bool = True
+    focal_x: int = Field(default=50, ge=0, le=100)
+    focal_y: int = Field(default=50, ge=0, le=100)
+    zoom_scale: float = Field(default=1.0, ge=1.0, le=2.5)
     target_product_id: str | None = None
     target_collection_id: str | None = None
 
@@ -72,6 +90,9 @@ class HeroSlideUpdateCommand(StrictCommand):
     image_asset_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     display_order: int | None = Field(default=None, ge=0)
     is_enabled: bool | None = None
+    focal_x: int | None = Field(default=None, ge=0, le=100)
+    focal_y: int | None = Field(default=None, ge=0, le=100)
+    zoom_scale: float | None = Field(default=None, ge=1.0, le=2.5)
     target_product_id: str | None = None
     target_collection_id: str | None = None
 
@@ -82,4 +103,10 @@ class HeroSlideReorderCommand(StrictCommand):
 
 class MediaRenameCommand(StrictCommand):
     name: str = Field(min_length=1, max_length=200)
+
+
+class MediaFramingCommand(StrictCommand):
+    focal_x: int = Field(default=50, ge=0, le=100)
+    focal_y: int = Field(default=50, ge=0, le=100)
+    zoom_scale: float = Field(default=1.0, ge=1.0, le=2.5)
 

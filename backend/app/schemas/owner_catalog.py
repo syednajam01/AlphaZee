@@ -84,6 +84,12 @@ class CollectionCreate(Command):
     is_active: bool = True
     image_media_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     hover_image_media_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+    focal_x: int | None = Field(default=None, ge=0, le=100)
+    focal_y: int | None = Field(default=None, ge=0, le=100)
+    zoom_scale: float | None = Field(default=None, ge=1.0, le=2.5)
+    hover_focal_x: int | None = Field(default=None, ge=0, le=100)
+    hover_focal_y: int | None = Field(default=None, ge=0, le=100)
+    hover_zoom_scale: float | None = Field(default=None, ge=1.0, le=2.5)
 
     _slug = field_validator('slug')(ProductFields.slug_format.__func__)
 
@@ -112,6 +118,12 @@ class CollectionUpdate(Command):
     is_active: bool | None = None
     image_media_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
     hover_image_media_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
+    focal_x: int | None = Field(default=None, ge=0, le=100)
+    focal_y: int | None = Field(default=None, ge=0, le=100)
+    zoom_scale: float | None = Field(default=None, ge=1.0, le=2.5)
+    hover_focal_x: int | None = Field(default=None, ge=0, le=100)
+    hover_focal_y: int | None = Field(default=None, ge=0, le=100)
+    hover_zoom_scale: float | None = Field(default=None, ge=1.0, le=2.5)
 
     @field_validator('name', 'slug', 'display_order', 'is_active')
     @classmethod
