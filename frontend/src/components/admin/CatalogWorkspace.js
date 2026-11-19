@@ -2015,9 +2015,9 @@ export function mountCatalogSection(section, container, context) {
           </svg>
           <div class="upload-text-group">
             <span class="upload-main-title">Click to choose image or video files</span>
-            <span class="upload-sub-desc">JPEG, PNG, WebP (up to 10 MB) · MP4, WebM (up to 100 MB)</span>
+            <span class="upload-sub-desc">JPEG, PNG, WebP, HEIC/HEIF, ProRAW DNG (up to 75 MB) · MP4, MOV, WebM (up to 200 MB)</span>
           </div>
-          <input type="file" id="catalog-file-input" class="visually-hidden-file-input" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple>
+          <input type="file" id="catalog-file-input" class="visually-hidden-file-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/x-adobe-dng,image/tiff,.heic,.heif,.dng,video/mp4,video/quicktime,video/webm,.mov" multiple>
         </label>
       </div>
       <div id="catalog-upload-queue"></div>`;
@@ -2065,8 +2065,16 @@ export function mountCatalogSection(section, container, context) {
     try {
       while (current()) {
         const item = queue.find(x => x.state === 'queued'); if (!item) break;
-        const limit = item.file.type.startsWith('image/') ? 10 * 1024 * 1024 : 100 * 1024 * 1024;
-        if (!['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm'].includes(item.file.type) || !item.file.size || item.file.size > limit) {
+        const ext = item.file.name ? (item.file.name.split('.').pop() || '').toLowerCase() : '';
+        const isImage = item.file.type.startsWith('image/') || ['heic', 'heif', 'dng', 'jpg', 'jpeg', 'png', 'webp'].includes(ext);
+        const limit = isImage ? 75 * 1024 * 1024 : 200 * 1024 * 1024;
+        const supportedTypes = [
+          'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif',
+          'image/x-adobe-dng', 'image/tiff', 'video/mp4', 'video/quicktime', 'video/webm'
+        ];
+        const supportedExts = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'dng', 'mp4', 'mov', 'webm'];
+        const isValidType = supportedTypes.includes(item.file.type) || supportedExts.includes(ext) || !item.file.type;
+        if (!isValidType || !item.file.size || item.file.size > limit) {
           item.state = 'failed'; item.message = 'Choose a supported nonempty file within its size limit.'; renderQueue(); continue;
         }
         item.controller = new AbortController(); controllers.add(item.controller); item.state = 'uploading'; renderQueue();
@@ -2171,7 +2179,7 @@ export function mountCatalogSection(section, container, context) {
               </svg>
               <span>Upload</span>
             </button>
-            <input type="file" id="catalog-media-file-input" class="visually-hidden-file-input" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple>
+            <input type="file" id="catalog-media-file-input" class="visually-hidden-file-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/x-adobe-dng,image/tiff,.heic,.heif,.dng,video/mp4,video/quicktime,video/webm,.mov" multiple>
           </div>
 
           <div class="media-control-search">

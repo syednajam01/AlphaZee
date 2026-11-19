@@ -38,7 +38,7 @@ class LimitedUploadMiddleware:
         try: length = int(headers.get(b'content-length', b'0'))
         except ValueError: length = storage.BODY_LIMIT + 1
         if length < 0 or length > storage.BODY_LIMIT:
-            return await JSONResponse({'detail': {'code': 'media_too_large', 'message': 'Upload request exceeds 101 MiB'}}, status_code=413)(scope, receive, send)
+            return await JSONResponse({'detail': {'code': 'media_too_large', 'message': f'Upload request exceeds {storage.BODY_LIMIT // (1024 * 1024)} MiB'}}, status_code=413)(scope, receive, send)
         size = 0
         async def bounded_receive():
             nonlocal size
@@ -61,7 +61,7 @@ async def upload(request: Request, principal: OwnerPrincipal = Depends(require_o
         except CatalogError as error:
             raise HTTPException(error.status, error.detail) from None
         except StarletteHTTPException as error:
-            if error.detail == 'media_body_limit': raise HTTPException(413, 'Upload exceeds 101 MiB') from None
+            if error.detail == 'media_body_limit': raise HTTPException(413, f'Upload exceeds {storage.BODY_LIMIT // (1024 * 1024)} MiB') from None
             raise
 
 

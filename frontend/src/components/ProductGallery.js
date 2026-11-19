@@ -18,7 +18,7 @@ export function mountProductGallery(host, product, variantId) {
       preloadLink = document.createElement('link');
       preloadLink.rel = 'preload';
       preloadLink.as = 'image';
-      preloadLink.href = toVariantUrl(initialItem.url, 'card');
+      preloadLink.href = toVariantUrl(initialItem.url, 'stage');
       preloadLink.setAttribute('fetchpriority', 'high');
       document.head.appendChild(preloadLink);
     } catch {}
@@ -108,7 +108,7 @@ export function mountProductGallery(host, product, variantId) {
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
         </button>
-        <img class="gallery-lightbox-img" src="${sanitizeMediaUrl(toVariantUrl(item.url, 'full'), '')}" alt="${esc(item.alt_text || product.title)}" />
+        <img class="gallery-lightbox-img" src="${sanitizeMediaUrl(toVariantUrl(item.url, 'zoom'), '')}" alt="${esc(item.alt_text || product.title)}" />
         ${media.length > 1 ? `
           <div class="gallery-lightbox-counter">${mediaIndex + 1} of ${media.length}</div>
         ` : ''}
@@ -200,9 +200,9 @@ export function mountProductGallery(host, product, variantId) {
     } else {
       if (zoomBtn) zoomBtn.style.display = 'flex';
       const image = createSafeImageElement({
-        src: toVariantUrl(item.url, 'card'),
+        src: toVariantUrl(item.url, 'stage'),
         srcset: generateMediaSrcset(item.url),
-        sizes: '(max-width: 768px) 100vw, 800px',
+        sizes: '(max-width: 768px) 100vw, 1200px',
         alt: item.alt_text || product.title,
         className: 'modal-img product-gallery-img',
         loading: index === 0 ? 'eager' : 'lazy',

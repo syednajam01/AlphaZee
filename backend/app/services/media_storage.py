@@ -5,20 +5,62 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import uuid
 import warnings
 from PIL import Image, ImageOps, UnidentifiedImageError
+
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass
+
 from app.config import settings
 from app.services.owner_catalog import CatalogError
 
-IMAGE_LIMIT = 10 * 1024 * 1024
-VIDEO_LIMIT = 100 * 1024 * 1024
-BODY_LIMIT = VIDEO_LIMIT + 1024 * 1024
-PIXEL_LIMIT = 40_000_000
-TYPES = {'.jpg': ('image/jpeg', 'JPEG'), '.jpeg': ('image/jpeg', 'JPEG'),
-         '.png': ('image/png', 'PNG'), '.webp': ('image/webp', 'WEBP'),
-         '.mp4': ('video/mp4', 'h264'), '.webm': ('video/webm', ('vp8', 'vp9'))}
+IMAGE_LIMIT = 75 * 1024 * 1024
+VIDEO_LIMIT = 200 * 1024 * 1024
+BODY_LIMIT = VIDEO_LIMIT + 5 * 1024 * 1024
+PIXEL_LIMIT = 65_000_000
+TYPES = {
+    '.jpg': ('image/jpeg', 'JPEG'),
+    '.jpeg': ('image/jpeg', 'JPEG'),
+    '.png': ('image/png', 'PNG'),
+    '.webp': ('image/webp', 'WEBP'),
+    '.heic': ('image/heic', 'HEIF'),
+    '.heif': ('image/heif', 'HEIF'),
+    '.dng': ('image/x-adobe-dng', ('TIFF', 'DNG')),
+    '.mp4': ('video/mp4', ('h264', 'hevc')),
+    '.mov': ('video/quicktime', ('h264', 'hevc', 'mov')),
+    '.webm': ('video/webm', ('vp8', 'vp9')),
+}
+
+CONTENT_TYPE_ALIASES = {
+    '.jpg': {'image/jpeg'},
+    '.jpeg': {'image/jpeg'},
+    '.png': {'image/png'},
+    '.webp': {'image/webp'},
+    '.heic': {'image/heic', 'image/heif', 'image/jpeg', 'application/octet-stream'},
+    '.heif': {'image/heif', 'image/heic', 'image/jpeg', 'application/octet-stream'},
+    '.dng': {'image/x-adobe-dng', 'image/dng', 'image/tiff', 'application/octet-stream'},
+    '.mp4': {'video/mp4', 'video/x-m4v', 'application/octet-stream'},
+    '.mov': {'video/quicktime', 'video/mp4', 'application/octet-stream'},
+    '.webm': {'video/webm'},
+}
+
+
+def low_priority_cmd(command: list[str]) -> list[str]:
+    """Prefix CPU/IO intensive tasks with lowest scheduling priority on POSIX."""
+    if os.name != 'nt':
+        prefix = []
+        if shutil.which('nice'):
+            prefix.extend(['nice', '-n', '19'])
+        if shutil.which('ionice'):
+            prefix.extend(['ionice', '-c', '3'])
+        return prefix + command
+    return command
 
 
 def paths():
@@ -47,7 +89,9 @@ def object_path(key):
 VARIANT_SPECS = {
     'thumb': {'max_dim': 300, 'quality': 80},
     'card': {'max_dim': 800, 'quality': 82},
-    'full': {'max_dim': 1600, 'quality': 82},
+    'stage': {'max_dim': 1600, 'quality': 84},
+    'full': {'max_dim': 1600, 'quality': 84},
+    'zoom': {'max_dim': 2560, 'quality': 86},
 }
 
 
@@ -131,22 +175,55 @@ def delete_variants(key):
             vfile.unlink(missing_ok=True)
 
 
+def extract_video_poster(video_path: Path, poster_path: Path, max_dim: int = 1600) -> bool:
+    """Extract a representative frame from video as high-quality JPEG poster."""
+    for timestamp in ('0.0', '0.5'):
+        cmd = low_priority_cmd([
+            'ffmpeg', '-y', '-v', 'error', '-nostdin',
+            '-i', str(video_path),
+            '-ss', timestamp,
+            '-vframes', '1',
+            '-vf', f'scale=min({max_dim}\\,iw):-2',
+            '-f', 'image2',
+            '-c:v', 'mjpeg',
+            str(poster_path)
+        ])
+        try:
+            kwargs = {}
+            if os.name == 'nt':
+                kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+            subprocess.run(
+                cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=settings.media_probe_timeout, check=True, **kwargs
+            )
+            if poster_path.is_file() and poster_path.stat().st_size > 0:
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def upload_type(filename, declared_type):
     # Filename is a display label, never a storage path. Reject path/control input.
     if not filename or len(filename) > 200 or re.search(r'[\\/\x00-\x1f\x7f]', filename):
         raise CatalogError('invalid_filename', 'Use a simple filename without paths')
     extension = Path(filename).suffix.lower()
-    if extension not in TYPES or declared_type != TYPES[extension][0]:
-        raise CatalogError('unsupported_media', 'Upload JPEG, PNG, WebP, H.264 MP4 or VP8/VP9 WebM with the correct content type')
-    kind = 'image' if extension not in {'.mp4', '.webm'} else 'video'
+    if extension not in TYPES:
+        raise CatalogError('unsupported_media', 'Upload JPEG, PNG, WebP, HEIC, ProRAW DNG, MP4, MOV, or WebM')
+    allowed = CONTENT_TYPE_ALIASES.get(extension, {TYPES[extension][0]})
+    if declared_type and declared_type not in allowed and declared_type != 'application/octet-stream':
+        raise CatalogError('unsupported_media', 'Upload with a matching content type')
+    kind = 'image' if extension not in {'.mp4', '.webm', '.mov'} else 'video'
     return kind, extension, IMAGE_LIMIT if kind == 'image' else VIDEO_LIMIT
 
 
 def _probe(command, timeout):
     try:
+        kwargs = {}
+        if os.name == 'nt':
+            kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
         result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=timeout, check=True,
-                                **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
+                                stderr=subprocess.PIPE, timeout=timeout, check=True, **kwargs)
         return result.stdout
     except FileNotFoundError:
         raise CatalogError('video_validator_unavailable', 'Video validation requires ffmpeg and ffprobe. Use the Docker API.', 503) from None
@@ -161,8 +238,9 @@ def validate(path: Path, kind, extension):
             with warnings.catch_warnings():
                 warnings.simplefilter('error', Image.DecompressionBombWarning)
                 with Image.open(path) as image:
-                    if image.format != expected or image.width * image.height > PIXEL_LIMIT:
-                        raise CatalogError('invalid_image', 'Image content/type must match and stay under 40 megapixels')
+                    expected_format = expected if isinstance(expected, tuple) else (expected,)
+                    if image.format not in expected_format or image.width * image.height > PIXEL_LIMIT:
+                        raise CatalogError('invalid_image', 'Image content/type must match and stay under 65 megapixels')
                     if getattr(image, 'n_frames', 1) != 1:
                         raise CatalogError('invalid_image', 'Animated images are not supported')
                     image.verify()
@@ -170,21 +248,49 @@ def validate(path: Path, kind, extension):
                     image.load()
                     clean = ImageOps.exif_transpose(image)
                     width, height = clean.size
-                    if expected == 'JPEG': clean = clean.convert('RGB')
+
+                    if extension in ('.heic', '.heif', '.dng', '.jpeg', '.jpg'):
+                        clean = clean.convert('RGB')
+                        save_format = 'JPEG'
+                        out_extension = '.jpg'
+                        out_content_type = 'image/jpeg'
+                        save_kwargs = {'quality': 95}
+                    elif extension == '.png':
+                        if clean.mode not in ('RGB', 'RGBA'):
+                            clean = clean.convert('RGBA' if 'transparency' in clean.info else 'RGB')
+                        save_format = 'PNG'
+                        out_extension = '.png'
+                        out_content_type = 'image/png'
+                        save_kwargs = {}
+                    elif extension == '.webp':
+                        if clean.mode not in ('RGB', 'RGBA'):
+                            clean = clean.convert('RGBA' if 'transparency' in clean.info else 'RGB')
+                        save_format = 'WEBP'
+                        out_extension = '.webp'
+                        out_content_type = 'image/webp'
+                        save_kwargs = {'quality': 92, 'method': 6}
+                    else:
+                        clean = clean.convert('RGB')
+                        save_format = 'JPEG'
+                        out_extension = '.jpg'
+                        out_content_type = 'image/jpeg'
+                        save_kwargs = {'quality': 95}
+
                     clean.info.clear()
                     normalized = path.with_suffix('.clean')
                     try:
-                        clean.save(normalized, format=expected)
+                        clean.save(normalized, format=save_format, **save_kwargs)
                         if normalized.stat().st_size > IMAGE_LIMIT:
-                            raise CatalogError('media_too_large', 'Validated image exceeds 10 MiB', 413)
+                            raise CatalogError('media_too_large', f'Validated image exceeds {IMAGE_LIMIT // (1024 * 1024)} MiB', 413)
                         os.replace(normalized, path)
                     finally:
                         normalized.unlink(missing_ok=True)
             duration_ms = None
-            extension = '.jpg' if extension == '.jpeg' else extension
+            extension = out_extension
+            content_type = out_content_type
         else:
             output = _probe(['ffprobe', '-v', 'error', '-protocol_whitelist', 'file,pipe',
-                '-format_whitelist', 'mov,matroska,webm', '-show_format', '-show_streams', '-of', 'json', str(path)], settings.media_probe_timeout)
+                '-format_whitelist', 'mov,mp4,matroska,webm', '-show_format', '-show_streams', '-of', 'json', str(path)], settings.media_probe_timeout)
             data = json.loads(output)
             streams = data.get('streams', [])
             video = [s for s in streams if s.get('codec_type') == 'video']
@@ -193,23 +299,65 @@ def validate(path: Path, kind, extension):
                 raise CatalogError('invalid_video', 'Provide one video stream with optional audio')
             stream = video[0]
             codec = stream.get('codec_name')
-            if (extension == '.mp4' and (codec != 'h264' or 'mp4' not in formats)) or (extension == '.webm' and (codec not in expected or 'webm' not in formats)):
+            expected_codecs = expected if isinstance(expected, tuple) else (expected,)
+            if codec not in expected_codecs:
                 raise CatalogError('invalid_video', 'Container and codec must match the chosen file type')
-            # WebM is a restricted Matroska container: require its EBML document type.
+
             with path.open('rb') as source: header = source.read(4096)
             if extension == '.webm' and b'\x42\x82\x84webm' not in header:
                 raise CatalogError('invalid_video', 'Expected a WebM container')
-            if extension == '.mp4' and (header[4:8] != b'ftyp' or header[8:12] not in {
-                    b'isom', b'iso2', b'iso3', b'iso4', b'iso5', b'iso6', b'avc1', b'mp41', b'mp42', b'M4V ', b'dash', b'cmfc', b'cmfs'}):
-                raise CatalogError('invalid_video', 'Expected an MP4 container with a supported file-type brand')
-            width, height = int(stream['width']), int(stream['height'])
-            duration = float(data['format']['duration'])
+            if extension in ('.mp4', '.mov') and b'ftyp' not in header[:32] and b'moov' not in header[:32] and b'wide' not in header[:32] and b'mdat' not in header[:32]:
+                raise CatalogError('invalid_video', 'Expected an MP4 or QuickTime MOV container with supported brand')
+
+            width, height = int(stream.get('width', 0)), int(stream.get('height', 0))
+            duration = float(data.get('format', {}).get('duration') or stream.get('duration') or 0)
             if width <= 0 or height <= 0 or width * height > PIXEL_LIMIT or not math.isfinite(duration) or not 0 < duration <= 120:
-                raise CatalogError('invalid_video', 'Video must be at most 120 seconds and 40 megapixels')
-            # Probe alone accepts corrupt/truncated payloads. Decode all frames, bounded.
-            _probe(['ffmpeg', '-v', 'error', '-xerror', '-nostdin', '-threads', '2', '-protocol_whitelist', 'file,pipe',
-                    '-format_whitelist', 'mov,matroska,webm', '-i', str(path), '-map', '0:v:0', '-f', 'null', '-'], settings.media_decode_timeout)
+                raise CatalogError('invalid_video', 'Video must be at most 120 seconds and 65 megapixels')
+
+            pix_fmt = stream.get('pix_fmt', '')
+            color_primaries = stream.get('color_primaries', '')
+            color_space = stream.get('color_space', '')
+            is_hdr = '10' in pix_fmt or color_primaries in ('bt2020',) or color_space in ('bt2020nc', 'bt2020c')
+            needs_transcode = (extension == '.mov') or (codec == 'hevc') or is_hdr
+
+            if needs_transcode:
+                normalized = path.with_suffix('.transcoded.mp4')
+                transcode_cmd = low_priority_cmd([
+                    'ffmpeg', '-y', '-v', 'error', '-nostdin', '-threads', '2',
+                    '-protocol_whitelist', 'file,pipe',
+                    '-i', str(path),
+                    '-vf', 'scale=out_color_matrix=bt709,format=yuv420p',
+                    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22',
+                    '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-movflags', '+faststart',
+                    str(normalized)
+                ])
+                try:
+                    _probe(transcode_cmd, max(settings.media_decode_timeout, 120))
+                    if normalized.stat().st_size > VIDEO_LIMIT:
+                        raise CatalogError('media_too_large', f'Transcoded video exceeds {VIDEO_LIMIT // (1024 * 1024)} MiB', 413)
+                    os.replace(normalized, path)
+                    extension = '.mp4'
+                    content_type = 'video/mp4'
+                    reprobe_out = _probe(['ffprobe', '-v', 'error', '-show_format', '-show_streams', '-of', 'json', str(path)], settings.media_probe_timeout)
+                    reprobe_data = json.loads(reprobe_out)
+                    v_stream = [s for s in reprobe_data.get('streams', []) if s.get('codec_type') == 'video'][0]
+                    width, height = int(v_stream['width']), int(v_stream['height'])
+                    duration = float(reprobe_data.get('format', {}).get('duration') or v_stream.get('duration') or duration)
+                finally:
+                    normalized.unlink(missing_ok=True)
+            else:
+                _probe(low_priority_cmd(['ffmpeg', '-v', 'error', '-xerror', '-nostdin', '-threads', '2',
+                                         '-protocol_whitelist', 'file,pipe',
+                                         '-format_whitelist', 'mov,mp4,matroska,webm',
+                                         '-i', str(path), '-map', '0:v:0', '-f', 'null', '-']), settings.media_decode_timeout)
+                content_type = TYPES[extension][0]
+                if isinstance(content_type, tuple):
+                    content_type = content_type[0]
+
             duration_ms = max(1, math.ceil(duration * 1000))
+
         digest = hashlib.sha256()
         with path.open('rb') as source:
             for chunk in iter(lambda: source.read(1024 * 1024), b''): digest.update(chunk)

@@ -68,7 +68,7 @@ export function sanitizeMediaUrl(url, fallback = PLACEHOLDER_IMAGE_URL) {
 /**
  * Convert a catalog media URL to a responsive variant URL (?variant=thumb|card|full).
  * @param {string|null|undefined} url
- * @param {'thumb'|'card'|'full'} variant
+ * @param {'thumb'|'card'|'stage'|'full'|'zoom'} variant
  * @returns {string}
  */
 export function toVariantUrl(url, variant) {
@@ -87,8 +87,9 @@ export function toVariantUrl(url, variant) {
 export function generateMediaSrcset(url) {
   if (!url || typeof url !== 'string' || !url.includes('/api/v1/media/')) return '';
   const cardUrl = toVariantUrl(url, 'card');
-  const fullUrl = toVariantUrl(url, 'full');
-  return `${cardUrl} 800w, ${fullUrl} 1600w`;
+  const stageUrl = toVariantUrl(url, 'stage');
+  const zoomUrl = toVariantUrl(url, 'zoom');
+  return `${cardUrl} 800w, ${stageUrl} 1600w, ${zoomUrl} 2560w`;
 }
 
 /**

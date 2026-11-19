@@ -25,10 +25,15 @@ def public_asset(asset):
     if getattr(asset, 'kind', None) == 'image':
         res['thumb_url'] = f'/api/v1/media/{asset.id}/content?variant=thumb'
         res['card_url'] = f'/api/v1/media/{asset.id}/content?variant=card'
+        res['stage_url'] = f'/api/v1/media/{asset.id}/content?variant=stage'
         res['full_url'] = f'/api/v1/media/{asset.id}/content?variant=full'
+        res['zoom_url'] = f'/api/v1/media/{asset.id}/content?variant=zoom'
     elif getattr(asset, 'poster_id', None):
         res['thumb_url'] = f'/api/v1/media/{asset.id}/content?variant=thumb'
         res['card_url'] = f'/api/v1/media/{asset.id}/content?variant=card'
+        res['stage_url'] = f'/api/v1/media/{asset.id}/content?variant=stage'
+        res['full_url'] = f'/api/v1/media/{asset.id}/content?variant=full'
+        res['zoom_url'] = f'/api/v1/media/{asset.id}/content?variant=zoom'
     return res
 
 
@@ -86,12 +91,37 @@ def ingest(db, upload, owner):
             try: os.fsync(descriptor)
             finally: os.close(descriptor)
         # A crash after rename leaves an unreferenced object; age-based cleanup handles it.
+        creator_id = owner.owner.user_id if hasattr(owner, 'owner') and hasattr(owner.owner, 'user_id') else (getattr(owner, 'user_id', None) or getattr(owner, 'id', None))
         asset = MediaAsset(id=identifier, storage_key=key, original_name=upload.filename,
-                           creator_id=owner.owner.user_id, state='ready', **metadata)
+                           creator_id=creator_id, state='ready', **metadata)
         db.add(asset)
         db.flush()
         if kind == 'image':
             storage.generate_all_variants(key)
+        elif kind == 'video':
+            try:
+                poster_id = uuid.uuid4().hex
+                poster_staging = staging / (poster_id + '.upload')
+                if storage.extract_video_poster(final, poster_staging):
+                    p_meta, p_ext = storage.validate(poster_staging, 'image', '.jpg')
+                    p_key = poster_id + p_ext
+                    p_final = storage.object_path(p_key)
+                    os.replace(poster_staging, p_final)
+                    poster_asset = MediaAsset(
+                        id=poster_id,
+                        storage_key=p_key,
+                        original_name=f"{upload.filename} poster",
+                        creator_id=creator_id,
+                        state='ready',
+                        **p_meta
+                    )
+                    db.add(poster_asset)
+                    db.flush()
+                    storage.generate_all_variants(p_key)
+                    asset.poster_id = poster_asset.id
+                    db.flush()
+            except Exception:
+                pass
         result = owner_asset(asset)
         commit_started = True
         db.commit()
