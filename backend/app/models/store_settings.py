@@ -95,6 +95,44 @@ class StoreSettings(Base):
         nullable=False,
     )
 
+    # Storefront Homepage Sections & FAQ Copy
+    homepage_collections_title: Mapped[str] = mapped_column(
+        String(100),
+        default='Shop by collection',
+        server_default='Shop by collection',
+        nullable=False,
+    )
+    homepage_collections_subtitle: Mapped[str] = mapped_column(
+        String(255),
+        default='A place for every part of your wardrobe.',
+        server_default='A place for every part of your wardrobe.',
+        nullable=False,
+    )
+    homepage_products_title: Mapped[str] = mapped_column(
+        String(100),
+        default='The current edit',
+        server_default='The current edit',
+        nullable=False,
+    )
+    homepage_products_subtitle: Mapped[str] = mapped_column(
+        String(255),
+        default='A curated selection of our latest pieces.',
+        server_default='A curated selection of our latest pieces.',
+        nullable=False,
+    )
+    faq_section_title: Mapped[str] = mapped_column(
+        String(100),
+        default='Before you order',
+        server_default='Before you order',
+        nullable=False,
+    )
+    faq_section_subtitle: Mapped[str] = mapped_column(
+        String(255),
+        default='A few useful answers, all in one place.',
+        server_default='A few useful answers, all in one place.',
+        nullable=False,
+    )
+
     # Legal & Policies (Draft vs Published)
     delivery_policy_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_policy_status: Mapped[str] = mapped_column(String(20), default='draft', nullable=False)

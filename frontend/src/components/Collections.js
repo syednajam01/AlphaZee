@@ -1,4 +1,4 @@
-import { fetchCollections } from '../utils/api.js';
+import { fetchCollections, fetchPublicStoreSettings } from '../utils/api.js';
 import { escapeHtml, sanitizeMediaUrl, createSafeImageElement, toVariantUrl } from '../utils/dom.js';
 
 export function createCollectionsSection(onSelectCollection, { limit = 3, onNavigate } = {}) {
@@ -25,6 +25,19 @@ export function createCollectionsSection(onSelectCollection, { limit = 3, onNavi
   `;
 
   section.appendChild(container);
+
+  // Load dynamic headings from store settings
+  fetchPublicStoreSettings().then(settings => {
+    if (!settings) return;
+    const titleEl = container.querySelector('.section-title');
+    const subEl = container.querySelector('.section-subtitle');
+    if (titleEl && settings.homepage_collections_title) {
+      titleEl.textContent = settings.homepage_collections_title;
+    }
+    if (subEl && settings.homepage_collections_subtitle) {
+      subEl.textContent = settings.homepage_collections_subtitle;
+    }
+  }).catch(() => {});
 
   const grid = container.querySelector('#collections-grid-container');
   const moreContainer = container.querySelector('#collections-more-container');

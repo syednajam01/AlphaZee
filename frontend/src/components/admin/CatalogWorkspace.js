@@ -72,14 +72,20 @@ export function mountCatalogSection(section, container, context) {
   let productsPage = 1, productFilter = { search: '', status: '', collection_id: '' };
   let collectionSearchText = '';
   let colHeadingsOpen = false;
+  let colScope = 'collections_page'; // 'collections_page' | 'homepage'
   let colPageTitle = 'All Collections';
   let colPageSubtitle = 'Explore our complete range of curated wardrobe edits.';
+  let hpColTitle = 'Shop by collection';
+  let hpColSubtitle = 'A place for every part of your wardrobe.';
   let colHeadingsLoaded = false;
   let colHeadingsSaving = false;
   let colHeadingsAlert = '';
   let prodHeadingsOpen = false;
+  let prodScope = 'products_page'; // 'products_page' | 'homepage'
   let prodPageTitle = 'All Products';
   let prodPageSubtitle = 'Find a piece that feels like you. Explore our complete catalog.';
+  let hpProdTitle = 'The current edit';
+  let hpProdSubtitle = 'A curated selection of our latest pieces.';
   let prodHeadingsLoaded = false;
   let prodHeadingsSaving = false;
   let prodHeadingsAlert = '';
@@ -149,6 +155,8 @@ export function mountCatalogSection(section, container, context) {
         if (settings) {
           prodPageTitle = settings.products_page_title || 'All Products';
           prodPageSubtitle = settings.products_page_subtitle || 'Find a piece that feels like you. Explore our complete catalog.';
+          hpProdTitle = settings.homepage_products_title || 'The current edit';
+          hpProdSubtitle = settings.homepage_products_subtitle || 'A curated selection of our latest pieces.';
           prodHeadingsLoaded = true;
         }
       } catch (err) {
@@ -211,29 +219,38 @@ export function mountCatalogSection(section, container, context) {
             <div class="col-headings-title-wrap">
               <span class="col-headings-icon-badge">Aa</span>
               <div>
-                <h4 class="col-headings-heading">Storefront Products Page Headings</h4>
-                <p class="col-headings-desc">Configure the hero title and introductory deck text displayed on alphazee.tech/products.</p>
+                <h4 class="col-headings-heading">Storefront Products & Section Headings</h4>
+                <p class="col-headings-desc">Configure the titles and introductory deck text displayed on alphazee.tech/products and the main homepage.</p>
               </div>
             </div>
-            <span class="col-headings-live-badge">Live on alphazee.tech/products</span>
+            <span class="col-headings-live-badge">${prodScope === 'homepage' ? 'Live on alphazee.tech (Home)' : 'Live on alphazee.tech/products'}</span>
+          </div>
+
+          <div class="col-headings-scope-bar" style="display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--color-border); padding-bottom: 10px;">
+            <button type="button" class="btn btn-sm ${prodScope === 'products_page' ? 'btn-primary' : 'btn-secondary'} btn-scope-prod" data-scope="products_page" style="font-size: 0.75rem; padding: 4px 10px;">
+              Catalog Page (/products)
+            </button>
+            <button type="button" class="btn btn-sm ${prodScope === 'homepage' ? 'btn-primary' : 'btn-secondary'} btn-scope-prod" data-scope="homepage" style="font-size: 0.75rem; padding: 4px 10px;">
+              Homepage Section (The current edit)
+            </button>
           </div>
 
           <div class="col-headings-body-grid">
             <div class="col-headings-inputs">
               <div class="form-group" style="margin-bottom: 12px;">
                 <div class="col-headings-label-row">
-                  <label for="input-prod-headings-title" class="col-headings-input-label">Page Heading (H1)</label>
-                  <span id="prod-title-counter" class="col-headings-char-counter">${prodPageTitle.length} / 100</span>
+                  <label for="input-prod-headings-title" class="col-headings-input-label">${prodScope === 'homepage' ? 'Homepage Section Heading' : 'Page Heading (H1)'}</label>
+                  <span id="prod-title-counter" class="col-headings-char-counter">${(prodScope === 'homepage' ? hpProdTitle : prodPageTitle).length} / 100</span>
                 </div>
-                <input type="text" id="input-prod-headings-title" class="col-headings-input" maxlength="100" value="${esc(prodPageTitle)}" placeholder="All Products" aria-label="Page Heading" />
+                <input type="text" id="input-prod-headings-title" class="col-headings-input" maxlength="100" value="${esc(prodScope === 'homepage' ? hpProdTitle : prodPageTitle)}" placeholder="${prodScope === 'homepage' ? 'The current edit' : 'All Products'}" aria-label="Page Heading" />
               </div>
 
               <div class="form-group" style="margin-bottom: 14px;">
                 <div class="col-headings-label-row">
-                  <label for="input-prod-headings-subtitle" class="col-headings-input-label">Page Subtitle / Deck Line</label>
-                  <span id="prod-subtitle-counter" class="col-headings-char-counter">${prodPageSubtitle.length} / 255</span>
+                  <label for="input-prod-headings-subtitle" class="col-headings-input-label">${prodScope === 'homepage' ? 'Homepage Section Subtitle / Deck' : 'Page Subtitle / Deck Line'}</label>
+                  <span id="prod-subtitle-counter" class="col-headings-char-counter">${(prodScope === 'homepage' ? hpProdSubtitle : prodPageSubtitle).length} / 255</span>
                 </div>
-                <textarea id="input-prod-headings-subtitle" rows="2" class="col-headings-textarea" maxlength="255" placeholder="Find a piece that feels like you. Explore our complete catalog." aria-label="Page Subtitle">${esc(prodPageSubtitle)}</textarea>
+                <textarea id="input-prod-headings-subtitle" rows="2" class="col-headings-textarea" maxlength="255" placeholder="${prodScope === 'homepage' ? 'A curated selection of our latest pieces.' : 'Find a piece that feels like you. Explore our complete catalog.'}" aria-label="Page Subtitle">${esc(prodScope === 'homepage' ? hpProdSubtitle : prodPageSubtitle)}</textarea>
               </div>
 
               <div class="col-headings-actions-row">
@@ -253,16 +270,16 @@ export function mountCatalogSection(section, container, context) {
             <div class="col-headings-preview-card">
               <div class="preview-header-bar">
                 <span class="preview-tag">Live Storefront Preview</span>
-                <span class="preview-url">alphazee.tech/products</span>
+                <span class="preview-url">${prodScope === 'homepage' ? 'alphazee.tech (Section)' : 'alphazee.tech/products'}</span>
               </div>
               <div class="preview-content">
                 <div class="preview-breadcrumbs">
                   <span class="preview-crumb-home">Home</span>
                   <span class="preview-crumb-sep">/</span>
-                  <span class="preview-crumb-curr">Products</span>
+                  <span class="preview-crumb-curr">${prodScope === 'homepage' ? 'Featured Section' : 'Products'}</span>
                 </div>
-                <h3 id="preview-prod-title" class="preview-col-h1">${esc(prodPageTitle || 'All Products')}</h3>
-                <p id="preview-prod-subtitle" class="preview-col-p">${esc(prodPageSubtitle || 'Find a piece that feels like you. Explore our complete catalog.')}</p>
+                <h3 id="preview-prod-title" class="preview-col-h1">${esc((prodScope === 'homepage' ? hpProdTitle : prodPageTitle) || (prodScope === 'homepage' ? 'The current edit' : 'All Products'))}</h3>
+                <p id="preview-prod-subtitle" class="preview-col-p">${esc((prodScope === 'homepage' ? hpProdSubtitle : prodPageSubtitle) || (prodScope === 'homepage' ? 'A curated selection of our latest pieces.' : 'Find a piece that feels like you. Explore our complete catalog.'))}</p>
               </div>
             </div>
           </div>
@@ -396,6 +413,13 @@ export function mountCatalogSection(section, container, context) {
     });
 
     if (prodHeadingsOpen) {
+      container.querySelectorAll('.btn-scope-prod').forEach(btn => {
+        btn.addEventListener('click', () => {
+          prodScope = btn.dataset.scope || 'products_page';
+          products();
+        });
+      });
+
       const titleInput = query('#input-prod-headings-title');
       const subtitleInput = query('#input-prod-headings-subtitle');
       const previewTitle = query('#preview-prod-title');
@@ -404,26 +428,49 @@ export function mountCatalogSection(section, container, context) {
       const subtitleCounter = query('#prod-subtitle-counter');
 
       titleInput?.addEventListener('input', e => {
-        prodPageTitle = e.target.value;
-        if (titleCounter) titleCounter.textContent = `${prodPageTitle.length} / 100`;
-        if (previewTitle) previewTitle.textContent = prodPageTitle || 'All Products';
+        if (prodScope === 'homepage') {
+          hpProdTitle = e.target.value;
+          if (titleCounter) titleCounter.textContent = `${hpProdTitle.length} / 100`;
+          if (previewTitle) previewTitle.textContent = hpProdTitle || 'The current edit';
+        } else {
+          prodPageTitle = e.target.value;
+          if (titleCounter) titleCounter.textContent = `${prodPageTitle.length} / 100`;
+          if (previewTitle) previewTitle.textContent = prodPageTitle || 'All Products';
+        }
       });
 
       subtitleInput?.addEventListener('input', e => {
-        prodPageSubtitle = e.target.value;
-        if (subtitleCounter) subtitleCounter.textContent = `${prodPageSubtitle.length} / 255`;
-        if (previewSubtitle) previewSubtitle.textContent = prodPageSubtitle || 'Find a piece that feels like you. Explore our complete catalog.';
+        if (prodScope === 'homepage') {
+          hpProdSubtitle = e.target.value;
+          if (subtitleCounter) subtitleCounter.textContent = `${hpProdSubtitle.length} / 255`;
+          if (previewSubtitle) previewSubtitle.textContent = hpProdSubtitle || 'A curated selection of our latest pieces.';
+        } else {
+          prodPageSubtitle = e.target.value;
+          if (subtitleCounter) subtitleCounter.textContent = `${prodPageSubtitle.length} / 255`;
+          if (previewSubtitle) previewSubtitle.textContent = prodPageSubtitle || 'Find a piece that feels like you. Explore our complete catalog.';
+        }
       });
 
       bind('#btn-reset-prod-headings', () => {
-        prodPageTitle = 'All Products';
-        prodPageSubtitle = 'Find a piece that feels like you. Explore our complete catalog.';
-        if (titleInput) titleInput.value = prodPageTitle;
-        if (subtitleInput) subtitleInput.value = prodPageSubtitle;
-        if (titleCounter) titleCounter.textContent = `${prodPageTitle.length} / 100`;
-        if (subtitleCounter) subtitleCounter.textContent = `${prodPageSubtitle.length} / 255`;
-        if (previewTitle) previewTitle.textContent = prodPageTitle;
-        if (previewSubtitle) previewSubtitle.textContent = prodPageSubtitle;
+        if (prodScope === 'homepage') {
+          hpProdTitle = 'The current edit';
+          hpProdSubtitle = 'A curated selection of our latest pieces.';
+          if (titleInput) titleInput.value = hpProdTitle;
+          if (subtitleInput) subtitleInput.value = hpProdSubtitle;
+          if (titleCounter) titleCounter.textContent = `${hpProdTitle.length} / 100`;
+          if (subtitleCounter) subtitleCounter.textContent = `${hpProdSubtitle.length} / 255`;
+          if (previewTitle) previewTitle.textContent = hpProdTitle;
+          if (previewSubtitle) previewSubtitle.textContent = hpProdSubtitle;
+        } else {
+          prodPageTitle = 'All Products';
+          prodPageSubtitle = 'Find a piece that feels like you. Explore our complete catalog.';
+          if (titleInput) titleInput.value = prodPageTitle;
+          if (subtitleInput) subtitleInput.value = prodPageSubtitle;
+          if (titleCounter) titleCounter.textContent = `${prodPageTitle.length} / 100`;
+          if (subtitleCounter) subtitleCounter.textContent = `${prodPageSubtitle.length} / 255`;
+          if (previewTitle) previewTitle.textContent = prodPageTitle;
+          if (previewSubtitle) previewSubtitle.textContent = prodPageSubtitle;
+        }
       });
 
       bind('#btn-save-prod-headings', async () => {
@@ -438,7 +485,9 @@ export function mountCatalogSection(section, container, context) {
         try {
           const payload = {
             products_page_title: (prodPageTitle || '').trim() || 'All Products',
-            products_page_subtitle: (prodPageSubtitle || '').trim() || 'Find a piece that feels like you. Explore our complete catalog.'
+            products_page_subtitle: (prodPageSubtitle || '').trim() || 'Find a piece that feels like you. Explore our complete catalog.',
+            homepage_products_title: (hpProdTitle || '').trim() || 'The current edit',
+            homepage_products_subtitle: (hpProdSubtitle || '').trim() || 'A curated selection of our latest pieces.'
           };
           await api.updateAdminStoreSettings(payload);
           prodHeadingsAlert = 'Headings saved successfully.';
@@ -1418,6 +1467,8 @@ export function mountCatalogSection(section, container, context) {
         if (settings) {
           colPageTitle = settings.collections_page_title || 'All Collections';
           colPageSubtitle = settings.collections_page_subtitle || 'Explore our complete range of curated wardrobe edits.';
+          hpColTitle = settings.homepage_collections_title || 'Shop by collection';
+          hpColSubtitle = settings.homepage_collections_subtitle || 'A place for every part of your wardrobe.';
           colHeadingsLoaded = true;
         }
       } catch (err) {
@@ -1461,29 +1512,38 @@ export function mountCatalogSection(section, container, context) {
             <div class="col-headings-title-wrap">
               <span class="col-headings-icon-badge">Aa</span>
               <div>
-                <h4 class="col-headings-heading">Storefront Collections Page Headings</h4>
-                <p class="col-headings-desc">Configure the hero title and introductory deck text displayed on alphazee.tech/collections.</p>
+                <h4 class="col-headings-heading">Storefront Collections & Section Headings</h4>
+                <p class="col-headings-desc">Configure the titles and introductory deck text displayed on alphazee.tech/collections and the main homepage.</p>
               </div>
             </div>
-            <span class="col-headings-live-badge">Live on alphazee.tech/collections</span>
+            <span class="col-headings-live-badge">${colScope === 'homepage' ? 'Live on alphazee.tech (Home)' : 'Live on alphazee.tech/collections'}</span>
+          </div>
+
+          <div class="col-headings-scope-bar" style="display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--color-border); padding-bottom: 10px;">
+            <button type="button" class="btn btn-sm ${colScope === 'collections_page' ? 'btn-primary' : 'btn-secondary'} btn-scope-col" data-scope="collections_page" style="font-size: 0.75rem; padding: 4px 10px;">
+              Collections Page (/collections)
+            </button>
+            <button type="button" class="btn btn-sm ${colScope === 'homepage' ? 'btn-primary' : 'btn-secondary'} btn-scope-col" data-scope="homepage" style="font-size: 0.75rem; padding: 4px 10px;">
+              Homepage Section (Shop by collection)
+            </button>
           </div>
 
           <div class="col-headings-body-grid">
             <div class="col-headings-inputs">
               <div class="form-group" style="margin-bottom: 12px;">
                 <div class="col-headings-label-row">
-                  <label for="input-col-headings-title" class="col-headings-input-label">Page Heading (H1)</label>
-                  <span id="col-title-counter" class="col-headings-char-counter">${colPageTitle.length} / 100</span>
+                  <label for="input-col-headings-title" class="col-headings-input-label">${colScope === 'homepage' ? 'Homepage Section Heading' : 'Page Heading (H1)'}</label>
+                  <span id="col-title-counter" class="col-headings-char-counter">${(colScope === 'homepage' ? hpColTitle : colPageTitle).length} / 100</span>
                 </div>
-                <input type="text" id="input-col-headings-title" class="col-headings-input" maxlength="100" value="${esc(colPageTitle)}" placeholder="All Collections" aria-label="Page Heading" />
+                <input type="text" id="input-col-headings-title" class="col-headings-input" maxlength="100" value="${esc(colScope === 'homepage' ? hpColTitle : colPageTitle)}" placeholder="${colScope === 'homepage' ? 'Shop by collection' : 'All Collections'}" aria-label="Page Heading" />
               </div>
 
               <div class="form-group" style="margin-bottom: 14px;">
                 <div class="col-headings-label-row">
-                  <label for="input-col-headings-subtitle" class="col-headings-input-label">Page Subtitle / Deck Line</label>
-                  <span id="col-subtitle-counter" class="col-headings-char-counter">${colPageSubtitle.length} / 255</span>
+                  <label for="input-col-headings-subtitle" class="col-headings-input-label">${colScope === 'homepage' ? 'Homepage Section Subtitle / Deck' : 'Page Subtitle / Deck Line'}</label>
+                  <span id="col-subtitle-counter" class="col-headings-char-counter">${(colScope === 'homepage' ? hpColSubtitle : colPageSubtitle).length} / 255</span>
                 </div>
-                <textarea id="input-col-headings-subtitle" rows="2" class="col-headings-textarea" maxlength="255" placeholder="Explore our complete range of curated wardrobe edits." aria-label="Page Subtitle">${esc(colPageSubtitle)}</textarea>
+                <textarea id="input-col-headings-subtitle" rows="2" class="col-headings-textarea" maxlength="255" placeholder="${colScope === 'homepage' ? 'A place for every part of your wardrobe.' : 'Explore our complete range of curated wardrobe edits.'}" aria-label="Page Subtitle">${esc(colScope === 'homepage' ? hpColSubtitle : colPageSubtitle)}</textarea>
               </div>
 
               <div class="col-headings-actions-row">
@@ -1503,16 +1563,16 @@ export function mountCatalogSection(section, container, context) {
             <div class="col-headings-preview-card">
               <div class="preview-header-bar">
                 <span class="preview-tag">Live Storefront Preview</span>
-                <span class="preview-url">alphazee.tech/collections</span>
+                <span class="preview-url">${colScope === 'homepage' ? 'alphazee.tech (Section)' : 'alphazee.tech/collections'}</span>
               </div>
               <div class="preview-content">
                 <div class="preview-breadcrumbs">
                   <span class="preview-crumb-home">Home</span>
                   <span class="preview-crumb-sep">/</span>
-                  <span class="preview-crumb-curr">Collections</span>
+                  <span class="preview-crumb-curr">${colScope === 'homepage' ? 'Collections Section' : 'Collections'}</span>
                 </div>
-                <h3 id="preview-col-title" class="preview-col-h1">${esc(colPageTitle || 'All Collections')}</h3>
-                <p id="preview-col-subtitle" class="preview-col-p">${esc(colPageSubtitle || 'Explore our complete range of curated wardrobe edits.')}</p>
+                <h3 id="preview-col-title" class="preview-col-h1">${esc((colScope === 'homepage' ? hpColTitle : colPageTitle) || (colScope === 'homepage' ? 'Shop by collection' : 'All Collections'))}</h3>
+                <p id="preview-col-subtitle" class="preview-col-p">${esc((colScope === 'homepage' ? hpColSubtitle : colPageSubtitle) || (colScope === 'homepage' ? 'A place for every part of your wardrobe.' : 'Explore our complete range of curated wardrobe edits.'))}</p>
               </div>
               <div class="preview-footer-bar">
                 <span>Collections grid renders below</span>
@@ -1599,6 +1659,13 @@ export function mountCatalogSection(section, container, context) {
     });
 
     if (colHeadingsOpen) {
+      container.querySelectorAll('.btn-scope-col').forEach(btn => {
+        btn.addEventListener('click', () => {
+          colScope = btn.dataset.scope || 'collections_page';
+          collectionList();
+        });
+      });
+
       const titleInput = query('#input-col-headings-title');
       const subtitleInput = query('#input-col-headings-subtitle');
       const previewTitle = query('#preview-col-title');
@@ -1607,26 +1674,49 @@ export function mountCatalogSection(section, container, context) {
       const subtitleCounter = query('#col-subtitle-counter');
 
       titleInput?.addEventListener('input', e => {
-        colPageTitle = e.target.value;
-        if (titleCounter) titleCounter.textContent = `${colPageTitle.length} / 100`;
-        if (previewTitle) previewTitle.textContent = colPageTitle || 'All Collections';
+        if (colScope === 'homepage') {
+          hpColTitle = e.target.value;
+          if (titleCounter) titleCounter.textContent = `${hpColTitle.length} / 100`;
+          if (previewTitle) previewTitle.textContent = hpColTitle || 'Shop by collection';
+        } else {
+          colPageTitle = e.target.value;
+          if (titleCounter) titleCounter.textContent = `${colPageTitle.length} / 100`;
+          if (previewTitle) previewTitle.textContent = colPageTitle || 'All Collections';
+        }
       });
 
       subtitleInput?.addEventListener('input', e => {
-        colPageSubtitle = e.target.value;
-        if (subtitleCounter) subtitleCounter.textContent = `${colPageSubtitle.length} / 255`;
-        if (previewSubtitle) previewSubtitle.textContent = colPageSubtitle || 'Explore our complete range of curated wardrobe edits.';
+        if (colScope === 'homepage') {
+          hpColSubtitle = e.target.value;
+          if (subtitleCounter) subtitleCounter.textContent = `${hpColSubtitle.length} / 255`;
+          if (previewSubtitle) previewSubtitle.textContent = hpColSubtitle || 'A place for every part of your wardrobe.';
+        } else {
+          colPageSubtitle = e.target.value;
+          if (subtitleCounter) subtitleCounter.textContent = `${colPageSubtitle.length} / 255`;
+          if (previewSubtitle) previewSubtitle.textContent = colPageSubtitle || 'Explore our complete range of curated wardrobe edits.';
+        }
       });
 
       bind('#btn-reset-col-headings', () => {
-        colPageTitle = 'All Collections';
-        colPageSubtitle = 'Explore our complete range of curated wardrobe edits.';
-        if (titleInput) titleInput.value = colPageTitle;
-        if (subtitleInput) subtitleInput.value = colPageSubtitle;
-        if (titleCounter) titleCounter.textContent = `${colPageTitle.length} / 100`;
-        if (subtitleCounter) subtitleCounter.textContent = `${colPageSubtitle.length} / 255`;
-        if (previewTitle) previewTitle.textContent = colPageTitle;
-        if (previewSubtitle) previewSubtitle.textContent = colPageSubtitle;
+        if (colScope === 'homepage') {
+          hpColTitle = 'Shop by collection';
+          hpColSubtitle = 'A place for every part of your wardrobe.';
+          if (titleInput) titleInput.value = hpColTitle;
+          if (subtitleInput) subtitleInput.value = hpColSubtitle;
+          if (titleCounter) titleCounter.textContent = `${hpColTitle.length} / 100`;
+          if (subtitleCounter) subtitleCounter.textContent = `${hpColSubtitle.length} / 255`;
+          if (previewTitle) previewTitle.textContent = hpColTitle;
+          if (previewSubtitle) previewSubtitle.textContent = hpColSubtitle;
+        } else {
+          colPageTitle = 'All Collections';
+          colPageSubtitle = 'Explore our complete range of curated wardrobe edits.';
+          if (titleInput) titleInput.value = colPageTitle;
+          if (subtitleInput) subtitleInput.value = colPageSubtitle;
+          if (titleCounter) titleCounter.textContent = `${colPageTitle.length} / 100`;
+          if (subtitleCounter) subtitleCounter.textContent = `${colPageSubtitle.length} / 255`;
+          if (previewTitle) previewTitle.textContent = colPageTitle;
+          if (previewSubtitle) previewSubtitle.textContent = colPageSubtitle;
+        }
       });
 
       bind('#btn-save-col-headings', async () => {
@@ -1641,7 +1731,9 @@ export function mountCatalogSection(section, container, context) {
         try {
           const payload = {
             collections_page_title: (colPageTitle || '').trim() || 'All Collections',
-            collections_page_subtitle: (colPageSubtitle || '').trim() || 'Explore our complete range of curated wardrobe edits.'
+            collections_page_subtitle: (colPageSubtitle || '').trim() || 'Explore our complete range of curated wardrobe edits.',
+            homepage_collections_title: (hpColTitle || '').trim() || 'Shop by collection',
+            homepage_collections_subtitle: (hpColSubtitle || '').trim() || 'A place for every part of your wardrobe.'
           };
           await api.updateAdminStoreSettings(payload);
           colHeadingsAlert = 'Headings saved successfully.';

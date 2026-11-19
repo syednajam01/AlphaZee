@@ -1,4 +1,4 @@
-import { fetchProducts, fetchCollections } from '../utils/api.js';
+import { fetchProducts, fetchCollections, fetchPublicStoreSettings } from '../utils/api.js';
 import { formatDisplayPrice, extractPriceMinor } from '../utils/money.js';
 import { escapeHtml, sanitizeMediaUrl, createSafeImageElement, toVariantUrl } from '../utils/dom.js';
 
@@ -63,6 +63,21 @@ export function createFeaturedProducts(onOpenProductModal, { preview = false, pa
   `;
 
   section.appendChild(container);
+
+  // Load dynamic homepage headings if in preview mode
+  if (preview) {
+    fetchPublicStoreSettings().then(settings => {
+      if (!settings) return;
+      const titleEl = container.querySelector('.section-title');
+      const subEl = container.querySelector('.section-subtitle');
+      if (titleEl && settings.homepage_products_title) {
+        titleEl.textContent = settings.homepage_products_title;
+      }
+      if (subEl && settings.homepage_products_subtitle) {
+        subEl.textContent = settings.homepage_products_subtitle;
+      }
+    }).catch(() => {});
+  }
 
   const grid = container.querySelector('#products-grid-container');
   const tabsContainer = container.querySelector('#filter-tabs-container');

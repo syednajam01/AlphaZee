@@ -31,6 +31,12 @@ class PublicStoreSettingsResponse(BaseModel):
     collections_page_subtitle: str = 'Explore our complete range of curated wardrobe edits.'
     products_page_title: str = 'All Products'
     products_page_subtitle: str = 'Find a piece that feels like you. Explore our complete catalog.'
+    homepage_collections_title: str = 'Shop by collection'
+    homepage_collections_subtitle: str = 'A place for every part of your wardrobe.'
+    homepage_products_title: str = 'The current edit'
+    homepage_products_subtitle: str = 'A curated selection of our latest pieces.'
+    faq_section_title: str = 'Before you order'
+    faq_section_subtitle: str = 'A few useful answers, all in one place.'
     delivery_policy: str | None
     return_policy: str | None
     terms_policy: str | None
@@ -65,6 +71,12 @@ class AdminStoreSettingsResponse(BaseModel):
     collections_page_subtitle: str = 'Explore our complete range of curated wardrobe edits.'
     products_page_title: str = 'All Products'
     products_page_subtitle: str = 'Find a piece that feels like you. Explore our complete catalog.'
+    homepage_collections_title: str = 'Shop by collection'
+    homepage_collections_subtitle: str = 'A place for every part of your wardrobe.'
+    homepage_products_title: str = 'The current edit'
+    homepage_products_subtitle: str = 'A curated selection of our latest pieces.'
+    faq_section_title: str = 'Before you order'
+    faq_section_subtitle: str = 'A few useful answers, all in one place.'
     delivery_policy_content: str | None
     delivery_policy_status: str
     delivery_policy_published_at: datetime | None
@@ -122,6 +134,12 @@ class UpdateStoreSettingsRequest(BaseModel):
     collections_page_subtitle: str | None = Field(default=None, max_length=255)
     products_page_title: str | None = Field(default=None, min_length=1, max_length=100)
     products_page_subtitle: str | None = Field(default=None, max_length=255)
+    homepage_collections_title: str | None = Field(default=None, min_length=1, max_length=100)
+    homepage_collections_subtitle: str | None = Field(default=None, max_length=255)
+    homepage_products_title: str | None = Field(default=None, min_length=1, max_length=100)
+    homepage_products_subtitle: str | None = Field(default=None, max_length=255)
+    faq_section_title: str | None = Field(default=None, min_length=1, max_length=100)
+    faq_section_subtitle: str | None = Field(default=None, max_length=255)
     delivery_policy_content: str | None = None
     return_policy_content: str | None = None
     terms_policy_content: str | None = None

@@ -210,6 +210,55 @@ export function createStoreSettingsComponent() {
                 <div id="preview-announcement-bar" style="display: none;">${escapeHtml(s.announcement_banner_text || '')}</div>
               </div>
             </div>
+
+            <!-- Storefront Homepage Sections Headings Card -->
+            <div class="set-card">
+              <div class="set-card-header">
+                <h3 class="set-card-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #38BDF8;"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+                  Storefront Homepage Sections Copy
+                </h3>
+                <div class="set-action-group">
+                  <button type="submit" id="btn-save-hp-headings" class="set-action-btn is-save" data-tooltip="Save storefront homepage section copy" aria-label="Save section headings" title="Save headings">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 14px;">
+                <!-- Group 1: Collections Section -->
+                <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--admin-border-subtle); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                  <div style="font-size: 0.75rem; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+                    <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #38BDF8;"></span>
+                    1. Collections Section (Homepage)
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Section Heading</label>
+                    <input type="text" id="input-hp-col-title" value="${escapeHtml(s.homepage_collections_title || 'Shop by collection')}" class="admin-input" style="width: 100%;" maxlength="100" placeholder="Shop by collection">
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Section Subtitle / Deck</label>
+                    <input type="text" id="input-hp-col-subtitle" value="${escapeHtml(s.homepage_collections_subtitle || 'A place for every part of your wardrobe.')}" class="admin-input" style="width: 100%;" maxlength="255" placeholder="A place for every part of your wardrobe.">
+                  </div>
+                </div>
+
+                <!-- Group 2: Featured Pieces Section -->
+                <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--admin-border-subtle); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                  <div style="font-size: 0.75rem; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+                    <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10B981;"></span>
+                    2. Featured Pieces Section (Homepage)
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Section Heading</label>
+                    <input type="text" id="input-hp-prod-title" value="${escapeHtml(s.homepage_products_title || 'The current edit')}" class="admin-input" style="width: 100%;" maxlength="100" placeholder="The current edit">
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">Section Subtitle / Deck</label>
+                    <input type="text" id="input-hp-prod-subtitle" value="${escapeHtml(s.homepage_products_subtitle || 'A curated selection of our latest pieces.')}" class="admin-input" style="width: 100%;" maxlength="255" placeholder="A curated selection of our latest pieces.">
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Right Column: Interactive Live Mockup Preview Card -->
@@ -241,8 +290,11 @@ export function createStoreSettingsComponent() {
               <span id="mockup-tagline" class="set-mockup-tagline">${escapeHtml(s.tagline || 'Curated Contemporary Silhouettes')}</span>
               
               <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: ${radiusVal}; padding: 14px; margin-top: 4px;">
-                <div style="font-size: 0.8125rem; font-weight: 600; color: #fff; margin-bottom: 4px; font-family: ${font};" id="mockup-specimen-title">Contemporary Tailoring Specimen</div>
-                <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); line-height: 1.4;">Precision crafted apparel cut from heavyweight luxury cotton with exact seam allowances.</div>
+                <div style="font-size: 0.8125rem; font-weight: 600; color: #fff; margin-bottom: 2px; font-family: ${font};" id="mockup-hp-col-title">${escapeHtml(s.homepage_collections_title || 'Shop by collection')}</div>
+                <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); line-height: 1.4; margin-bottom: 8px;" id="mockup-hp-col-subtitle">${escapeHtml(s.homepage_collections_subtitle || 'A place for every part of your wardrobe.')}</div>
+                
+                <div style="font-size: 0.8125rem; font-weight: 600; color: #fff; margin-bottom: 2px; font-family: ${font};" id="mockup-hp-prod-title">${escapeHtml(s.homepage_products_title || 'The current edit')}</div>
+                <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); line-height: 1.4; margin-bottom: 12px;" id="mockup-hp-prod-subtitle">${escapeHtml(s.homepage_products_subtitle || 'A curated selection of our latest pieces.')}</div>
                 
                 <button type="button" id="mockup-sample-btn" class="set-mockup-cta-sample" style="background: ${accent}; border-radius: ${radiusVal}; font-family: ${font};">
                   Explore Capsule
@@ -483,6 +535,34 @@ export function createStoreSettingsComponent() {
       <div class="set-grid-2col faq-admin-container">
         <!-- Left Column: Support Channels & FAQ Management -->
         <div style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Storefront FAQ Section Headings Card -->
+          <div class="set-card">
+            <div class="set-card-header">
+              <h3 class="set-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #F59E0B;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Storefront FAQ Section Headings
+              </h3>
+              <div class="set-action-group">
+                <button type="button" id="btn-save-faq-headings" class="set-action-btn is-save" data-tooltip="Save FAQ section headings" aria-label="Save FAQ headings" title="Save FAQ headings">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--admin-border-subtle); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">FAQ Section Heading</label>
+                <input type="text" id="input-faq-section-title" value="${escapeHtml(s.faq_section_title || 'Before you order')}" class="admin-input" style="width: 100%;" maxlength="100" placeholder="Before you order">
+                <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 4px;">Primary heading displayed above the accordion questions on alphazee.tech.</div>
+              </div>
+              <div>
+                <label style="display: block; font-size: 0.75rem; color: var(--admin-text-secondary); margin-bottom: 6px;">FAQ Section Subtitle / Deck</label>
+                <input type="text" id="input-faq-section-subtitle" value="${escapeHtml(s.faq_section_subtitle || 'A few useful answers, all in one place.')}" class="admin-input" style="width: 100%;" maxlength="255" placeholder="A few useful answers, all in one place.">
+                <div style="font-size: 0.6875rem; color: var(--admin-text-muted); margin-top: 4px;">Reassurance copy setting expectations for customers before ordering.</div>
+              </div>
+            </div>
+          </div>
+
           <!-- Customer Support Channels Card -->
           <div class="set-card">
             <div class="set-card-header">
@@ -662,8 +742,8 @@ export function createStoreSettingsComponent() {
 
           <div class="set-mockup-body" style="padding: 16px;">
             <div style="margin-bottom: 14px;">
-              <div style="font-size: 0.875rem; font-weight: 600; color: #fff;">Before you order</div>
-              <div style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5);">A few useful answers, all in one place.</div>
+              <div id="mockup-faq-title" style="font-size: 0.875rem; font-weight: 600; color: #fff;">${escapeHtml(s.faq_section_title || 'Before you order')}</div>
+              <div id="mockup-faq-subtitle" style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5);">${escapeHtml(s.faq_section_subtitle || 'A few useful answers, all in one place.')}</div>
             </div>
 
             <div class="set-mockup-faq-accordion">
@@ -1007,6 +1087,37 @@ export function createStoreSettingsComponent() {
       });
     }
 
+    // Storefront Homepage Headings Sync
+    const inputHpColTitle = container.querySelector('#input-hp-col-title');
+    const inputHpColSubtitle = container.querySelector('#input-hp-col-subtitle');
+    const inputHpProdTitle = container.querySelector('#input-hp-prod-title');
+    const inputHpProdSubtitle = container.querySelector('#input-hp-prod-subtitle');
+    const mockupHpColTitle = container.querySelector('#mockup-hp-col-title');
+    const mockupHpColSubtitle = container.querySelector('#mockup-hp-col-subtitle');
+    const mockupHpProdTitle = container.querySelector('#mockup-hp-prod-title');
+    const mockupHpProdSubtitle = container.querySelector('#mockup-hp-prod-subtitle');
+
+    if (inputHpColTitle && mockupHpColTitle) {
+      inputHpColTitle.addEventListener('input', (e) => {
+        mockupHpColTitle.textContent = e.target.value || 'Shop by collection';
+      });
+    }
+    if (inputHpColSubtitle && mockupHpColSubtitle) {
+      inputHpColSubtitle.addEventListener('input', (e) => {
+        mockupHpColSubtitle.textContent = e.target.value || 'A place for every part of your wardrobe.';
+      });
+    }
+    if (inputHpProdTitle && mockupHpProdTitle) {
+      inputHpProdTitle.addEventListener('input', (e) => {
+        mockupHpProdTitle.textContent = e.target.value || 'The current edit';
+      });
+    }
+    if (inputHpProdSubtitle && mockupHpProdSubtitle) {
+      inputHpProdSubtitle.addEventListener('input', (e) => {
+        mockupHpProdSubtitle.textContent = e.target.value || 'A curated selection of our latest pieces.';
+      });
+    }
+
     // Typography select sync
     const fontSelect = container.querySelector('#select-font-family');
     const mockupSpecimenTitle = container.querySelector('#mockup-specimen-title');
@@ -1050,6 +1161,10 @@ export function createStoreSettingsComponent() {
             font_family: container.querySelector('#select-font-family').value,
             border_radius: container.querySelector('#select-border-radius').value,
             spacing_density: container.querySelector('#select-spacing-density').value,
+            homepage_collections_title: container.querySelector('#input-hp-col-title')?.value.trim() || 'Shop by collection',
+            homepage_collections_subtitle: container.querySelector('#input-hp-col-subtitle')?.value.trim() || 'A place for every part of your wardrobe.',
+            homepage_products_title: container.querySelector('#input-hp-prod-title')?.value.trim() || 'The current edit',
+            homepage_products_subtitle: container.querySelector('#input-hp-prod-subtitle')?.value.trim() || 'A curated selection of our latest pieces.',
             change_reason: container.querySelector('#input-change-reason').value.trim() || undefined,
           };
           payload.expected_version = currentSettings.version;
@@ -1155,6 +1270,46 @@ export function createStoreSettingsComponent() {
         } catch (err) {
           showAlert(err.message || 'Failed to revert policy', 'error');
         }
+      });
+    }
+
+    // Save FAQ Section Headings
+    const btnSaveFaqHeadings = container.querySelector('#btn-save-faq-headings');
+    if (btnSaveFaqHeadings) {
+      btnSaveFaqHeadings.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          const title = (container.querySelector('#input-faq-section-title')?.value || '').trim() || 'Before you order';
+          const subtitle = (container.querySelector('#input-faq-section-subtitle')?.value || '').trim() || 'A few useful answers, all in one place.';
+          const payload = {
+            faq_section_title: title,
+            faq_section_subtitle: subtitle,
+            expected_version: currentSettings.version,
+            change_reason: 'Update storefront FAQ section copy',
+          };
+          const res = await updateAdminStoreSettings(payload);
+          currentSettings = res;
+          showAlert('Storefront FAQ section headings updated successfully');
+          render();
+        } catch (err) {
+          showAlert(err.message || 'Failed to update FAQ headings', 'error');
+        }
+      });
+    }
+
+    // FAQ Section Headings Live Mockup Sync
+    const inputFaqTitle = container.querySelector('#input-faq-section-title');
+    const inputFaqSubtitle = container.querySelector('#input-faq-section-subtitle');
+    const mockupFaqTitle = container.querySelector('#mockup-faq-title');
+    const mockupFaqSubtitle = container.querySelector('#mockup-faq-subtitle');
+    if (inputFaqTitle && mockupFaqTitle) {
+      inputFaqTitle.addEventListener('input', (e) => {
+        mockupFaqTitle.textContent = e.target.value || 'Before you order';
+      });
+    }
+    if (inputFaqSubtitle && mockupFaqSubtitle) {
+      inputFaqSubtitle.addEventListener('input', (e) => {
+        mockupFaqSubtitle.textContent = e.target.value || 'A few useful answers, all in one place.';
       });
     }
 

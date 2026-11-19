@@ -429,4 +429,63 @@ def test_products_page_headings_configuration(client, db):
     assert pub_updated["products_page_subtitle"] == "Explore our full archive of premium essentials and signature cuts."
 
 
+def test_homepage_and_faq_headings_configuration(client, db):
+    """Owner can update homepage section headings and FAQ headers, reflected in public store settings and audit logs."""
+    owner_name, pwd = _create_owner(db, "owner_hp_faq_test")
+    csrf = _login_owner(client, owner_name, pwd)
+
+    # 1. Verify defaults
+    pub = client.get("/api/v1/store/settings").json()
+    assert pub["homepage_collections_title"] == "Shop by collection"
+    assert pub["homepage_collections_subtitle"] == "A place for every part of your wardrobe."
+    assert pub["homepage_products_title"] == "The current edit"
+    assert pub["homepage_products_subtitle"] == "A curated selection of our latest pieces."
+    assert pub["faq_section_title"] == "Before you order"
+    assert pub["faq_section_subtitle"] == "A few useful answers, all in one place."
+
+    # 2. Update via admin settings
+    cur = client.get("/api/v1/admin/settings").json()
+    v = cur["version"]
+    res = client.put(
+        "/api/v1/admin/settings",
+        json={
+            "expected_version": v,
+            "homepage_collections_title": "Curated Seasonal Capsules",
+            "homepage_collections_subtitle": "Exclusive capsules handpicked for every occasion.",
+            "homepage_products_title": "Editor's Choice Pieces",
+            "homepage_products_subtitle": "Hand-stitched luxury apparel and latest runway drops.",
+            "faq_section_title": "Order Inquiries & Answers",
+            "faq_section_subtitle": "Everything you need to know about our craftsmanship and delivery.",
+            "change_reason": "Configure custom storefront section copy",
+        },
+        headers={"Origin": "http://localhost:3000", "X-CSRF-Token": csrf},
+    )
+    assert res.status_code == 200, res.text
+    adm = res.json()
+    assert adm["homepage_collections_title"] == "Curated Seasonal Capsules"
+    assert adm["homepage_collections_subtitle"] == "Exclusive capsules handpicked for every occasion."
+    assert adm["homepage_products_title"] == "Editor's Choice Pieces"
+    assert adm["homepage_products_subtitle"] == "Hand-stitched luxury apparel and latest runway drops."
+    assert adm["faq_section_title"] == "Order Inquiries & Answers"
+    assert adm["faq_section_subtitle"] == "Everything you need to know about our craftsmanship and delivery."
+
+    # 3. Public endpoint serves updated values
+    pub_updated = client.get("/api/v1/store/settings").json()
+    assert pub_updated["homepage_collections_title"] == "Curated Seasonal Capsules"
+    assert pub_updated["homepage_collections_subtitle"] == "Exclusive capsules handpicked for every occasion."
+    assert pub_updated["homepage_products_title"] == "Editor's Choice Pieces"
+    assert pub_updated["homepage_products_subtitle"] == "Hand-stitched luxury apparel and latest runway drops."
+    assert pub_updated["faq_section_title"] == "Order Inquiries & Answers"
+    assert pub_updated["faq_section_subtitle"] == "Everything you need to know about our craftsmanship and delivery."
+
+    # 4. Audit log records the snapshot
+    audit = client.get("/api/v1/admin/settings/audit-logs?limit=5", headers={"Origin": "http://localhost:3000"}).json()
+    assert len(audit) > 0
+    latest_entry = audit[0]
+    assert latest_entry["change_reason"] == "Configure custom storefront section copy"
+    assert "homepage_collections_title" in latest_entry["changed_fields"]
+    assert "faq_section_title" in latest_entry["changed_fields"]
+
+
+
 

@@ -172,6 +172,16 @@ export function createReassuranceAndFooter() {
   fetchPublicStoreSettings().then(settings => {
     if (!settings) return;
 
+    // 0. Dynamic FAQ Section Header & Subtitle
+    const faqTitleEl = wrapper.querySelector('#faq .section-title');
+    if (faqTitleEl && settings.faq_section_title) {
+      faqTitleEl.textContent = settings.faq_section_title;
+    }
+    const faqSubtitleEl = wrapper.querySelector('#faq .section-subtitle');
+    if (faqSubtitleEl && settings.faq_section_subtitle) {
+      faqSubtitleEl.textContent = settings.faq_section_subtitle;
+    }
+
     // 1. Dynamic FAQ Items from Admin Settings
     if (Array.isArray(settings.faq_items) && settings.faq_items.length > 0) {
       const activeFaqs = settings.faq_items.filter(f => f.is_enabled !== false);
