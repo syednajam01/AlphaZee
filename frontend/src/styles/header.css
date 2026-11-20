@@ -3,12 +3,13 @@
   --nav-pill-max-width: 1140px;
   --nav-pill-height: 56px;
   --nav-floating-top: 14px;
-  position: fixed;
+  position: sticky;
   top: var(--lab-notice-height, 0px);
   left: 0;
   right: 0;
   z-index: var(--z-header);
-  height: 0 !important;
+  height: var(--nav-pill-height, 56px);
+  margin-bottom: calc(-1 * var(--nav-pill-height, 56px));
   flex-shrink: 0;
   pointer-events: none;
   background: transparent;
