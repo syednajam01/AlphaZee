@@ -36,7 +36,7 @@ export function createOrderTrackingModal(onClose) {
             Enter your order number and private access code. If you lost the code, contact the store for verified recovery.
           </p>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="tracking-form-grid">
             <div>
               <label for="tracking-order-num" style="font-size: 0.75rem; font-weight: 600; display: block; margin-bottom: 4px;">Order Number *</label>
               <input type="text" id="tracking-order-num" required placeholder="AZ-20261011-A1B2C3" style="width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-btn); font-size: 0.875rem;" />

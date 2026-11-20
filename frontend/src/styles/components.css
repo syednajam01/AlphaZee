@@ -996,6 +996,26 @@
   white-space: nowrap;
 }
 
+/* --- Order Tracking Form & Progression Stepper --- */
+.tracking-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .tracking-form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .tracking-form-grid input {
+    font-size: 16px !important;
+  }
+  #btn-search-order {
+    width: 100% !important;
+  }
+}
+
 /* --- Order Tracking Progression Stepper --- */
 .tracking-stepper {
   display: flex;
