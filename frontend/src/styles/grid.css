@@ -546,9 +546,17 @@
 .collections-page-container,
 .collection-products-page-container,
 .catalog-page-container {
-  padding-top: var(--space-6);
+  padding-top: calc(var(--nav-announcement-height, 0px) + 80px);
   padding-bottom: var(--space-12);
   min-height: 60vh;
+}
+
+@media (max-width: 600px) {
+  .collections-page-container,
+  .collection-products-page-container,
+  .catalog-page-container {
+    padding-top: calc(var(--nav-announcement-height, 0px) + 70px);
+  }
 }
 
 .collections-more-container,

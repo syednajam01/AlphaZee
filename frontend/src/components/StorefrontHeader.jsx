@@ -21,28 +21,9 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const panel = useRef(null), announcement = useRef(null);
   const controller = useRef(createHeaderScroll());
-  const idleTimer = useRef(null);
   const compact = mode === 'compact';
-
-  const startIdleCountdown = () => {
-    if (idleTimer.current) clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => {
-      const locked = typeof document !== 'undefined' && (
-        document.body.classList.contains('has-overlay') ||
-        (host.contains(document.activeElement) && document.activeElement.matches(':focus-visible'))
-      );
-      if (!locked) {
-        setMode('compact');
-      }
-    }, 2500);
-  };
-
-  const cancelIdleCountdown = () => {
-    if (idleTimer.current) {
-      clearTimeout(idleTimer.current);
-      idleTimer.current = null;
-    }
-  };
+  const banner = settings?.announcement_banner_enabled !== false && settings?.announcement_banner_text;
+  const bannerText = caps.testMode ? `AlphaZee SAMPLE / TEST: ${banner || 'no real orders'}` : banner;
 
   useEffect(() => cart.subscribe(state => setCount(state.count)), []);
   useEffect(() => capabilities.subscribe(setCaps), []);
@@ -62,22 +43,26 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
 
   useLayoutEffect(() => {
     const measure = () => {
-      const height = panel.current?.offsetHeight || 72;
+      const height = panel.current?.offsetHeight || 56;
       host.style.height = `${height}px`;
       host.style.setProperty('--panel-height', `${height}px`);
-      host.style.setProperty('--nav-announcement-height', `${announcement.current?.offsetHeight || 0}px`);
+      const annHeight = (announcement.current && bannerText) ? (announcement.current.offsetHeight || 32) : 0;
+      host.style.setProperty('--nav-announcement-height', `${annHeight}px`);
+      document.documentElement.style.setProperty('--nav-announcement-height', `${annHeight}px`);
       document.documentElement.style.setProperty('--storefront-header-height', `${height}px`);
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(panel.current);
+    if (panel.current) observer?.observe(panel.current);
+    if (announcement.current) observer?.observe(announcement.current);
     window.addEventListener('resize', measure);
     return () => {
       observer?.disconnect();
       window.removeEventListener('resize', measure);
       document.documentElement.style.removeProperty('--storefront-header-height');
+      document.documentElement.style.removeProperty('--nav-announcement-height');
     };
-  }, [host, settings, caps.testMode]);
+  }, [host, settings, caps.testMode, bannerText]);
 
   useLayoutEffect(() => {
     host.dataset.navState = mode;
@@ -116,28 +101,6 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
   }, [host]);
 
   useEffect(() => {
-    if (mode === 'compact') {
-      cancelIdleCountdown();
-      return;
-    }
-    startIdleCountdown();
-    const onActivity = () => {
-      if (host.dataset.navState !== 'compact') {
-        startIdleCountdown();
-      }
-    };
-    window.addEventListener('pointermove', onActivity, { passive: true });
-    window.addEventListener('keydown', onActivity, { passive: true });
-    window.addEventListener('touchstart', onActivity, { passive: true });
-    return () => {
-      cancelIdleCountdown();
-      window.removeEventListener('pointermove', onActivity);
-      window.removeEventListener('keydown', onActivity);
-      window.removeEventListener('touchstart', onActivity);
-    };
-  }, [mode, host]);
-
-  useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(entries => {
       if (window.location.pathname !== '/') return;
@@ -158,8 +121,6 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
     return () => { changes.disconnect(); observer.disconnect(); };
   }, []);
 
-  const banner = settings?.announcement_banner_enabled !== false && settings?.announcement_banner_text;
-  const bannerText = caps.testMode ? `AlphaZee SAMPLE / TEST: ${banner || 'no real orders'}` : banner;
   return <>
     <div id="header-logo-slot" className="brand-logo-container">
       <a
@@ -172,7 +133,6 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
           if (mode === 'compact') {
             event.preventDefault();
             setMode(controller.current.reset(typeof window !== 'undefined' ? window.scrollY : 0));
-            startIdleCountdown();
             return;
           }
           if (typeof window !== 'undefined' && window.scrollY > 0) {
@@ -185,10 +145,20 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
         <img className="brand-logo-img logo-variant-compact" src={LOGO_ASSETS.symbol} width="36" height="36" alt=""/>
       </a>
     </div>
+    <div
+      ref={announcement}
+      className="announcement-bar"
+      role="region"
+      aria-label="Store announcement"
+      style={{ display: bannerText ? 'block' : 'none', backgroundColor: settings?.accent_color || undefined }}
+    >
+      {settings?.announcement_banner_link?.startsWith('#') ? (
+        <a href={settings.announcement_banner_link}>{bannerText}</a>
+      ) : (
+        <span>{bannerText}</span>
+      )}
+    </div>
     <div ref={panel} className="header-panel" inert={compact} aria-hidden={compact}>
-      <div ref={announcement} className="announcement-bar" role="region" aria-label="Store announcement" style={{ display: bannerText ? 'block' : 'none', backgroundColor: settings?.accent_color || undefined }}>
-        {settings?.announcement_banner_link?.startsWith('#') ? <a href={settings.announcement_banner_link}>{bannerText}</a> : <span>{bannerText}</span>}
-      </div>
       <div className="container"><div className="header-inner">
         <div className="header-brand-space" aria-hidden="true"/>
         <nav className="nav-desktop" aria-label="Primary navigation">
