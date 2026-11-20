@@ -11,6 +11,8 @@ import uuid
 import warnings
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+Image.MAX_IMAGE_PIXELS = 250_000_000
+
 try:
     import pillow_heif
     pillow_heif.register_heif_opener()
@@ -20,10 +22,22 @@ except ImportError:
 from app.config import settings
 from app.services.owner_catalog import CatalogError
 
-IMAGE_LIMIT = 75 * 1024 * 1024
-VIDEO_LIMIT = 200 * 1024 * 1024
-BODY_LIMIT = VIDEO_LIMIT + 5 * 1024 * 1024
-PIXEL_LIMIT = 65_000_000
+IMAGE_LIMIT = 100 * 1024 * 1024
+VIDEO_LIMIT = 250 * 1024 * 1024
+BODY_LIMIT = VIDEO_LIMIT + 10 * 1024 * 1024
+PIXEL_LIMIT = 150_000_000
+ALLOWED_IMAGE_FORMATS = {'JPEG', 'PNG', 'WEBP', 'HEIF', 'TIFF', 'DNG', 'MPO'}
+ALLOWED_FORMATS_BY_EXT = {
+    '.jpg': {'JPEG', 'MPO', 'HEIF'},
+    '.jpeg': {'JPEG', 'MPO', 'HEIF'},
+    '.png': {'PNG'},
+    '.webp': {'WEBP'},
+    '.heic': {'HEIF', 'JPEG'},
+    '.heif': {'HEIF', 'JPEG'},
+    '.dng': {'TIFF', 'DNG'},
+}
+MAX_WEB_DIM = 4096
+
 TYPES = {
     '.jpg': ('image/jpeg', 'JPEG'),
     '.jpeg': ('image/jpeg', 'JPEG'),
@@ -32,22 +46,22 @@ TYPES = {
     '.heic': ('image/heic', 'HEIF'),
     '.heif': ('image/heif', 'HEIF'),
     '.dng': ('image/x-adobe-dng', ('TIFF', 'DNG')),
-    '.mp4': ('video/mp4', ('h264', 'hevc')),
-    '.mov': ('video/quicktime', ('h264', 'hevc', 'mov')),
-    '.webm': ('video/webm', ('vp8', 'vp9')),
+    '.mp4': ('video/mp4', ('h264', 'hevc', 'av1', 'vp9', 'dvhe', 'dvh1', 'mpeg4')),
+    '.mov': ('video/quicktime', ('h264', 'hevc', 'mov', 'prores', 'dnxhd', 'dvhe', 'dvh1', 'mjpeg')),
+    '.webm': ('video/webm', ('vp8', 'vp9', 'av1')),
 }
 
 CONTENT_TYPE_ALIASES = {
-    '.jpg': {'image/jpeg'},
-    '.jpeg': {'image/jpeg'},
-    '.png': {'image/png'},
-    '.webp': {'image/webp'},
+    '.jpg': {'image/jpeg', 'image/pjpeg', 'image/heic', 'image/heif', 'application/octet-stream'},
+    '.jpeg': {'image/jpeg', 'image/pjpeg', 'image/heic', 'image/heif', 'application/octet-stream'},
+    '.png': {'image/png', 'application/octet-stream'},
+    '.webp': {'image/webp', 'application/octet-stream'},
     '.heic': {'image/heic', 'image/heif', 'image/jpeg', 'application/octet-stream'},
     '.heif': {'image/heif', 'image/heic', 'image/jpeg', 'application/octet-stream'},
     '.dng': {'image/x-adobe-dng', 'image/dng', 'image/tiff', 'application/octet-stream'},
-    '.mp4': {'video/mp4', 'video/x-m4v', 'application/octet-stream'},
-    '.mov': {'video/quicktime', 'video/mp4', 'application/octet-stream'},
-    '.webm': {'video/webm'},
+    '.mp4': {'video/mp4', 'video/x-m4v', 'video/quicktime', 'application/octet-stream'},
+    '.mov': {'video/quicktime', 'video/mp4', 'video/x-m4v', 'application/octet-stream'},
+    '.webm': {'video/webm', 'video/x-matroska', 'application/octet-stream'},
 }
 
 
@@ -182,8 +196,10 @@ def extract_video_poster(video_path: Path, poster_path: Path, max_dim: int = 160
             'ffmpeg', '-y', '-v', 'error', '-nostdin',
             '-i', str(video_path),
             '-ss', timestamp,
+            '-map', '0:v:0',
+            '-dn', '-sn',
             '-vframes', '1',
-            '-vf', f'scale=min({max_dim}\\,iw):-2',
+            '-vf', f'scale=min({max_dim}\\,iw):-2:force_original_aspect_ratio=decrease,out_color_matrix=bt709,format=yuv420p',
             '-f', 'image2',
             '-c:v', 'mjpeg',
             str(poster_path)
@@ -236,33 +252,30 @@ def validate(path: Path, kind, extension):
     try:
         if kind == 'image':
             with warnings.catch_warnings():
-                warnings.simplefilter('error', Image.DecompressionBombWarning)
+                warnings.simplefilter('ignore', Image.DecompressionBombWarning)
                 with Image.open(path) as image:
-                    expected_format = expected if isinstance(expected, tuple) else (expected,)
-                    if image.format not in expected_format or image.width * image.height > PIXEL_LIMIT:
-                        raise CatalogError('invalid_image', 'Image content/type must match and stay under 65 megapixels')
+                    detected_format = image.format
+                    allowed_for_ext = ALLOWED_FORMATS_BY_EXT.get(extension, ALLOWED_IMAGE_FORMATS)
+                    if detected_format not in allowed_for_ext or image.width * image.height > PIXEL_LIMIT:
+                        raise CatalogError('invalid_image', f'Image content/type must match and stay under {PIXEL_LIMIT // 1_000_000} megapixels')
                     if getattr(image, 'n_frames', 1) != 1:
                         raise CatalogError('invalid_image', 'Animated images are not supported')
                     image.verify()
                 with Image.open(path) as image:
                     image.load()
                     clean = ImageOps.exif_transpose(image)
+                    if max(clean.width, clean.height) > MAX_WEB_DIM:
+                        clean.thumbnail((MAX_WEB_DIM, MAX_WEB_DIM), Image.Resampling.LANCZOS)
                     width, height = clean.size
 
-                    if extension in ('.heic', '.heif', '.dng', '.jpeg', '.jpg'):
-                        clean = clean.convert('RGB')
-                        save_format = 'JPEG'
-                        out_extension = '.jpg'
-                        out_content_type = 'image/jpeg'
-                        save_kwargs = {'quality': 95}
-                    elif extension == '.png':
+                    if detected_format == 'PNG':
                         if clean.mode not in ('RGB', 'RGBA'):
                             clean = clean.convert('RGBA' if 'transparency' in clean.info else 'RGB')
                         save_format = 'PNG'
                         out_extension = '.png'
                         out_content_type = 'image/png'
                         save_kwargs = {}
-                    elif extension == '.webp':
+                    elif detected_format == 'WEBP':
                         if clean.mode not in ('RGB', 'RGBA'):
                             clean = clean.convert('RGBA' if 'transparency' in clean.info else 'RGB')
                         save_format = 'WEBP'
@@ -293,40 +306,54 @@ def validate(path: Path, kind, extension):
                 '-format_whitelist', 'mov,mp4,matroska,webm', '-show_format', '-show_streams', '-of', 'json', str(path)], settings.media_probe_timeout)
             data = json.loads(output)
             streams = data.get('streams', [])
-            video = [s for s in streams if s.get('codec_type') == 'video']
-            formats = data.get('format', {}).get('format_name', '').split(',')
-            if len(video) != 1 or len(streams) > 2 or any(s.get('codec_type') not in {'video', 'audio'} for s in streams):
-                raise CatalogError('invalid_video', 'Provide one video stream with optional audio')
-            stream = video[0]
-            codec = stream.get('codec_name')
+            video_streams = [s for s in streams if s.get('codec_type') == 'video']
+            if not video_streams:
+                raise CatalogError('invalid_video', 'Provide at least one valid video stream')
+
+            # Pick primary video stream (highest resolution)
+            stream = max(video_streams, key=lambda s: int(s.get('width', 0)) * int(s.get('height', 0)))
+            audio_streams = [s for s in streams if s.get('codec_type') == 'audio']
+
+            codec = stream.get('codec_name', '').lower()
             expected_codecs = expected if isinstance(expected, tuple) else (expected,)
-            if codec not in expected_codecs:
+            valid_codecs = {'h264', 'hevc', 'mov', 'prores', 'dnxhd', 'dvhe', 'dvh1', 'vp8', 'vp9', 'av1', 'mjpeg', 'mpeg4'}
+            if codec not in expected_codecs and codec not in valid_codecs:
                 raise CatalogError('invalid_video', 'Container and codec must match the chosen file type')
 
             with path.open('rb') as source: header = source.read(4096)
             if extension == '.webm' and b'\x42\x82\x84webm' not in header:
                 raise CatalogError('invalid_video', 'Expected a WebM container')
-            if extension in ('.mp4', '.mov') and b'ftyp' not in header[:32] and b'moov' not in header[:32] and b'wide' not in header[:32] and b'mdat' not in header[:32]:
+            if extension in ('.mp4', '.mov') and not any(k in header[:64] for k in (b'ftyp', b'moov', b'wide', b'mdat', b'free', b'skip')):
                 raise CatalogError('invalid_video', 'Expected an MP4 or QuickTime MOV container with supported brand')
 
             width, height = int(stream.get('width', 0)), int(stream.get('height', 0))
             duration = float(data.get('format', {}).get('duration') or stream.get('duration') or 0)
             if width <= 0 or height <= 0 or width * height > PIXEL_LIMIT or not math.isfinite(duration) or not 0 < duration <= 120:
-                raise CatalogError('invalid_video', 'Video must be at most 120 seconds and 65 megapixels')
+                raise CatalogError('invalid_video', f'Video must be at most 120 seconds and {PIXEL_LIMIT // 1_000_000} megapixels')
 
             pix_fmt = stream.get('pix_fmt', '')
             color_primaries = stream.get('color_primaries', '')
             color_space = stream.get('color_space', '')
-            is_hdr = '10' in pix_fmt or color_primaries in ('bt2020',) or color_space in ('bt2020nc', 'bt2020c')
-            needs_transcode = (extension == '.mov') or (codec == 'hevc') or is_hdr
+            color_trc = stream.get('color_trc', '')
+            is_hdr = '10' in pix_fmt or color_primaries in ('bt2020',) or color_space in ('bt2020nc', 'bt2020c') or 'arib' in color_trc or 'smpte2084' in color_trc
+            is_oversized = (width > 1920 or height > 1920)
+            needs_transcode = (extension == '.mov') or (codec in ('hevc', 'prores', 'dvhe', 'dvh1')) or is_hdr or is_oversized
 
             if needs_transcode:
                 normalized = path.with_suffix('.transcoded.mp4')
+                video_idx = stream.get('index', 0)
                 transcode_cmd = low_priority_cmd([
                     'ffmpeg', '-y', '-v', 'error', '-nostdin', '-threads', '2',
                     '-protocol_whitelist', 'file,pipe',
                     '-i', str(path),
-                    '-vf', 'scale=out_color_matrix=bt709,format=yuv420p',
+                    '-map', f'0:{video_idx}',
+                ])
+                if audio_streams:
+                    audio_idx = audio_streams[0].get('index', 1)
+                    transcode_cmd.extend(['-map', f'0:{audio_idx}'])
+                transcode_cmd.extend(['-dn', '-sn'])
+                transcode_cmd.extend([
+                    '-vf', "scale='min(1920,iw)':-2:force_original_aspect_ratio=decrease,out_color_matrix=bt709,format=yuv420p",
                     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22',
                     '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
                     '-c:a', 'aac', '-b:a', '128k',
@@ -351,7 +378,7 @@ def validate(path: Path, kind, extension):
                 _probe(low_priority_cmd(['ffmpeg', '-v', 'error', '-xerror', '-nostdin', '-threads', '2',
                                          '-protocol_whitelist', 'file,pipe',
                                          '-format_whitelist', 'mov,mp4,matroska,webm',
-                                         '-i', str(path), '-map', '0:v:0', '-f', 'null', '-']), settings.media_decode_timeout)
+                                         '-i', str(path), '-map', f"0:{stream.get('index', 0)}", '-f', 'null', '-']), settings.media_decode_timeout)
                 content_type = TYPES[extension][0]
                 if isinstance(content_type, tuple):
                     content_type = content_type[0]

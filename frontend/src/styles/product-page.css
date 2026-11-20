@@ -1,13 +1,13 @@
 /* Product Page Layout & Components (Editorial Commerce) */
 
 .product-page-container {
-  padding-top: calc(var(--nav-announcement-height, 0px) + 80px);
+  padding-top: calc(var(--nav-announcement-height, 0px) + 96px);
   padding-bottom: var(--space-12);
 }
 
 @media (max-width: 600px) {
   .product-page-container {
-    padding-top: calc(var(--nav-announcement-height, 0px) + 70px);
+    padding-top: calc(var(--nav-announcement-height, 0px) + 84px);
   }
 }
 

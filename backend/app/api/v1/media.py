@@ -24,7 +24,7 @@ from app.api.v1.owner_catalog import persist
 
 router = APIRouter(prefix='/admin/media', tags=['Owner media'], dependencies=[Depends(require_owner_session)])
 public_router = APIRouter(tags=['Public catalog media'])
-upload_slots = asyncio.Semaphore(4)
+upload_slots = asyncio.Semaphore(2)
 
 
 class LimitedUploadMiddleware:

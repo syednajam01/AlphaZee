@@ -79,7 +79,7 @@ def test_pixel_limit_allows_48mp_and_rejects_over_65mp(admin_client, monkeypatch
     Image.new('RGB', (50, 50), '#aabbcc').save(data_fail, format='JPEG')
     res_fail = admin_client.post('/api/v1/admin/media', files={'file': ('fail.jpg', data_fail.getvalue(), 'image/jpeg')})
     assert res_fail.status_code == 422
-    assert '65 megapixels' in res_fail.json()['detail']['message']
+    assert 'megapixels' in res_fail.json()['detail']['message']
 
 
 def test_low_priority_command_helper():
@@ -112,3 +112,80 @@ def test_public_asset_includes_stage_and_zoom_urls():
     assert payload['stage_url'] == '/api/v1/media/dummy123/content?variant=stage'
     assert payload['full_url'] == '/api/v1/media/dummy123/content?variant=full'
     assert payload['zoom_url'] == '/api/v1/media/dummy123/content?variant=zoom'
+
+
+def test_iphone_multi_stream_video_probe_and_transcode_parameters(monkeypatch, tmp_path):
+    """Verify iPhone MOV with timecode data stream and HEVC Dolby Vision passes and prepares proper transcode command."""
+    sample_video = tmp_path / 'sample_iphone.mov'
+    sample_video.write_bytes(b'\x00\x00\x00\x20ftypqt  \x00\x00\x00\x00qt  ' + b'\x00' * 5000)
+
+    iphone_ffprobe_mock = {
+        'streams': [
+            {
+                'index': 0,
+                'codec_type': 'video',
+                'codec_name': 'hevc',
+                'width': 3840,
+                'height': 2160,
+                'pix_fmt': 'yuv420p10le',
+                'color_primaries': 'bt2020',
+                'color_space': 'bt2020nc',
+                'color_trc': 'arib-std-b67',
+                'duration': '15.2'
+            },
+            {
+                'index': 1,
+                'codec_type': 'audio',
+                'codec_name': 'aac',
+                'channels': 2,
+                'duration': '15.2'
+            },
+            {
+                'index': 2,
+                'codec_type': 'data',
+                'codec_name': None,
+                'tags': {'handler_name': 'Core Media Time Code'}
+            }
+        ],
+        'format': {
+            'duration': '15.2',
+            'format_name': 'mov,mp4,m4a,3gp,3g2,mj2'
+        }
+    }
+
+    commands_executed = []
+    def fake_probe(cmd, timeout):
+        cmd_str = ' '.join(cmd)
+        commands_executed.append(cmd)
+        if 'show_streams' in cmd_str:
+            import json
+            if not any('-c:v' in ' '.join(c) for c in commands_executed):
+                return json.dumps(iphone_ffprobe_mock)
+            return json.dumps({
+                'streams': [{'codec_type': 'video', 'codec_name': 'h264', 'width': 1920, 'height': 1080, 'duration': '15.2'}],
+                'format': {'duration': '15.2'}
+            })
+        if 'ffmpeg' in cmd_str and '-c:v' in cmd_str:
+            normalized = sample_video.with_suffix('.transcoded.mp4')
+            normalized.write_bytes(b'dummy_transcoded_bytes')
+            return ''
+        return ''
+
+    monkeypatch.setattr(media_storage, '_probe', fake_probe)
+
+    # Validate the iPhone MOV file
+    validated, ext = media_storage.validate(sample_video, 'video', '.mov')
+    assert validated['width'] == 1920
+    assert validated['height'] == 1080
+    assert validated['content_type'] == 'video/mp4'
+    assert ext == '.mp4'
+
+    # Verify transcode command stripped timecode track (-dn -sn) and mapped video 0:0 and audio 0:1
+    transcode_calls = [cmd for cmd in commands_executed if '-c:v' in cmd]
+    assert len(transcode_calls) == 1
+    t_cmd = transcode_calls[0]
+    assert '-map' in t_cmd and '0:0' in t_cmd
+    assert '-map' in t_cmd and '0:1' in t_cmd
+    assert '-dn' in t_cmd and '-sn' in t_cmd
+    assert 'scale=\'min(1920,iw)\':-2:force_original_aspect_ratio=decrease,out_color_matrix=bt709,format=yuv420p' in t_cmd
+

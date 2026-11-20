@@ -3,16 +3,17 @@
   --nav-pill-max-width: 1140px;
   --nav-pill-height: 56px;
   --nav-floating-top: 14px;
-  position: sticky;
+  position: fixed;
   top: var(--lab-notice-height, 0px);
   left: 0;
   right: 0;
   z-index: var(--z-header);
-  height: var(--header-height);
+  height: 0 !important;
   flex-shrink: 0;
   pointer-events: none;
   background: transparent;
   color: var(--color-text);
+  overflow: visible;
 }
 
 /* Floating "In Air" Island Navbar */
@@ -214,10 +215,11 @@
 }
 
 .site-header[data-nav-state="compact"] .announcement-bar {
+  transform: translateY(-100%);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 200ms ease, visibility 200ms;
+  transition: transform 260ms ease, opacity 200ms ease, visibility 260ms;
 }
 
 .site-header .container {

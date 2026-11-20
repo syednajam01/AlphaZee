@@ -44,7 +44,7 @@ export function StorefrontHeader({ host, onCart, onMenu, onCatalog, onTrack }) {
   useLayoutEffect(() => {
     const measure = () => {
       const height = panel.current?.offsetHeight || 56;
-      host.style.height = `${height}px`;
+      host.style.height = '0px';
       host.style.setProperty('--panel-height', `${height}px`);
       const annHeight = (announcement.current && bannerText) ? (announcement.current.offsetHeight || 32) : 0;
       host.style.setProperty('--nav-announcement-height', `${annHeight}px`);
