@@ -26,12 +26,12 @@
   padding-bottom: var(--space-12);
 }
 
-/* Ensure anchored sections account for sticky header */
+/* Ensure anchored sections account for floating navbar and announcement bar clearance */
 #featured,
 #collections,
 #reassurance,
 #faq {
-  scroll-margin-top: calc(var(--storefront-header-height, var(--header-height, 64px)) + var(--lab-notice-height, 0px) + var(--space-6, 24px));
+  scroll-margin-top: calc(var(--lab-notice-height, 0px) + var(--nav-announcement-height, 0px) + var(--nav-floating-top, 14px) + var(--nav-pill-height, 56px) + var(--space-8, 32px));
 }
 
 @media (min-width: 768px) {

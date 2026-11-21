@@ -1,3 +1,15 @@
+:root {
+  --nav-pill-height: 56px;
+  --nav-floating-top: 14px;
+}
+
+@media (max-width: 600px) {
+  :root {
+    --nav-pill-height: 50px;
+    --nav-floating-top: 10px;
+  }
+}
+
 .site-header {
   --nav-gutter: var(--gutter-mobile);
   --nav-pill-max-width: 1140px;

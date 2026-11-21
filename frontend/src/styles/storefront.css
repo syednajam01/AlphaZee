@@ -300,7 +300,7 @@
 .storefront .hero-section {
   position: relative;
   width: 100%;
-  margin-top: max(14px, var(--nav-announcement-height, 0px)) !important;
+  margin-top: max(16px, var(--nav-announcement-height, 0px)) !important;
   margin-bottom: 24px !important;
   aspect-ratio: 16 / 9 !important;
   height: auto !important;
